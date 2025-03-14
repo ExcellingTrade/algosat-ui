@@ -1,18 +1,43 @@
 "use client";
 import { useState, useEffect } from "react";
 
-const quotes = [
-  "The stock market is filled with individuals who know the price of everything but the value of nothing. — Philip Fisher",
-  "Cut your losses quickly. Let your profits run. — Jesse Livermore",
-  "An investment in knowledge pays the best interest. — Benjamin Franklin",
-  "Know what you own, and know why you own it. — Peter Lynch",
-  "The four most dangerous words in investing are: ‘This time it's different.’ — Sir John Templeton",
-  "The stock market is a device for transferring money from the impatient to the patient. — Warren Buffett",
-  "Risk comes from not knowing what you're doing. — Warren Buffett",
-  "Opportunities come infrequently. When it rains gold, put out the bucket, not the thimble. — Warren Buffett",
-  "Wide diversification is only required when investors do not understand what they are doing. — Warren Buffett",
-  "Time in the market beats timing the market. — Ken Fisher",
-];
+  const quotes = [
+    "Cut your losses quickly. Let your profits run. — Jesse Livermore",
+    "The market can stay irrational longer than you can stay solvent. — John Maynard Keynes",
+    "Risk comes from not knowing what you’re doing. — Warren Buffett",
+    "It’s not whether you’re right or wrong that’s important, but how much money you make when you’re right and how much you lose when you’re wrong. — George Soros",
+    "Markets are never wrong, opinions often are. — Jesse Livermore",
+    "An investment in knowledge pays the best interest. — Benjamin Franklin",
+    "The goal of a successful trader is to make the best trades. Money is secondary. — Alexander Elder",
+    "The four most dangerous words in investing are: This time it’s different. — Sir John Templeton",
+    "Trade what’s happening… not what you think is gonna happen. — Doug Gregory",
+    "There is a time to go long, a time to go short and a time to go fishing. — Jesse Livermore",
+    "Price is what you pay. Value is what you get. — Warren Buffett",
+    "The market is a device for transferring money from the impatient to the patient. — Warren Buffett",
+    "The stock market is filled with individuals who know the price of everything but the value of nothing. — Philip Fisher",
+    "The biggest risk is not taking any risk. — Mark Zuckerberg",
+    "In investing, what is comfortable is rarely profitable. — Robert Arnott",
+    "The goal of a trader is to make the best trades. — Alexander Elder",
+    "Buy low, sell high. — Anonymous",
+    "Markets can remain irrational longer than you can remain solvent. — John Maynard Keynes",
+    "Be fearful when others are greedy, and greedy when others are fearful. — Warren Buffett",
+    "Losers average losers. — Paul Tudor Jones",
+    "Successful investing is about managing risk, not avoiding it. — Benjamin Graham",
+    "There are no free lunches on Wall Street. — Anonymous",
+    "Investing should be more like watching paint dry or watching grass grow. — Paul Samuelson",
+    "The trend is your friend, until the end when it bends. — Ed Seykota",
+    "An expert is someone who has made all the mistakes that can be made in a very narrow field. — Niels Bohr",
+    "Trading is very competitive and you have to be able to handle getting your butt kicked. — Paul Tudor Jones",
+    "The only thing to do when a person is wrong is to be right by ceasing to be wrong. — Jesse Livermore",
+    "Panic selling is never a strategy. — Anonymous",
+    "Amateurs think about how much money they can make. Professionals think about how much money they could lose. — Jack Schwager",
+    "Adapt or perish. — H.G. Wells",
+    "Hope is not a trading strategy. — Anonymous",
+    "Don’t fight the trend. — Anonymous",
+    "Trade the price, not the noise. — Anonymous",
+    "The more you learn, the more you earn. — Warren Buffett",
+    "All intelligent investing is value investing. — Charlie Munger"
+  ];
 
 export default function SignIn() {
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
@@ -28,7 +53,7 @@ export default function SignIn() {
   }, []);
 
   return (
-    <div className="relative h-screen w-screen bg-black">
+    <div className="relative h-screen w-screen bg-black flex items-center justify-center">
       {/* Background Image */}
       <div
         className="absolute inset-0 bg-cover bg-center opacity-60"
@@ -37,31 +62,29 @@ export default function SignIn() {
         }}
       />
 
-      {/* Tagline Section */}
-      <div className="absolute left-[10%] sm:left-[15%] md:left-[18%] lg:left-[20%] top-[20%] md:top-[25%] lg:top-[30%] xl:top-[35%] w-[80%] md:w-[40%] text-white">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-glow"
-        style={{
-            fontFamily: "Poppins, sans-serif",
-            color: "#68E0CF", // Neon blue-green color
-            textShadow: "0 0 15px rgba(104, 224, 207, 0.7)",
-          }}
-      >
-          Your Trading Edge Starts Here
-        </h1>
-        <p className="text-md md:text-lg text-gray-400 mt-2">
-          Unlock the power of strategy and precision.
-        </p>
+      {/* Left Side - Tagline */}
+      <div className="absolute left-[17%] sm:left-[15%] md:left-[18%] lg:left-[20%] top-[16%] sm:top-[14%] md:top-[12%] lg:top-[34%] w-[70%] sm:w-[60%] md:w-[50%] lg:w-[40%] text-white break-words">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-glow">
+            Your Trading Edge Starts Here
+          </h1>
+          <p className="text-md md:text-lg text-gray-400 mt-2">
+            Unlock the power of strategy and precision.
+          </p>
 
-        {/* Quotes Section */}
-        <p className="mt-4 italic font-semibold text-yellow-400 text-lg md:text-xl animate-fadeIn">
-          {quotes[currentQuoteIndex]}
-        </p>
-      </div>
+          {/* Quotes Section */}
+          <p className="mt-4 italic font-semibold text-yellow-400 text-lg md:text-xl animate-fadeIn">
+            {quotes[currentQuoteIndex]}
+          </p>
+        </div>
 
-      {/* Sign-In Form */}
-      <div className="absolute top-[20%] sm:top-[22%] md:top-[25%] lg:top-[20%] right-[5%] w-[90%] sm:w-[60%] md:w-[40%] lg:w-[30%] xl:w-[25%] bg-black/80 shadow-xl text-white p-8 rounded-xl backdrop-blur-lg border-2 border-transparent animate-glowing-border">
-        <h2 className="text-2xl font-bold mb-4">Welcome Back!</h2>
-        <p className="text-gray-400 mb-6">Login using your email ID</p>
+      {/* Right Side - Sign-In Form */}
+      <div className={`w-full max-w-[400px] bg-black/80 shadow-xl text-white 
+        p-6 md:p-8 rounded-xl backdrop-blur-lg border-2 border-transparent animate-glowing-border 
+        mx-auto lg:ml-auto lg:mr-[8%] lg:mt-[5%] sm:mt-[8%]`}>
+        <h2 className="text-2xl font-bold mb-4 text-center">Welcome Back!</h2>
+        <p className="text-gray-400 mb-6 text-center">
+          Login using your email ID
+        </p>
 
         {/* Email Input */}
         <input
@@ -77,7 +100,7 @@ export default function SignIn() {
           className="w-full p-3 mb-4 bg-gray-800 border border-gray-700 rounded focus:outline-none hover:border-blue-400 focus:ring-2 focus:ring-blue-500 transition duration-300"
         />
 
-        {/* 🔥 Fixed Sign-In Button */}
+        {/* Sign-In Button */}
         <button
           className="w-full p-3 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:shadow-lg animate-glowing-border"
         >
