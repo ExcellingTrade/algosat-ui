@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 const quotes = [
   "Cut your losses quickly. Let your profits run. — Jesse Livermore",
