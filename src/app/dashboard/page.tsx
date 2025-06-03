@@ -345,9 +345,23 @@ export default function Dashboard() {
                   </div>
                 )}
               </button>
+              
+              {/* API Configuration Status */}
+              {/* <div className="flex items-center space-x-2 px-3 py-2 bg-gray-800/50 rounded-lg border border-gray-600/50">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <div className="text-right">
+                  <p className="text-xs text-gray-400">API Connected</p>
+                  <p className="text-xs text-cyan-400 font-mono">{apiClient.getConfig().baseUrl}</p>
+                  <p className="text-xs text-gray-500">({apiClient.getConfig().detectionMethod})</p>
+                </div>
+              </div> */}
+              
               <div className="text-right">
                 <p className="text-sm text-gray-400">Welcome back</p>
-                <p className="text-cyan-400 font-medium">{user?.username}</p>
+                {/* <p className="text-cyan-400 font-medium">{user?.username}</p> */}
+                <p className="text-cyan-400 font-medium">
+  {user?.username && user.username.charAt(0).toUpperCase() + user.username.slice(1)}
+</p>
               </div>
               <button
                 onClick={handleLogout}
@@ -582,7 +596,7 @@ export default function Dashboard() {
                     </div>
                     <div className="grid grid-cols-4 gap-4 mt-6">
                       <div className="text-center">
-                        <p className="text-green-400 text-lg font-bold">$38,450.75</p>
+                        <p className="text-green-400 text-lg font-bold">₹38,450.75</p>
                         <p className="text-gray-400 text-sm">Total P&L</p>
                       </div>
                       <div className="text-center">
@@ -590,7 +604,7 @@ export default function Dashboard() {
                         <p className="text-gray-400 text-sm">Win Rate</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-blue-400 text-lg font-bold">$1,240.25</p>
+                        <p className="text-blue-400 text-lg font-bold">₹1,240.25</p>
                         <p className="text-gray-400 text-sm">Avg. Trade</p>
                       </div>
                       <div className="text-center">
@@ -602,18 +616,18 @@ export default function Dashboard() {
 
                   {/* Activity Log */}
                   <div className="backdrop-blur-sm bg-black/30 border border-cyan-500/30 rounded-lg p-6 shadow-lg shadow-cyan-500/10">
-                    <h2 className="text-xl font-semibold text-cyan-400 mb-4">🕒 Activity Log</h2>
+                    <h2 className="text-xl font-semibold text-cyan-400 mb-4">🕒 Activity Log (may or may not be present)</h2>
                     <div className="space-y-3 text-sm">
                       <div className="border-l-2 border-green-500 pl-3">
-                        <p className="text-white">BTC/USDT Long position opened</p>
-                        <p className="text-gray-400">2 mins ago • 0.25 BTC at $38,22,150</p>
+                        <p className="text-white">SBIN Long position opened</p>
+                        <p className="text-gray-400">2 mins ago • 100 shares at ₹580.50</p>
                       </div>
                       <div className="border-l-2 border-red-500 pl-3">
-                        <p className="text-white">ETH/USDT Short position closed</p>
-                        <p className="text-gray-400">15 mins ago • 7 ETH at $2,60,980</p>
+                        <p className="text-white">NIFTY Short position closed</p>
+                        <p className="text-gray-400">15 mins ago • 25 lots at ₹21,450.75</p>
                       </div>
                       <div className="border-l-2 border-blue-500 pl-3">
-                        <p className="text-white">DOT Strategy activated</p>
+                        <p className="text-white">BANKNIFTY Strategy activated</p>
                         <p className="text-gray-400">42 mins ago • Algorithm #127</p>
                       </div>
                       <div className="border-l-2 border-cyan-500 pl-3">
@@ -621,45 +635,13 @@ export default function Dashboard() {
                         <p className="text-gray-400">1 hour ago • Duration: 5 minutes</p>
                       </div>
                       <div className="border-l-2 border-green-500 pl-3">
-                        <p className="text-white">ADA/USDT Long position opened</p>
-                        <p className="text-gray-400">2 hours ago • 1000 ADA at $0.45</p>
+                        <p className="text-white">SBIN Long position opened</p>
+                        <p className="text-gray-400">2 hours ago • 200 shares at ₹575.25</p>
                       </div>
                     </div>
                     <button className="mt-4 text-cyan-400 hover:text-cyan-300 text-sm transition duration-200">
                       View all activity →
                     </button>
-                  </div>
-                </div>
-
-                {/* Strategy Templates */}
-                <div className="backdrop-blur-sm bg-black/30 border border-cyan-500/30 rounded-lg p-6 shadow-lg shadow-cyan-500/10">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-semibold text-cyan-400">⚡ Strategy Templates</h2>
-                    <button className="text-cyan-400 hover:text-cyan-300 text-sm transition duration-200">
-                      View All →
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="backdrop-blur-sm bg-black/50 border border-cyan-500/20 rounded-lg p-4 hover:border-cyan-500/40 transition duration-200">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-white font-medium">Gap & Go Strategy</h3>
-                        <span className="bg-orange-500/20 text-orange-400 text-xs px-2 py-1 rounded">Popular</span>
-                      </div>
-                      <p className="text-gray-400 text-sm mb-3">Momentum-based strategy targeting gap movements in price action</p>
-                      <div className="h-16 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded mb-3 flex items-center justify-center">
-                        <div className="w-full h-8 bg-gradient-to-r from-cyan-500 to-blue-400 rounded opacity-60"></div>
-                      </div>
-                    </div>
-                    <div className="backdrop-blur-sm bg-black/50 border border-cyan-500/20 rounded-lg p-4 hover:border-cyan-500/40 transition duration-200">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-white font-medium">Momentum Breakout</h3>
-                        <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded">New</span>
-                      </div>
-                      <p className="text-gray-400 text-sm mb-3">Advanced breakout detection with volume confirmation</p>
-                      <div className="h-16 bg-gradient-to-r from-green-500/20 to-cyan-500/20 rounded mb-3 flex items-center justify-center">
-                        <div className="w-full h-8 bg-gradient-to-r from-green-500 to-cyan-400 rounded opacity-60"></div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>

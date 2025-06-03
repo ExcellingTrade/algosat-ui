@@ -3,7 +3,32 @@
  * Handles all API communication with the FastAPI backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+// Dynamic API URL configuration based on current host
+function getDynamicApiUrl(): string {
+  // Check for environment variable first (production builds)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // For development and runtime, detect based on current location
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    // If running on localhost, use localhost:8001
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//localhost:8001`;
+    }
+    
+    // If running on an IP address, use that IP with port 8001
+    return `${protocol}//${hostname}:8001`;
+  }
+  
+  // Fallback for SSR
+  return 'http://localhost:8001';
+}
+
+const API_BASE_URL = getDynamicApiUrl();
 
 export interface LoginRequest {
   username: string;
@@ -116,6 +141,9 @@ class ApiClient {
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
     this.loadToken();
+    
+    // Log the API URL being used
+    console.log('API Client initialized with base URL:', this.baseURL);
   }
 
   private loadToken() {
@@ -353,6 +381,29 @@ class ApiClient {
       tokenLength: this.token ? this.token.length : 0 
     });
     return authenticated;
+  }
+
+  // Get current API configuration info
+  getConfig(): { baseURL: string; detectionMethod: string } {
+    let detectionMethod = 'environment variable';
+    
+    if (!process.env.NEXT_PUBLIC_API_URL) {
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          detectionMethod = 'localhost detection';
+        } else {
+          detectionMethod = 'IP-based detection';
+        }
+      } else {
+        detectionMethod = 'SSR fallback';
+      }
+    }
+    
+    return {
+      baseURL: this.baseURL,
+      detectionMethod
+    };
   }
 }
 

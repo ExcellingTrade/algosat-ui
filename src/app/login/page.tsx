@@ -67,6 +67,9 @@ export default function SignIn() {
     // Test API connection on component mount
     const testConnection = async () => {
       console.log('Testing API connection...');
+      const config = apiClient.getConfig();
+      console.log('API Configuration:', config);
+      
       try {
         const isConnected = await apiClient.testConnection();
         setConnectionStatus(isConnected ? 'connected' : 'failed');
@@ -162,6 +165,11 @@ export default function SignIn() {
         {connectionStatus === 'connected' && (
           <div className="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded text-green-300 text-sm">
             ✅ API connection successful
+            <div className="mt-1 text-xs text-gray-400">
+              Connected to: {apiClient.getConfig().baseURL}
+              <br />
+              Detection: {apiClient.getConfig().detectionMethod}
+            </div>
           </div>
         )}
 
