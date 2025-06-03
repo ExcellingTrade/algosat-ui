@@ -44,12 +44,17 @@ export interface StrategyConfig {
 }
 
 export interface Broker {
-  name: string;
-  enabled: boolean;
+  id: number;
+  broker_name: string;
+  is_enabled: boolean;
   is_data_provider: boolean;
   trade_execution_enabled: boolean;
-  credentials_status: string;
-  last_auth_check: string;
+  notes?: string;
+  credentials_status?: string;
+  last_auth_check?: string;
+  balance?: number;
+  available_balance?: number;
+  utilized_margin?: number;
 }
 
 export interface Position {
