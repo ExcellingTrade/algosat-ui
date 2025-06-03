@@ -263,6 +263,30 @@ class ApiClient {
     });
   }
 
+  async enableStrategy(strategyId: number): Promise<any> {
+    // Enable strategy by enabling its default config
+    const configs = await this.getStrategyConfigs(strategyId);
+    const defaultConfig = configs.find(config => config.name.includes('default') || configs.length === 1 ? config : configs[0]);
+    
+    if (defaultConfig) {
+      return this.updateStrategyConfig(defaultConfig.id, { enabled: true });
+    }
+    throw new Error('No strategy config found to enable');
+  }
+
+  async disableStrategy(strategyId: number): Promise<any> {
+    // Disable strategy by disabling all its configs
+    const configs = await this.getStrategyConfigs(strategyId);
+    const enabledConfigs = configs.filter(config => config.enabled);
+    
+    // Disable all enabled configs for this strategy
+    const disablePromises = enabledConfigs.map(config => 
+      this.updateStrategyConfig(config.id, { enabled: false })
+    );
+    
+    return Promise.all(disablePromises);
+  }
+
   // Brokers
   async getBrokers(): Promise<Broker[]> {
     return this.request('/brokers/');

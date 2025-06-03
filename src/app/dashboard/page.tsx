@@ -239,6 +239,39 @@ export default function Dashboard() {
     }
   };
 
+  const toggleStrategy = async (strategyId: number, enabled: boolean) => {
+    try {
+      console.log(`Toggling strategy ${strategyId} to ${enabled ? 'enabled' : 'disabled'}`);
+      
+      if (enabled) {
+        await apiClient.enableStrategy(strategyId);
+      } else {
+        await apiClient.disableStrategy(strategyId);
+      }
+      
+      // Update local state immediately for better UX
+      setStrategies(prev => prev.map(strategy => 
+        strategy.id === strategyId 
+          ? { ...strategy, enabled } 
+          : strategy
+      ));
+      
+      // Background refresh to get the latest data
+      await loadDashboardData(true);
+      
+    } catch (err) {
+      console.error('Strategy toggle error:', err);
+      setError(err instanceof Error ? err.message : "Failed to update strategy");
+      
+      // Revert local state on error
+      setStrategies(prev => prev.map(strategy => 
+        strategy.id === strategyId 
+          ? { ...strategy, enabled: !enabled } 
+          : strategy
+      ));
+    }
+  };
+
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -633,45 +666,216 @@ export default function Dashboard() {
 
             {/* Strategies Tab */}
             {activeTab === "strategies" && (
-              <div>
-                <h2 className="text-xl font-semibold mb-4 text-cyan-400">⚡ Strategies</h2>
-                <div className="backdrop-blur-sm bg-black/30 border border-cyan-500/30 rounded-lg overflow-hidden shadow-lg shadow-cyan-500/10">
-                  <table className="w-full">
-                    <thead className="bg-black/50 border-b border-cyan-500/30">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-cyan-400">ID</th>
-                        <th className="px-4 py-3 text-left text-cyan-400">Name</th>
-                        <th className="px-4 py-3 text-left text-cyan-400">Description</th>
-                        <th className="px-4 py-3 text-left text-cyan-400">Status</th>
-                        <th className="px-4 py-3 text-left text-cyan-400">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {strategies.map((strategy) => (
-                        <tr key={strategy.id} className="border-t border-cyan-500/20 hover:bg-cyan-500/5 transition duration-200">
-                          <td className="px-4 py-3 text-gray-300">{strategy.id}</td>
-                          <td className="px-4 py-3 font-medium text-white">{strategy.name}</td>
-                          <td className="px-4 py-3 text-gray-400">{strategy.description || "No description"}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              strategy.enabled 
-                                ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                                : 'bg-red-500/20 text-red-400 border border-red-500/50'
-                            }`}>
-                              {strategy.enabled ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-400">
-                            {strategy.created_at ? 
-                              new Date(strategy.created_at).toLocaleDateString() : 
-                              'Not available'
-                            }
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className="space-y-6">
+                {/* Header with Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-cyan-400">⚡ Trading Strategies</h2>
+                    <p className="text-gray-400 text-sm mt-1">Manage and monitor your automated trading strategies</p>
+                  </div>
+                  <div className="flex space-x-3">
+                    <button className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 px-4 py-2 rounded-lg transition duration-200 border border-cyan-500/50 hover:border-cyan-400 shadow-lg hover:shadow-cyan-500/20 text-sm">
+                      + Add Strategy
+                    </button>
+                    <button className="bg-gray-500/20 hover:bg-gray-500/30 text-gray-400 px-4 py-2 rounded-lg transition duration-200 border border-gray-500/50 hover:border-gray-400 text-sm">
+                      Import
+                    </button>
+                  </div>
                 </div>
+
+                {/* Strategy Stats */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="backdrop-blur-sm bg-black/30 border border-cyan-500/30 rounded-lg p-4 shadow-lg shadow-cyan-500/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center">
+                        <span className="text-cyan-400">📊</span>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">Total Strategies</p>
+                        <p className="text-xl font-bold text-white">{strategies.length}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="backdrop-blur-sm bg-black/30 border border-green-500/30 rounded-lg p-4 shadow-lg shadow-green-500/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                        <span className="text-green-400">✅</span>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">Active</p>
+                        <p className="text-xl font-bold text-green-400">{strategies.filter(s => s.enabled).length}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="backdrop-blur-sm bg-black/30 border border-red-500/30 rounded-lg p-4 shadow-lg shadow-red-500/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
+                        <span className="text-red-400">⏸️</span>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">Inactive</p>
+                        <p className="text-xl font-bold text-red-400">{strategies.filter(s => !s.enabled).length}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Strategies Grid */}
+                {strategies.length === 0 ? (
+                  <div className="backdrop-blur-sm bg-black/30 border border-cyan-500/30 rounded-lg p-12 text-center shadow-lg shadow-cyan-500/10">
+                    <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-2xl">⚡</span>
+                    </div>
+                    <h3 className="text-lg font-semibold text-white mb-2">No Strategies Found</h3>
+                    <p className="text-gray-400 mb-6">Get started by creating your first trading strategy</p>
+                    <button className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 px-6 py-3 rounded-lg transition duration-200 border border-cyan-500/50 hover:border-cyan-400 shadow-lg hover:shadow-cyan-500/20">
+                      Create Strategy
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+                    {strategies.map((strategy, index) => {
+                      // Generate realistic mock data based on strategy ID
+                      const mockPerformance = ((strategy.id * 7 + 13) % 25) - 5; // -5% to +20%
+                      const mockTrades = (strategy.id * 23 + 47) % 150 + 50; // 50-200 trades
+                      const mockWinRate = ((strategy.id * 11 + 29) % 30) + 55; // 55-85%
+                      const mockDrawdown = -((strategy.id * 3 + 7) % 8 + 2); // -2% to -10%
+                      const avgTrade = mockTrades * 25;
+                      
+                      return (
+                        <div key={strategy.id} className="backdrop-blur-sm bg-black/30 border border-cyan-500/30 rounded-lg shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/20 transition-all duration-300 hover:border-cyan-400 group overflow-hidden">
+                          {/* Ultra-Compact Header */}
+                          <div className="p-2 border-b border-cyan-500/20 bg-gradient-to-r from-black/50 to-cyan-900/10">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${strategy.enabled ? 'bg-green-400 animate-pulse shadow-lg shadow-green-400/50' : 'bg-red-400'}`}></div>
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="text-sm font-semibold text-white group-hover:text-cyan-400 transition duration-200 truncate">{strategy.name}</h3>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2 flex-shrink-0">
+                                <span className="text-xs font-mono text-gray-500">#{strategy.id}</span>
+                                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                  strategy.enabled 
+                                    ? 'bg-green-500/20 text-green-400' 
+                                    : 'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {strategy.enabled ? 'ON' : 'OFF'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Super Compact Body */}
+                          <div className="p-2.5">
+                            {/* Performance & Status Row */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-3">
+                                <div className="text-center">
+                                  <p className={`text-lg font-bold leading-none ${mockPerformance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {mockPerformance >= 0 ? '+' : ''}{mockPerformance.toFixed(1)}%
+                                  </p>
+                                  <p className="text-xs text-gray-500">P&L</p>
+                                </div>
+                                <div className="w-px h-8 bg-gray-700"></div>
+                                <div className="text-center">
+                                  <p className="text-sm font-bold text-cyan-400 leading-none">{mockTrades}</p>
+                                  <p className="text-xs text-gray-500">Trades</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-bold text-blue-400 leading-none">{mockWinRate}%</p>
+                                <p className="text-xs text-gray-500">Win Rate</p>
+                              </div>
+                            </div>
+
+                            {/* Compact Performance Bar */}
+                            <div className="mb-2">
+                              <div className="w-full bg-gray-800 rounded-full h-1">
+                                <div 
+                                  className={`h-1 rounded-full transition-all duration-500 ${
+                                    mockPerformance >= 0 
+                                      ? 'bg-gradient-to-r from-green-500 to-emerald-400' 
+                                      : 'bg-gradient-to-r from-red-500 to-orange-400'
+                                  }`}
+                                  style={{ width: `${Math.min(Math.abs(mockPerformance) * 4, 100)}%` }}
+                                ></div>
+                              </div>
+                            </div>
+
+                            {/* Compact Details Grid */}
+                            <div className="grid grid-cols-2 gap-1.5 mb-2 text-xs">
+                              <div className="flex justify-between bg-black/40 rounded px-1.5 py-1">
+                                <span className="text-gray-500">Type</span>
+                                <span className="text-blue-400 font-medium">
+                                  {['Scalping', 'Swing', 'Momentum', 'Mean Rev'][strategy.id % 4]}
+                                </span>
+                              </div>
+                              <div className="flex justify-between bg-black/40 rounded px-1.5 py-1">
+                                <span className="text-gray-500">Risk</span>
+                                <span className={`font-medium ${['Low', 'Med', 'High'][strategy.id % 3] === 'Low' ? 'text-green-400' : ['Low', 'Med', 'High'][strategy.id % 3] === 'Med' ? 'text-yellow-400' : 'text-red-400'}`}>
+                                  {['Low', 'Med', 'High'][strategy.id % 3]}
+                                </span>
+                              </div>
+                              <div className="flex justify-between bg-black/40 rounded px-1.5 py-1">
+                                <span className="text-gray-500">DD</span>
+                                <span className="text-red-400 font-medium">{mockDrawdown.toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between bg-black/40 rounded px-1.5 py-1">
+                                <span className="text-gray-500">Avg</span>
+                                <span className="text-cyan-400 font-medium">₹{avgTrade > 1000 ? `${(avgTrade/1000).toFixed(1)}k` : avgTrade}</span>
+                              </div>
+                            </div>
+
+                            {/* Compact Status & Time */}
+                            <div className="flex items-center justify-between text-xs mb-2">
+                              <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-1">
+                                  <div className="w-1 h-1 bg-cyan-400 rounded-full animate-ping"></div>
+                                  <span className="text-gray-400">Live</span>
+                                </div>
+                                {strategy.enabled && (
+                                  <>
+                                    <span className="text-gray-600">•</span>
+                                    <div className="flex items-center space-x-1">
+                                      <div className="w-1 h-1 bg-green-400 rounded-full"></div>
+                                      <span className="text-gray-400">Active</span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              <span className="text-gray-500 font-mono text-xs">
+                                {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Ultra-Compact Footer */}
+                          <div className="p-1.5 border-t border-cyan-500/20 bg-black/20">
+                            <div className="flex space-x-1">
+                              <button 
+                                onClick={() => toggleStrategy(strategy.id, !strategy.enabled)}
+                                className={`flex-1 px-2 py-1 rounded text-xs font-medium transition duration-200 ${
+                                  strategy.enabled 
+                                    ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
+                                    : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                                }`}
+                              >
+                                {strategy.enabled ? '⏹' : '▶'}
+                              </button>
+                              <button className="flex-1 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 px-2 py-1 rounded text-xs font-medium transition duration-200">
+                                ⚙
+                              </button>
+                              <button className="bg-gray-500/20 text-gray-400 hover:bg-gray-500/30 px-2 py-1 rounded text-xs transition duration-200">
+                                📊
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
