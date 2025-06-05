@@ -551,6 +551,14 @@ class ApiClient {
   async getIndexData(): Promise<{ data: any[] }> {
     return this.request<{ data: any[] }>('/nse/getIndexData');
   }
+
+  async getMarqueueData(): Promise<{ data: any[] }> {
+    return this.request<{ data: any[] }>('/nse/getMarqueData');
+  }
+
+  async getNseHolidayList(): Promise<string[]> {
+    return this.request<string[]>('/nse/getNseHolidayList');
+  }
 }
 
 export const apiClient = new ApiClient();

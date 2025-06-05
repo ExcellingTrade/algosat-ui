@@ -54,18 +54,20 @@ export function MarketTicker({ className = "" }: MarketTickerProps) {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+    
     // Initial fetch
     fetchIndexData();
 
-    // Refresh data every 30 seconds
-    const dataRefreshInterval = setInterval(fetchIndexData, 30000);
+    // Refresh data every 60 seconds (changed from 30 for rate limiting)
+    const dataRefreshInterval = setInterval(fetchIndexData, 60000);
 
     return () => clearInterval(dataRefreshInterval);
-  }, []);
+  }, [isAuthenticated]);
 
   if (isLoading) {
     return (
-      <div className={isMobile ? `w-full max-w-4xl mx-auto ${className}` : `flex-1 max-w-5xl mx-4 ${className}`}>
+      <div className={isMobile ? `w-full max-w-4xl mx-auto ${className}` : `w-full max-w-4xl ${className}`}>
         <div className="flex items-center justify-center space-x-3 px-4 py-2 bg-[var(--card-background)]/70 rounded-lg border border-[var(--border)]/40">
           <div className="w-2 h-2 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></div>
           <span className="text-sm text-[var(--muted-foreground)] font-medium">Loading market data...</span>
@@ -76,7 +78,7 @@ export function MarketTicker({ className = "" }: MarketTickerProps) {
 
   if (error || indexData.length === 0) {
     return (
-      <div className={isMobile ? `w-full max-w-4xl mx-auto ${className}` : `flex-1 max-w-5xl mx-4 ${className}`}>
+      <div className={isMobile ? `w-full max-w-4xl mx-auto ${className}` : `w-full max-w-4xl ${className}`}>
         <div className="flex items-center justify-center space-x-3 px-4 py-2 bg-[var(--card-background)]/70 rounded-lg border border-[var(--error)]/40">
           <div className="w-1.5 h-1.5 bg-[var(--error)] rounded-full"></div>
           <span className="text-sm text-[var(--error)] font-medium">Market data unavailable</span>
@@ -93,7 +95,7 @@ export function MarketTicker({ className = "" }: MarketTickerProps) {
   };
 
   return (
-    <div className={isMobile ? `w-full max-w-4xl mx-auto ${className}` : `flex-1 max-w-5xl mx-4 ${className}`}>
+    <div className={isMobile ? `w-full max-w-4xl mx-auto ${className}` : `w-full max-w-4xl ${className}`}>
       {/* Horizontal ticker tape container */}
       <div className={`
         flex items-center px-3 py-2
@@ -104,15 +106,9 @@ export function MarketTicker({ className = "" }: MarketTickerProps) {
         overflow-hidden relative
       `}>
         
-        {/* Live indicator */}
-        <div className="flex items-center space-x-1.5 mr-4 flex-shrink-0">
-          <div className="w-1.5 h-1.5 bg-[var(--accent)] rounded-full animate-pulse"></div>
-          <span className="text-xs text-[var(--accent)] font-medium uppercase tracking-wide">LIVE</span>
-        </div>
-        
         {/* Auto-scrolling ticker content */}
         <div className="flex-1 overflow-hidden">
-          <div className="flex items-center gap-8 animate-ticker-scroll">
+          <div className="flex items-center gap-8 animate-ticker-scroll-market whitespace-nowrap">
             {/* First set of data */}
             {indexData.map((data, index) => {
               const isPositive = data.percChange >= 0;

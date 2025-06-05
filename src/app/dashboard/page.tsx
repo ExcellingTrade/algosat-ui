@@ -15,6 +15,7 @@ import {
   apiClient 
 } from "@/lib/api";
 import { MarketTicker } from "@/components/MarketTicker";
+import { StockTicker } from "@/components/StockTicker";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Home,
@@ -47,8 +48,9 @@ import {
   Eye,
   Target,
   Database,
-  Server
-} from 'lucide-react';
+  Server,
+  Watch
+} from "lucide-react";
 
 interface DashboardStats {
   totalStrategies: number;
@@ -97,8 +99,149 @@ export default function Dashboard() {
     totalPositions: 0,
     totalPnL: 0
   });
+  
+  // Market status state
+  const [isMarketOpen, setIsMarketOpen] = useState<boolean>(true); // Default to true during market hours
+  const [holidays, setHolidays] = useState<string[]>([]);
+  const [lastDataUpdate, setLastDataUpdate] = useState<Date>(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [holidaysLoaded, setHolidaysLoaded] = useState<boolean>(false);
+  
+  // Rate limiting state
+  const [lastApiCall, setLastApiCall] = useState<Date>(new Date());
+  const MIN_API_INTERVAL = 60000; // Minimum 60 seconds between API calls
+
+  // Check if market is open - simple function without useCallback to prevent dependency issues
+  const checkMarketStatus = () => {
+    const now = new Date();
+    
+    // Get IST time components directly using the reliable method
+    const istHours = parseInt(now.toLocaleString('en-US', {timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false}));
+    const istMinutes = parseInt(now.toLocaleString('en-US', {timeZone: 'Asia/Kolkata', minute: '2-digit'}));
+    const istDay = new Date(now.toLocaleString('en-US', {timeZone: 'Asia/Kolkata'})).getDay(); // 0 = Sunday, 6 = Saturday
+    
+    // Format date for holiday check
+    const istDate = new Date(now.toLocaleString('en-US', {timeZone: 'Asia/Kolkata'}));
+    const year = istDate.getFullYear();
+    const month = String(istDate.getMonth() + 1).padStart(2, '0');
+    const date = String(istDate.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${date}`; // YYYY-MM-DD format
+    
+    console.log('=== MARKET STATUS DEBUG ===');
+    console.log('Current IST Time:', `${istHours}:${istMinutes.toString().padStart(2, '0')}`);
+    console.log('Day of week:', istDay, '(0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)');
+    console.log('Date string:', dateString);
+    console.log('Is Weekend:', istDay === 0 || istDay === 6);
+    console.log('Holidays loaded:', holidaysLoaded);
+    console.log('Total holidays:', holidays.length);
+    console.log('Is Holiday:', holidays.includes(dateString));
+    
+    // Check if it's weekend
+    if (istDay === 0 || istDay === 6) {
+      console.log('❌ Market CLOSED: Weekend');
+      setIsMarketOpen(false);
+      return;
+    }
+    
+    // Check if it's a holiday (only if holidays are loaded)
+    if (holidaysLoaded && holidays.includes(dateString)) {
+      console.log('❌ Market CLOSED: Holiday');
+      setIsMarketOpen(false);
+      return;
+    }
+    
+    // Check market hours (9:15 AM to 3:30 PM IST)
+    const currentTimeMinutes = istHours * 60 + istMinutes;
+    const marketOpenMinutes = 9 * 60 + 15; // 9:15 AM = 555 minutes
+    const marketCloseMinutes = 15 * 60 + 30; // 3:30 PM = 930 minutes
+    
+    const isWithinMarketHours = currentTimeMinutes >= marketOpenMinutes && currentTimeMinutes <= marketCloseMinutes;
+    
+    console.log('Current time in minutes:', currentTimeMinutes);
+    console.log('Market open at:', marketOpenMinutes, 'minutes (9:15 AM)');
+    console.log('Market close at:', marketCloseMinutes, 'minutes (3:30 PM)');
+    console.log('Is within market hours:', isWithinMarketHours);
+    
+    if (isWithinMarketHours) {
+      console.log('✅ Market OPEN');
+    } else {
+      console.log('❌ Market CLOSED: Outside trading hours');
+    }
+    console.log('=== END MARKET STATUS DEBUG ===');
+    
+    setIsMarketOpen(isWithinMarketHours);
+  };
+
+  // Holiday caching constants
+  const HOLIDAY_CACHE_KEY = 'nse_holidays_cache';
+  const HOLIDAY_CACHE_EXPIRY_KEY = 'nse_holidays_cache_expiry';
+  const CACHE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+
+  // Check if holiday cache is valid - simple function without useCallback
+  const isHolidayCacheValid = () => {
+    try {
+      const expiry = localStorage.getItem(HOLIDAY_CACHE_EXPIRY_KEY);
+      if (!expiry) return false;
+      return new Date().getTime() < parseInt(expiry);
+    } catch (error) {
+      console.error('Error checking holiday cache:', error);
+      return false;
+    }
+  };
+
+  // Get holidays from cache - simple function without useCallback
+  const getHolidaysFromCache = (): string[] | null => {
+    try {
+      if (!isHolidayCacheValid()) return null;
+      const cached = localStorage.getItem(HOLIDAY_CACHE_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch (error) {
+      console.error('Error reading holiday cache:', error);
+      return null;
+    }
+  };
+
+  // Save holidays to cache - simple function without useCallback
+  const saveHolidaysToCache = (holidayList: string[]) => {
+    try {
+      const expiry = new Date().getTime() + CACHE_DURATION;
+      localStorage.setItem(HOLIDAY_CACHE_KEY, JSON.stringify(holidayList));
+      localStorage.setItem(HOLIDAY_CACHE_EXPIRY_KEY, expiry.toString());
+      console.log('Holidays cached successfully');
+    } catch (error) {
+      console.error('Error caching holidays:', error);
+    }
+  };
+
+  // Fetch holidays with caching - simple function without useCallback
+  const fetchHolidays = async () => {
+    try {
+      if (!isAuthenticated) return;
+      
+      // Check cache first
+      const cachedHolidays = getHolidaysFromCache();
+      if (cachedHolidays) {
+        console.log('Using cached holidays:', cachedHolidays.length, 'holidays');
+        setHolidays(cachedHolidays);
+        setHolidaysLoaded(true);
+        return;
+      }
+      
+      // Fetch from API if not cached
+      console.log('Fetching holidays from API...');
+      const holidayList = await apiClient.getNseHolidayList();
+      setHolidays(holidayList);
+      setHolidaysLoaded(true);
+      
+      // Cache the result
+      saveHolidaysToCache(holidayList);
+      console.log('Holidays fetched and cached:', holidayList.length, 'holidays');
+    } catch (err) {
+      console.error('Failed to fetch holidays:', err);
+      setHolidaysLoaded(true); // Mark as loaded even on error to prevent retries
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -106,19 +249,83 @@ export default function Dashboard() {
       return;
     }
     
+    // Force immediate market status check (before anything else)
+    console.log('🚀 Dashboard mounted - checking market status immediately...');
+    checkMarketStatus();
+    
     // Initial load
     loadDashboardData(false);
     
     // Set up auto-refresh for system metrics (background refresh to prevent page flipping)
     const refreshInterval = setInterval(() => {
       loadDashboardData(true); // Background refresh
-    }, 30000); // Refresh every 30 seconds
+    }, 60000); // Refresh every 60 seconds
 
-    return () => clearInterval(refreshInterval);
-  }, [isAuthenticated, router]);
+    // Set up market status check interval
+    const marketStatusInterval = setInterval(() => {
+      checkMarketStatus();
+    }, 30000); // Check market status every 30 seconds
+
+    return () => {
+      clearInterval(refreshInterval);
+      clearInterval(marketStatusInterval);
+    };
+  }, [isAuthenticated, router]); // Stable dependencies only
+
+  // Separate useEffect for holidays - only run once on mount
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    // Define functions inside useEffect to avoid dependency issues
+    const fetchHolidaysOnMount = async () => {
+      try {
+        // Check cache first
+        const cachedHolidays = getHolidaysFromCache();
+        if (cachedHolidays) {
+          console.log('Using cached holidays:', cachedHolidays.length, 'holidays');
+          setHolidays(cachedHolidays);
+          setHolidaysLoaded(true);
+          // After holidays are loaded, check market status immediately
+          setTimeout(() => checkMarketStatus(), 100);
+          return;
+        }
+        
+        // Fetch from API if not cached
+        console.log('Fetching holidays from API...');
+        const holidayList = await apiClient.getNseHolidayList();
+        setHolidays(holidayList);
+        setHolidaysLoaded(true);
+        
+        // Cache the result
+        saveHolidaysToCache(holidayList);
+        console.log('Holidays fetched and cached:', holidayList.length, 'holidays');
+        // After holidays are loaded, check market status immediately
+        setTimeout(() => checkMarketStatus(), 100);
+      } catch (err) {
+        console.error('Failed to fetch holidays:', err);
+        setHolidaysLoaded(true);
+        // Even if holidays fail, check market status
+        setTimeout(() => checkMarketStatus(), 100);
+      }
+    };
+    
+    // Initial fetch only
+    fetchHolidaysOnMount();
+  }, [isAuthenticated]); // Only depend on authentication
 
   const loadDashboardData = async (isBackgroundRefresh = false) => {
     try {
+      // Rate limiting check - prevent calls more frequent than 60 seconds
+      const now = new Date();
+      const timeSinceLastCall = now.getTime() - lastApiCall.getTime();
+      
+      if (isBackgroundRefresh && timeSinceLastCall < MIN_API_INTERVAL) {
+        console.log(`Dashboard: Skipping API call, only ${Math.round(timeSinceLastCall/1000)}s since last call (min: ${MIN_API_INTERVAL/1000}s)`);
+        return;
+      }
+      
+      setLastApiCall(now);
+      
       // Only show loading state for initial load, not background refreshes
       if (!isBackgroundRefresh) {
         setIsLoading(true);
@@ -190,18 +397,39 @@ export default function Dashboard() {
         // Extract latest metrics from system status
         if (systemStatusData) {
           const extractLatestValue = (metric: any) => {
-            const timestamps = Object.keys(metric.usage).sort((a, b) => parseInt(b) - parseInt(a));
-            return timestamps.length > 0 ? metric.usage[timestamps[0]] : 0;
+            try {
+              if (!metric || !metric.usage || typeof metric.usage !== 'object') {
+                return 0;
+              }
+              const timestamps = Object.keys(metric.usage).sort((a, b) => parseInt(b) - parseInt(a));
+              return timestamps.length > 0 ? (metric.usage[timestamps[0]] || 0) : 0;
+            } catch (error) {
+              console.warn('Error extracting metric value:', error);
+              return 0;
+            }
           };
 
-          setSystemMetrics({
-            cpuUsage: extractLatestValue(systemStatusData.cpu_usage),
-            ramUsage: extractLatestValue(systemStatusData.ram_usage),
-            diskUsage: extractLatestValue(systemStatusData.disk_space),
-            uptime: extractLatestValue(systemStatusData.uptime),
-            incomingTraffic: extractLatestValue(systemStatusData.incoming_traffic),
-            outgoingTraffic: extractLatestValue(systemStatusData.outgoing_traffic)
-          });
+          try {
+            setSystemMetrics({
+              cpuUsage: extractLatestValue(systemStatusData.cpu_usage),
+              ramUsage: extractLatestValue(systemStatusData.ram_usage),
+              diskUsage: extractLatestValue(systemStatusData.disk_space),
+              uptime: extractLatestValue(systemStatusData.uptime),
+              incomingTraffic: extractLatestValue(systemStatusData.incoming_traffic),
+              outgoingTraffic: extractLatestValue(systemStatusData.outgoing_traffic)
+            });
+          } catch (error) {
+            console.warn('Error setting system metrics:', error);
+            // Set default values if extraction fails
+            setSystemMetrics({
+              cpuUsage: 0,
+              ramUsage: 0,
+              diskUsage: 0,
+              uptime: 0,
+              incomingTraffic: 0,
+              outgoingTraffic: 0
+            });
+          }
         }
       } else {
         console.error('Dashboard: Failed to load system status:', systemStatusResult.reason);
@@ -237,6 +465,8 @@ export default function Dashboard() {
       if (!isBackgroundRefresh) {
         setIsLoading(false);
       }
+      // Update last data refresh time
+      setLastDataUpdate(new Date());
     }
   };
 
@@ -331,51 +561,87 @@ export default function Dashboard() {
       
       <div className="relative z-10">
         {/* Header with subtle border */}
-        <header className="backdrop-blur-sm bg-[var(--card-background)]/80 border-b border-[var(--border)]/50 px-6 py-3 shadow-sm">
-          <div className="flex justify-between items-center gap-4">
-            <div className="flex items-center space-x-4">
+        <header className="backdrop-blur-sm bg-[var(--card-background)]/80 border-b border-[var(--border)]/50 px-3 lg:px-6 py-3 shadow-sm">
+          <div className="flex justify-between items-center gap-2 lg:gap-4 min-w-0">
+            <div className="flex items-center space-x-2 lg:space-x-4 min-w-0 flex-1">
               {/* Logo section */}
               <div className="flex items-center space-x-2 flex-shrink-0">
-                <div className="w-8 h-8 bg-gradient-to-r from-[var(--accent)] to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-[var(--accent)]/50">
-                  <span className="text-white font-bold text-sm">AS</span>
+                <div className="w-6 h-6 lg:w-8 lg:h-8 bg-gradient-to-r from-[var(--accent)] to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-[var(--accent)]/50">
+                  <TrendingUp className="w-3 h-3 lg:w-5 lg:h-5 text-white" />
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
-                    Algo Sat
+                <div className="min-w-0">
+                  <h1 className="text-lg lg:text-xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
+                    AlgoSat
                   </h1>
-                  <p className="text-xs text-[var(--muted-foreground)]">Trading Bot v1.0.0</p>
+                  <p className="text-xs text-[var(--muted-foreground)] hidden sm:block">Trading Bot v1.0.0</p>
+                </div>
+                
+                {/* Mobile Market Status - visible on small screens */}
+                <div className="flex lg:hidden items-center space-x-1 ml-2 px-2 py-1 bg-[var(--card-background)]/90 backdrop-blur-sm rounded border border-[var(--border)]/30">
+                  {isMarketOpen ? (
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  ) : (
+                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                  )}
+                  <span className={`text-xs font-semibold ${isMarketOpen ? 'text-green-400' : 'text-red-400'}`}>
+                    {isMarketOpen ? 'OPEN' : 'CLOSED'}
+                  </span>
+                </div>
+                
+                {/* Desktop Market Status Indicator with Time - hidden on mobile */}
+                <div className="hidden lg:flex flex-col items-start space-y-1 ml-4 px-3 py-1.5 bg-[var(--card-background)]/90 backdrop-blur-sm rounded-lg border border-[var(--border)]/30">
+                  <div className="flex items-center space-x-1.5">
+                    {isMarketOpen ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-400" />
+                    )}
+                    <span className={`text-xs font-semibold ${isMarketOpen ? 'text-green-400' : 'text-red-400'}`}>
+                      {isMarketOpen ? 'OPEN' : 'CLOSED'}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Watch className="w-3 h-3 text-[var(--muted-foreground)]" />
+                    <span className="text-xs text-[var(--muted-foreground)]">
+                      {lastDataUpdate.toLocaleTimeString()}
+                    </span>
+                  </div>
                 </div>
               </div>
               
-              {/* Market Data Ticker - constrained width */}
-              <MarketTicker className="hidden lg:flex" />
+              {/* Market Data Ticker - expanded width for better visibility */}
+              <div className="hidden xl:flex flex-1 max-w-4xl mx-2">
+                <MarketTicker className="w-full" />
+              </div>
             </div>
             
-            {/* Right section - moved further right */}
-            <div className="flex items-center space-x-6 flex-shrink-0 ml-8">
-              {/* User info */}
-              <div className="text-right">
-                <p className="text-sm text-[var(--muted-foreground)]">Welcome back</p>
-                <p className="text-[var(--accent)] font-medium">
+            {/* Right section - responsive spacing and proper flex shrink */}
+            <div className="flex items-center space-x-2 lg:space-x-4 xl:space-x-6 flex-shrink-0 ml-auto">
+              {/* User info - hidden on small screens */}
+              <div className="text-right hidden sm:block">
+                <p className="text-xs lg:text-sm text-[var(--muted-foreground)]">Welcome back</p>
+                <p className="text-sm lg:text-base text-[var(--accent)] font-medium">
                   {user?.username && user.username.charAt(0).toUpperCase() + user.username.slice(1)}
                 </p>
               </div>
               
               {/* Theme Toggle */}
-              <ThemeToggle />
+              <div className="flex-shrink-0">
+                <ThemeToggle />
+              </div>
               
-              {/* Professional Logout Icon with Tooltip */}
-              <div className="relative group">
+              {/* Professional Logout Icon with Tooltip - always visible */}
+              <div className="relative group flex-shrink-0">
                 <button
                   onClick={handleLogout}
-                  className="w-10 h-10 rounded-lg bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 hover:border-red-400/50 transition-all duration-200 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-red-500/20"
+                  className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 hover:border-red-400/50 transition-all duration-200 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-red-500/20"
                   title="Logout"
                 >
-                  <LogOut className="w-5 h-5 text-red-500 group-hover:text-red-400 transition-colors duration-200" />
+                  <LogOut className="w-4 h-4 lg:w-5 lg:h-5 text-red-500 group-hover:text-red-400 transition-colors duration-200" />
                 </button>
                 
                 {/* Tooltip */}
-                <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-[var(--card-background)] border border-[var(--border)] rounded text-xs text-[var(--foreground)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap shadow-lg">
+                <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-[var(--card-background)] border border-[var(--border)] rounded text-xs text-[var(--foreground)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap shadow-lg z-50">
                   Logout
                   <div className="absolute top-full right-2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-[var(--border)]"></div>
                 </div>
@@ -384,10 +650,8 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Mobile Market Ticker - compact */}
-        <div className="lg:hidden px-4 py-2 bg-[var(--card-background)]/40 border-b border-[var(--border)]/30">
-          <MarketTicker className="flex justify-center" />
-        </div>
+        {/* Professional Stock Ticker - Full Width */}
+        <StockTicker />
 
         {/* Main Layout */}
         <div className="flex flex-col lg:flex-row">
@@ -472,13 +736,13 @@ export default function Dashboard() {
                         <span className="text-xs text-[var(--muted-foreground)]">CPU</span>
                       </div>
                       <span className="text-xs font-mono text-[var(--accent)]">
-                        {systemMetrics.cpuUsage.toFixed(1)}%
+                        {(systemMetrics.cpuUsage || 0).toFixed(1)}%
                       </span>
                     </div>
                     <div className="w-full bg-[var(--border)] rounded-full h-1 overflow-hidden">
                       <div 
                         className="bg-gradient-to-r from-[var(--accent)] to-blue-400 h-1 rounded-full shadow-sm shadow-[var(--accent)]/60 transition-all duration-700 ease-out" 
-                        style={{ width: `${Math.min(systemMetrics.cpuUsage, 100)}%` }}
+                        style={{ width: `${Math.min(Math.max(systemMetrics.cpuUsage || 0, 0), 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -491,13 +755,13 @@ export default function Dashboard() {
                         <span className="text-xs text-[var(--muted-foreground)]">RAM</span>
                       </div>
                       <span className="text-xs font-mono text-green-300">
-                        {((systemMetrics.ramUsage / (8 * 1024 * 1024 * 1024)) * 100).toFixed(1)}%
+                        {(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100).toFixed(1)}%
                       </span>
                     </div>
                     <div className="w-full bg-[var(--border)] rounded-full h-1 overflow-hidden">
                       <div 
                         className="bg-gradient-to-r from-green-500 to-emerald-400 h-1 rounded-full shadow-sm shadow-green-500/60 transition-all duration-700 ease-out" 
-                        style={{ width: `${Math.min((systemMetrics.ramUsage / (8 * 1024 * 1024 * 1024)) * 100, 100)}%` }}
+                        style={{ width: `${Math.min(Math.max(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100, 0), 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -510,7 +774,7 @@ export default function Dashboard() {
                         <span className="text-xs text-[var(--muted-foreground)]">I/O</span>
                       </div>
                       <span className="text-xs font-mono text-blue-300">
-                        {formatBytes(systemMetrics.incomingTraffic + systemMetrics.outgoingTraffic)}/s
+                        {formatBytes((systemMetrics.incomingTraffic || 0) + (systemMetrics.outgoingTraffic || 0))}/s
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -518,7 +782,7 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between mb-0.5">
                           <div className="text-xs text-[var(--muted-foreground)]">↓</div>
                           <div className="text-xs font-mono text-blue-300">
-                            {formatBytes(systemMetrics.incomingTraffic)}
+                            {formatBytes(systemMetrics.incomingTraffic || 0)}
                           </div>
                         </div>
                         <div className="w-full bg-[var(--border)] rounded-full h-0.5">
@@ -529,7 +793,7 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between mb-0.5">
                           <div className="text-xs text-[var(--muted-foreground)]">↑</div>
                           <div className="text-xs font-mono text-purple-300">
-                            {formatBytes(systemMetrics.outgoingTraffic)}
+                            {formatBytes(systemMetrics.outgoingTraffic || 0)}
                           </div>
                         </div>
                         <div className="w-full bg-[var(--border)] rounded-full h-0.5">
@@ -543,7 +807,7 @@ export default function Dashboard() {
                   <div className="flex justify-between items-center pt-1.5 border-t border-[var(--border)]">
                     <div className="text-xs text-[var(--muted-foreground)]">
                       <Clock className="w-3 h-3 inline mr-1" />
-                      <span className="text-purple-300 font-mono">{formatUptime(systemMetrics.uptime)}</span>
+                      <span className="text-purple-300 font-mono">{formatUptime(systemMetrics.uptime || 0)}</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <div className="w-1 h-1 bg-green-400 rounded-full animate-ping"></div>
@@ -556,9 +820,9 @@ export default function Dashboard() {
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
+          <main className="flex-1 p-6 overflow-x-hidden">
             {error && (
-              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 backdrop-blur-sm">
+              <div className="mb-6 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 backdrop-blur-sm">
                 {error}
               </div>
             )}
@@ -567,8 +831,8 @@ export default function Dashboard() {
             {activeTab === "overview" && (
               <div className="space-y-6">
                 {/* Top Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-4 lg:p-6 shadow-lg shadow-[var(--accent)]/10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-6 shadow-lg shadow-[var(--accent)]/10">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">₹2,57,84,225</p>
@@ -576,7 +840,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-green-500/30 rounded-lg p-4 lg:p-6 shadow-lg shadow-green-500/10">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-green-500/30 rounded-lg p-6 shadow-lg shadow-green-500/10">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Today's P/L</p>
                       <p className="text-xl lg:text-2xl font-bold text-green-400 break-words">+₹1,84,225</p>
@@ -584,7 +848,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-blue-500/30 rounded-lg p-4 lg:p-6 shadow-lg shadow-blue-500/10">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-blue-500/30 rounded-lg p-6 shadow-lg shadow-blue-500/10">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Active Strategies</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)]">{stats.activeStrategies}</p>
@@ -592,7 +856,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-purple-500/30 rounded-lg p-4 lg:p-6 shadow-lg shadow-purple-500/10">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-purple-500/30 rounded-lg p-6 shadow-lg shadow-purple-500/10">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Trading Volume</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">₹89,42,700</p>
@@ -701,8 +965,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* Strategy Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-4 shadow-lg shadow-[var(--accent)]/10">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-6 shadow-lg shadow-[var(--accent)]/10">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-[var(--accent)]/20 rounded-lg flex items-center justify-center">
                         <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
@@ -713,7 +977,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-green-500/30 rounded-lg p-4 shadow-lg shadow-green-500/10">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-green-500/30 rounded-lg p-6 shadow-lg shadow-green-500/10">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
                         <CheckCircle className="w-5 h-5 text-green-400" />
@@ -724,7 +988,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-red-500/30 rounded-lg p-4 shadow-lg shadow-red-500/10">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-red-500/30 rounded-lg p-6 shadow-lg shadow-red-500/10">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
                         <PauseCircle className="w-5 h-5 text-red-400" />

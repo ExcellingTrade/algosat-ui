@@ -141,7 +141,28 @@ body {
   100% { transform: translateX(-50%); }
 }
 
+/* Stock ticker animation - for StockTicker component */
 .animate-ticker-scroll {
-  animation: ticker-scroll 25s linear infinite;
+  animation: ticker-scroll 60s linear infinite;
+}
+
+@keyframes ticker-scroll-fast {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* StockTicker animation - for individual stocks */
+.animate-ticker-scroll-fast {
+  animation: ticker-scroll-fast 60s linear infinite;
+}
+
+@keyframes ticker-scroll-market {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* MarketTicker animation - for NIFTY indices (faster speed) */
+.animate-ticker-scroll-market {
+  animation: ticker-scroll-market 20s linear infinite;
 }
 
