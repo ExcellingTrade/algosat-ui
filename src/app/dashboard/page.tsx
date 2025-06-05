@@ -14,6 +14,7 @@ import {
   HealthStatus,
   apiClient 
 } from "@/lib/api";
+import { MarketTicker } from "@/components/MarketTicker";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Home,
@@ -21,7 +22,6 @@ import {
   Link,
   BarChart3,
   TrendingUp,
-  RefreshCw,
   LogOut,
   Cpu,
   HardDrive,
@@ -98,15 +98,9 @@ export default function Dashboard() {
     totalPnL: 0
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Temporarily set the JWT token for testing
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6InVzZXIiLCJlbWFpbCI6ImFkbWluQGFkbWluLmNvbSIsImV4cCI6MTc0ODkyOTY1NX0.BeMg9hIFsIJIWaknH5Y4hOdQ8uR8UhGw0pHLR265GW0');
-    }
-    
     if (!isAuthenticated) {
       router.push("/login");
       return;
@@ -128,8 +122,6 @@ export default function Dashboard() {
       // Only show loading state for initial load, not background refreshes
       if (!isBackgroundRefresh) {
         setIsLoading(true);
-      } else {
-        setIsBackgroundRefreshing(true);
       }
       setError(null);
       console.log('Dashboard: Starting to load data...');
@@ -244,8 +236,6 @@ export default function Dashboard() {
     } finally {
       if (!isBackgroundRefresh) {
         setIsLoading(false);
-      } else {
-        setIsBackgroundRefreshing(false);
       }
     }
   };
@@ -340,13 +330,14 @@ export default function Dashboard() {
       <div className="fixed top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--accent)]/5 via-transparent to-transparent"></div>
       
       <div className="relative z-10">
-        {/* Header */}
-        <header className="backdrop-blur-sm bg-[var(--card-background)]/80 border-b border-[var(--accent)]/30 px-6 py-4">
-          <div className="flex justify-between items-center">
+        {/* Header with subtle border */}
+        <header className="backdrop-blur-sm bg-[var(--card-background)]/80 border-b border-[var(--border)]/50 px-6 py-3 shadow-sm">
+          <div className="flex justify-between items-center gap-4">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
+              {/* Logo section */}
+              <div className="flex items-center space-x-2 flex-shrink-0">
                 <div className="w-8 h-8 bg-gradient-to-r from-[var(--accent)] to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-[var(--accent)]/50">
-                  <span className="text-black font-bold text-sm">AS</span>
+                  <span className="text-white font-bold text-sm">AS</span>
                 </div>
                 <div>
                   <h1 className="text-xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
@@ -355,68 +346,53 @@ export default function Dashboard() {
                   <p className="text-xs text-[var(--muted-foreground)]">Trading Bot v1.0.0</p>
                 </div>
               </div>
+              
+              {/* Market Data Ticker - constrained width */}
+              <MarketTicker className="hidden lg:flex" />
             </div>
-            <div className="flex items-center space-x-4">
-              {/* Background refresh indicator */}
-              {isBackgroundRefreshing && (
-                <div className="flex items-center space-x-2 text-[var(--accent)]">
-                  <div className="w-3 h-3 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm">Updating...</span>
-                </div>
-              )}
-              
-              <button
-                onClick={() => loadDashboardData(false)}
-                disabled={isLoading}
-                className="bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] px-3 py-2 rounded-lg transition duration-200 border border-[var(--accent)]/50 hover:border-[var(--accent)] shadow-lg hover:shadow-[var(--accent)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></div>
-                    <span>Refreshing...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Refresh</span>
-                  </div>
-                )}
-              </button>
-              
-              {/* Theme Toggle */}
-              <ThemeToggle />
-              
-              {/* API Configuration Status */}
-              {/* <div className="flex items-center space-x-2 px-3 py-2 bg-gray-800/50 rounded-lg border border-gray-600/50">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-400">API Connected</p>
-                  <p className="text-xs text-cyan-400 font-mono">{apiClient.getConfig().baseUrl}</p>
-                  <p className="text-xs text-gray-500">({apiClient.getConfig().detectionMethod})</p>
-                </div>
-              </div> */}
-              
+            
+            {/* Right section - moved further right */}
+            <div className="flex items-center space-x-6 flex-shrink-0 ml-8">
+              {/* User info */}
               <div className="text-right">
                 <p className="text-sm text-[var(--muted-foreground)]">Welcome back</p>
                 <p className="text-[var(--accent)] font-medium">
                   {user?.username && user.username.charAt(0).toUpperCase() + user.username.slice(1)}
                 </p>
               </div>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600/80 hover:bg-red-600 px-4 py-2 rounded-lg transition duration-200 border border-red-500/50 hover:border-red-400 shadow-lg hover:shadow-red-500/20 flex items-center space-x-2"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
+              
+              {/* Theme Toggle */}
+              <ThemeToggle />
+              
+              {/* Professional Logout Icon with Tooltip */}
+              <div className="relative group">
+                <button
+                  onClick={handleLogout}
+                  className="w-10 h-10 rounded-lg bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 hover:border-red-400/50 transition-all duration-200 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-red-500/20"
+                  title="Logout"
+                >
+                  <LogOut className="w-5 h-5 text-red-500 group-hover:text-red-400 transition-colors duration-200" />
+                </button>
+                
+                {/* Tooltip */}
+                <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-[var(--card-background)] border border-[var(--border)] rounded text-xs text-[var(--foreground)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap shadow-lg">
+                  Logout
+                  <div className="absolute top-full right-2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-[var(--border)]"></div>
+                </div>
+              </div>
             </div>
           </div>
         </header>
 
+        {/* Mobile Market Ticker - compact */}
+        <div className="lg:hidden px-4 py-2 bg-[var(--card-background)]/40 border-b border-[var(--border)]/30">
+          <MarketTicker className="flex justify-center" />
+        </div>
+
         {/* Main Layout */}
         <div className="flex flex-col lg:flex-row">
-          {/* Sidebar */}
-          <aside className="w-full lg:w-64 backdrop-blur-sm bg-[var(--card-background)]/30 border-r border-[var(--accent)]/30 lg:h-screen lg:sticky lg:top-0 relative">
+          {/* Sidebar with subtle border */}
+          <aside className="w-full lg:w-64 backdrop-blur-sm bg-[var(--card-background)]/30 border-r border-[var(--border)]/40 lg:h-screen lg:sticky lg:top-0 relative shadow-sm">
             {/* Navigation */}
             <nav className="p-4 space-y-2">
               {[
@@ -1195,16 +1171,16 @@ export default function Dashboard() {
                   
                   {/* Position Stats */}
                   <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="backdrop-blur-sm bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                      <p className="text-2xl font-bold text-green-400">{positions.length}</p>
+                    <div className="backdrop-blur-sm bg-green-500/10 border border-green-500/30 rounded-lg p-2">
+                      <p className="text-xl font-bold text-green-400">{positions.length}</p>
                       <p className="text-xs text-green-300">Total</p>
                     </div>
-                    <div className="backdrop-blur-sm bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                      <p className="text-2xl font-bold text-blue-400">{positions.filter(p => p.pnl > 0).length}</p>
+                    <div className="backdrop-blur-sm bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
+                      <p className="text-xl font-bold text-blue-400">{positions.filter(p => p.pnl > 0).length}</p>
                       <p className="text-xs text-blue-300">Profit</p>
                     </div>
-                    <div className="backdrop-blur-sm bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                      <p className="text-2xl font-bold text-red-400">{positions.filter(p => p.pnl < 0).length}</p>
+                    <div className="backdrop-blur-sm bg-red-500/10 border border-red-500/30 rounded-lg p-2">
+                      <p className="text-xl font-bold text-red-400">{positions.filter(p => p.pnl < 0).length}</p>
                       <p className="text-xs text-red-300">Loss</p>
                     </div>
                   </div>

@@ -37,6 +37,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token?: string;
   token_type: string;
   expires_in: number;
   user_info: {
@@ -137,32 +138,155 @@ export interface HealthStatus {
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
+  private refreshToken: string | null = null;
+  private tokenExpiry: number | null = null;
+  private refreshTimer: NodeJS.Timeout | null = null;
+  private refreshPromise: Promise<void> | null = null;
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
-    this.loadToken();
+    this.loadTokens();
+    this.startTokenRefreshTimer();
     
     // Log the API URL being used
     console.log('API Client initialized with base URL:', this.baseURL);
   }
 
-  private loadToken() {
+  private loadTokens() {
     if (typeof window !== 'undefined') {
       this.token = localStorage.getItem('auth_token');
+      this.refreshToken = localStorage.getItem('refresh_token');
+      const expiry = localStorage.getItem('token_expiry');
+      this.tokenExpiry = expiry ? parseInt(expiry) : null;
     }
   }
 
-  private saveToken(token: string) {
-    this.token = token;
+  private saveTokens(accessToken: string, refreshToken?: string, expiresIn?: number) {
+    this.token = accessToken;
+    
+    if (refreshToken) {
+      this.refreshToken = refreshToken;
+    }
+    
+    // Calculate expiry time (current time + expires_in seconds)
+    const expiryTime = Date.now() + (expiresIn || 3600) * 1000;
+    this.tokenExpiry = expiryTime;
+    
     if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', token);
+      localStorage.setItem('auth_token', accessToken);
+      if (refreshToken) {
+        localStorage.setItem('refresh_token', refreshToken);
+      }
+      localStorage.setItem('token_expiry', expiryTime.toString());
     }
+    
+    // Restart the refresh timer
+    this.startTokenRefreshTimer();
   }
 
-  private clearToken() {
+  private clearTokens() {
     this.token = null;
+    this.refreshToken = null;
+    this.tokenExpiry = null;
+    
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    
     if (typeof window !== 'undefined') {
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('token_expiry');
+    }
+  }
+
+  private isTokenExpired(): boolean {
+    if (!this.tokenExpiry) return true;
+    // Consider token expired 30 seconds before actual expiry for safety
+    return Date.now() > (this.tokenExpiry - 30000);
+  }
+
+  private startTokenRefreshTimer() {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+    }
+    
+    if (!this.tokenExpiry || !this.refreshToken) return;
+    
+    // Refresh token 5 minutes before expiry
+    const refreshTime = this.tokenExpiry - Date.now() - 5 * 60 * 1000;
+    
+    if (refreshTime > 0) {
+      this.refreshTimer = setTimeout(() => {
+        this.refreshAccessToken();
+      }, refreshTime);
+    }
+  }
+
+  private async refreshAccessToken(): Promise<void> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this.performTokenRefresh();
+    try {
+      await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  private async performTokenRefresh(): Promise<void> {
+    if (!this.refreshToken) {
+      console.log('No refresh token available, clearing session');
+      this.clearTokens();
+      // Redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+      return;
+    }
+
+    // Check if we've been refreshing for more than 2 hours since login
+    const initialLoginTime = localStorage.getItem('initial_login_time');
+    if (initialLoginTime && Date.now() - parseInt(initialLoginTime) > 2 * 60 * 60 * 1000) {
+      console.log('Session expired after 2 hours, logging out');
+      this.clearTokens();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+      return;
+    }
+
+    try {
+      const response = await fetch(`${this.baseURL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: this.refreshToken
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        this.saveTokens(result.access_token, result.refresh_token, result.expires_in);
+        console.log('Token refreshed successfully');
+      } else {
+        console.log('Token refresh failed, clearing session');
+        this.clearTokens();
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login';
+        }
+      }
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      this.clearTokens();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
   }
 
@@ -170,6 +294,11 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Check if token needs refresh before making request
+    if (this.isTokenExpired() && this.refreshToken) {
+      await this.refreshAccessToken();
+    }
+
     const url = `${this.baseURL}${endpoint}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -205,8 +334,15 @@ class ApiClient {
 
       if (!response.ok) {
         if (response.status === 401) {
-          this.clearToken();
-          throw new Error('Authentication failed');
+          // Try to refresh token once more
+          if (this.refreshToken && !this.refreshPromise) {
+            await this.refreshAccessToken();
+            // Retry the request with new token
+            return this.request(endpoint, options);
+          } else {
+            this.clearTokens();
+            throw new Error('Authentication failed');
+          }
         }
         const error = await response.text();
         console.error('API error response:', error);
@@ -251,7 +387,12 @@ class ApiClient {
         throw new Error('No access token received from server');
       }
       
-      this.saveToken(response.access_token);
+      this.saveTokens(response.access_token, response.refresh_token, response.expires_in);
+      
+      // Store initial login time for 2-hour session limit
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('initial_login_time', Date.now().toString());
+      }
       console.log('Token saved successfully');
       return response;
     } catch (error) {
@@ -264,7 +405,7 @@ class ApiClient {
     try {
       await this.request('/auth/logout', { method: 'POST' });
     } finally {
-      this.clearToken();
+      this.clearTokens();
     }
   }
 
@@ -404,6 +545,11 @@ class ApiClient {
       baseURL: this.baseURL,
       detectionMethod
     };
+  }
+
+  // NSE Market Data
+  async getIndexData(): Promise<{ data: any[] }> {
+    return this.request<{ data: any[] }>('/nse/getIndexData');
   }
 }
 

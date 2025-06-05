@@ -37,18 +37,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         if (apiClient.isAuthenticated()) {
           console.log('AuthContext: Token found, validating...');
+          
+          // Check if session has expired (2 hours since login)
+          const initialLoginTime = localStorage.getItem('initial_login_time');
+          if (initialLoginTime && Date.now() - parseInt(initialLoginTime) > 2 * 60 * 60 * 1000) {
+            console.log('AuthContext: Session expired after 2 hours, logging out');
+            await logout();
+            return;
+          }
+          
           // Try to get system status to validate token
           const systemStatus = await apiClient.getSystemStatus();
           console.log('AuthContext: Token is valid, system status:', systemStatus);
           
-          // Set a basic user object - in a real app, you'd get user info from an endpoint
-          const basicUser = {
-            user_id: 1,
-            username: 'authenticated_user',
-            email: 'user@example.com'
-          };
-          setUser(basicUser);
-          console.log('AuthContext: User set from existing token:', basicUser);
+          // Get user info from token or set a basic user object
+          const storedUserInfo = localStorage.getItem('user_info');
+          let user;
+          if (storedUserInfo) {
+            user = JSON.parse(storedUserInfo);
+          } else {
+            // Fallback user object
+            user = {
+              user_id: 1,
+              username: 'authenticated_user',
+              email: 'user@example.com'
+            };
+          }
+          setUser(user);
+          console.log('AuthContext: User set from existing token:', user);
         } else {
           console.log('AuthContext: No token found');
         }
@@ -78,6 +94,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         tokenType: response.token_type,
         expiresIn: response.expires_in 
       });
+      
+      // Store user info in localStorage for persistence
+      if (response.user_info) {
+        localStorage.setItem('user_info', JSON.stringify(response.user_info));
+      }
+      
       setUser(response.user_info);
       console.log('AuthContext: User state updated, isAuthenticated should be:', !!response.user_info);
     } catch (error) {
@@ -97,6 +119,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Clear user info from localStorage
+      localStorage.removeItem('user_info');
+      localStorage.removeItem('initial_login_time');
       setUser(null);
       setIsLoading(false);
     }
