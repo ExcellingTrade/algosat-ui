@@ -90,9 +90,34 @@ body {
   box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.3);
 }
 
-/* Enhanced shadow effects for market ticker */
+/* Enhanced shadow effects for professional components */
 .shadow-3xl {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 20px rgba(6, 182, 212, 0.1);
+}
+
+/* Professional glass morphism effect */
+.glass-morphism {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Enhanced professional borders */
+.professional-border {
+  border: 2px solid;
+  border-image: linear-gradient(135deg, var(--accent), transparent) 1;
+  border-radius: 12px;
+}
+
+/* Smooth professional animations */
+.smooth-professional {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Professional hover effects */
+.professional-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.3), 0 0 30px rgba(6, 182, 212, 0.2);
 }
 
 /* Smooth animations for market ticker */

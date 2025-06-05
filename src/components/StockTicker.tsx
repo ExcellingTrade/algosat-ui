@@ -113,10 +113,10 @@ export function StockTicker({ className = "" }: StockTickerProps) {
   };
 
   return (
-    <div className={`w-full bg-[var(--card-background)]/80 backdrop-blur-sm border-b border-[var(--border)]/50 shadow-sm ${className}`}>
-      {/* Scrolling Ticker - Clean without status overlay */}
-      <div className="relative overflow-hidden py-3">
-        <div className="flex items-center gap-4 animate-ticker-scroll-fast" style={{ width: 'max-content' }}>
+    <div className={`w-full bg-gradient-to-r from-[var(--card-background)]/95 to-[var(--card-background)]/85 backdrop-blur-md border-y-2 border-[var(--border)]/60 shadow-lg shadow-[var(--accent)]/20 ${className}`}>
+      {/* Enhanced Professional Scrolling Ticker */}
+      <div className="relative overflow-hidden py-4 px-6">
+        <div className="flex items-center gap-6 animate-ticker-scroll-fast" style={{ width: 'max-content' }}>
           {/* First set of data */}
           {stockData.map((stock, index) => {
             const isPositive = stock.change >= 0;
@@ -129,9 +129,12 @@ export function StockTicker({ className = "" }: StockTickerProps) {
                 key={`${stock.symbol}-1-${index}`}
                 className={`
                   flex items-center gap-3 flex-shrink-0 whitespace-nowrap
-                  px-3 py-2 rounded-lg border ${borderColor} ${bgColor}
-                  transition-all duration-300 hover:scale-105 hover:shadow-lg
-                  min-w-[200px]
+                  px-4 py-3 rounded-xl border-2 ${borderColor} ${bgColor}
+                  backdrop-blur-sm shadow-md shadow-black/10
+                  transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-black/20
+                  hover:border-opacity-80 hover:bg-opacity-80
+                  min-w-[220px]
+                  ring-1 ring-white/10
                 `}
               >
                 {/* Trend icon */}
@@ -187,9 +190,12 @@ export function StockTicker({ className = "" }: StockTickerProps) {
                 key={`${stock.symbol}-2-${index}`}
                 className={`
                   flex items-center gap-3 flex-shrink-0 whitespace-nowrap
-                  px-3 py-2 rounded-lg border ${borderColor} ${bgColor}
-                  transition-all duration-300 hover:scale-105 hover:shadow-lg
-                  min-w-[200px]
+                  px-4 py-3 rounded-xl border-2 ${borderColor} ${bgColor}
+                  backdrop-blur-sm shadow-md shadow-black/10
+                  transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-black/20
+                  hover:border-opacity-80 hover:bg-opacity-80
+                  min-w-[220px]
+                  ring-1 ring-white/10
                 `}
               >
                 {/* Trend icon */}

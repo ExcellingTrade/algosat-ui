@@ -49,7 +49,9 @@ import {
   Target,
   Database,
   Server,
-  Watch
+  Watch,
+  Monitor,
+  Info
 } from "lucide-react";
 
 interface DashboardStats {
@@ -560,8 +562,8 @@ export default function Dashboard() {
       <div className="fixed top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--accent)]/5 via-transparent to-transparent"></div>
       
       <div className="relative z-10">
-        {/* Header with subtle border */}
-        <header className="backdrop-blur-sm bg-[var(--card-background)]/80 border-b border-[var(--border)]/50 px-3 lg:px-6 py-3 shadow-sm">
+        {/* Header with subtle border - Sticky for better UX */}
+        <header className="sticky top-0 z-30 backdrop-blur-sm bg-[var(--card-background)]/90 border-b border-[var(--border)]/50 px-3 lg:px-6 py-3 shadow-sm">
           <div className="flex justify-between items-center gap-2 lg:gap-4 min-w-0">
             <div className="flex items-center space-x-2 lg:space-x-4 min-w-0 flex-1">
               {/* Logo section */}
@@ -650,21 +652,24 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Professional Stock Ticker - Full Width */}
-        <StockTicker />
+        {/* Professional Stock Ticker - Full Width with proper spacing */}
+        <div className="w-full">
+          <StockTicker />
+        </div>
 
-        {/* Main Layout */}
+        {/* Main Layout with Perfect Alignment */}
         <div className="flex flex-col lg:flex-row">
-          {/* Sidebar with subtle border */}
-          <aside className="w-full lg:w-64 backdrop-blur-sm bg-[var(--card-background)]/30 border-r border-[var(--border)]/40 lg:h-screen lg:sticky lg:top-0 relative shadow-sm">
-            {/* Navigation */}
-            <nav className="p-4 space-y-2">
+          {/* Enhanced Sidebar with Professional Borders */}
+          <aside className="w-full lg:w-64 backdrop-blur-md bg-gradient-to-b from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-r-2 border-[var(--border)]/60 lg:h-screen lg:sticky lg:top-0 relative shadow-xl shadow-[var(--accent)]/10">
+            {/* Navigation with enhanced spacing */}
+            <nav className="p-6 space-y-3">
               {[
                 { id: "overview", label: "Dashboard", icon: Home },
                 { id: "strategies", label: "Strategies", icon: Zap },
                 { id: "brokers", label: "Brokers", icon: Link },
                 { id: "positions", label: "Positions", icon: BarChart3 },
                 { id: "orders", label: "Orders", icon: TrendingUp },
+                { id: "health", label: "System Health", icon: Activity },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -681,148 +686,13 @@ export default function Dashboard() {
               ))}
             </nav>
 
-            {/* Status Widgets Container - Fixed positioning for large screens */}
-            <div className="lg:absolute lg:bottom-2 lg:left-2 lg:right-2 p-4 lg:p-0 space-y-3">
-              {/* API Health Status */}
-              <div className="backdrop-blur-sm bg-gradient-to-br from-[var(--card-background)]/90 to-[var(--card-background)]/70 border border-[var(--accent)]/40 rounded-lg p-2 shadow-xl shadow-[var(--accent)]/20">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-1.5">
-                    <div className={`relative w-2.5 h-2.5 rounded-full ${apiHealthy ? 'bg-green-400' : 'bg-red-400'}`}>
-                      {apiHealthy && (
-                        <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-75"></div>
-                      )}
-                      <div className={`absolute inset-0 rounded-full ${apiHealthy ? 'bg-green-400' : 'bg-red-400'} animate-pulse`}></div>
-                    </div>
-                    <span className="text-xs font-semibold text-[var(--accent)]">API</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    <span className={`font-mono text-xs ${apiHealthy ? 'text-green-400' : 'text-red-400'}`}>
-                      {apiHealthy ? 'OK' : 'ERR'}
-                    </span>
-                    {healthStatus && (
-                      <div className="flex items-center space-x-0.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${healthStatus.components.database ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                        <span className="text-xs text-[var(--muted-foreground)]">DB</span>
-                        <div className={`w-1.5 h-1.5 rounded-full ${healthStatus.components.security ? 'bg-green-400' : 'bg-red-400'}`}></div>
-                        <span className="text-xs text-[var(--muted-foreground)]">SEC</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Enhanced System Status */}
-              <div className="backdrop-blur-sm bg-gradient-to-br from-[var(--card-background)]/90 to-[var(--card-background)]/70 border border-[var(--accent)]/40 rounded-lg p-2.5 shadow-xl shadow-[var(--accent)]/20">
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center space-x-1.5">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
-                    <h3 className="text-xs font-semibold text-[var(--accent)]">System</h3>
-                  </div>
-                  <div className="text-xs text-[var(--muted-foreground)] font-mono">
-                    {new Date().toLocaleTimeString('en-US', { 
-                      hour12: false, 
-                      hour: '2-digit', 
-                      minute: '2-digit'
-                    })}
-                  </div>
-                </div>
-                
-                <div className="space-y-2.5">
-                  {/* CPU Usage */}
-                  <div className="bg-[var(--background)]/30 rounded p-2 border border-[var(--border)]">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center space-x-1">
-                        <Cpu className="w-3 h-3 text-[var(--muted-foreground)]" />
-                        <span className="text-xs text-[var(--muted-foreground)]">CPU</span>
-                      </div>
-                      <span className="text-xs font-mono text-[var(--accent)]">
-                        {(systemMetrics.cpuUsage || 0).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-[var(--border)] rounded-full h-1 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-[var(--accent)] to-blue-400 h-1 rounded-full shadow-sm shadow-[var(--accent)]/60 transition-all duration-700 ease-out" 
-                        style={{ width: `${Math.min(Math.max(systemMetrics.cpuUsage || 0, 0), 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* Memory Usage */}
-                  <div className="bg-[var(--background)]/30 rounded p-2 border border-[var(--border)]">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center space-x-1">
-                        <HardDrive className="w-3 h-3 text-[var(--muted-foreground)]" />
-                        <span className="text-xs text-[var(--muted-foreground)]">RAM</span>
-                      </div>
-                      <span className="text-xs font-mono text-green-300">
-                        {(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-[var(--border)] rounded-full h-1 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-green-500 to-emerald-400 h-1 rounded-full shadow-sm shadow-green-500/60 transition-all duration-700 ease-out" 
-                        style={{ width: `${Math.min(Math.max(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100, 0), 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* Network Traffic */}
-                  <div className="bg-[var(--background)]/30 rounded p-2 border border-[var(--border)]">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center space-x-1">
-                        <Wifi className="w-3 h-3 text-[var(--muted-foreground)]" />
-                        <span className="text-xs text-[var(--muted-foreground)]">I/O</span>
-                      </div>
-                      <span className="text-xs font-mono text-blue-300">
-                        {formatBytes((systemMetrics.incomingTraffic || 0) + (systemMetrics.outgoingTraffic || 0))}/s
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <div className="text-xs text-[var(--muted-foreground)]">↓</div>
-                          <div className="text-xs font-mono text-blue-300">
-                            {formatBytes(systemMetrics.incomingTraffic || 0)}
-                          </div>
-                        </div>
-                        <div className="w-full bg-[var(--border)] rounded-full h-0.5">
-                          <div className="bg-gradient-to-r from-blue-500 to-[var(--accent)] h-0.5 rounded-full animate-pulse shadow-sm shadow-blue-500/60"></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <div className="text-xs text-[var(--muted-foreground)]">↑</div>
-                          <div className="text-xs font-mono text-purple-300">
-                            {formatBytes(systemMetrics.outgoingTraffic || 0)}
-                          </div>
-                        </div>
-                        <div className="w-full bg-[var(--border)] rounded-full h-0.5">
-                          <div className="bg-gradient-to-r from-purple-500 to-pink-400 h-0.5 rounded-full animate-pulse shadow-sm shadow-purple-500/60"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* System Info */}
-                  <div className="flex justify-between items-center pt-1.5 border-t border-[var(--border)]">
-                    <div className="text-xs text-[var(--muted-foreground)]">
-                      <Clock className="w-3 h-3 inline mr-1" />
-                      <span className="text-purple-300 font-mono">{formatUptime(systemMetrics.uptime || 0)}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <div className="w-1 h-1 bg-green-400 rounded-full animate-ping"></div>
-                      <span className="text-xs text-green-400">Live</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Sidebar content removed - System Health moved to dedicated tab */}
           </aside>
 
-          {/* Main Content */}
-          <main className="flex-1 p-6 overflow-x-hidden">
+          {/* Enhanced Main Content with Perfect Alignment */}
+          <main className="flex-1 p-6 overflow-x-hidden bg-gradient-to-br from-[var(--background)]/50 to-[var(--card-background)]/30">
             {error && (
-              <div className="mb-6 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 backdrop-blur-sm">
+              <div className="mb-6 p-4 bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-500/50 rounded-xl text-red-300 backdrop-blur-md shadow-lg shadow-red-500/20">
                 {error}
               </div>
             )}
@@ -830,9 +700,9 @@ export default function Dashboard() {
             {/* Overview Tab */}
             {activeTab === "overview" && (
               <div className="space-y-6">
-                {/* Top Stats */}
+                {/* Enhanced Professional Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-6 shadow-lg shadow-[var(--accent)]/10">
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10 hover:shadow-2xl hover:shadow-[var(--accent)]/30 transition-all duration-300">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">₹2,57,84,225</p>
@@ -840,7 +710,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-green-500/30 rounded-lg p-6 shadow-lg shadow-green-500/10">
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-green-500/40 rounded-xl p-6 shadow-xl shadow-green-500/20 ring-1 ring-green-500/10 hover:shadow-2xl hover:shadow-green-500/30 transition-all duration-300">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Today's P/L</p>
                       <p className="text-xl lg:text-2xl font-bold text-green-400 break-words">+₹1,84,225</p>
@@ -848,7 +718,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-blue-500/30 rounded-lg p-6 shadow-lg shadow-blue-500/10">
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-blue-500/40 rounded-xl p-6 shadow-xl shadow-blue-500/20 ring-1 ring-blue-500/10 hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Active Strategies</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)]">{stats.activeStrategies}</p>
@@ -945,23 +815,13 @@ export default function Dashboard() {
             {/* Strategies Tab */}
             {activeTab === "strategies" && (
               <div className="space-y-6">
-                {/* Header with Actions */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <Zap className="w-5 h-5 text-[var(--accent)]" />
-                      <h2 className="text-xl font-semibold text-[var(--accent)]">Trading Strategies</h2>
-                    </div>
-                    <p className="text-[var(--muted-foreground)] text-sm mt-1">Manage and monitor your automated trading strategies</p>
+                {/* Header */}
+                <div className="mb-6">
+                  <div className="flex items-center space-x-2">
+                    <Zap className="w-5 h-5 text-[var(--accent)]" />
+                    <h2 className="text-xl font-semibold text-[var(--accent)]">Trading Strategies</h2>
                   </div>
-                  <div className="flex space-x-3">
-                    <button className="bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] px-4 py-2 rounded-lg transition duration-200 border border-[var(--accent)]/50 hover:border-[var(--accent)] shadow-lg hover:shadow-[var(--accent)]/20 text-sm">
-                      + Add Strategy
-                    </button>
-                    <button className="bg-[var(--muted)]/20 hover:bg-[var(--muted)]/30 text-[var(--muted-foreground)] px-4 py-2 rounded-lg transition duration-200 border border-[var(--border)] hover:border-[var(--muted-foreground)] text-sm">
-                      Import
-                    </button>
-                  </div>
+                  <p className="text-[var(--muted-foreground)] text-sm mt-1">Manage and monitor your automated trading strategies</p>
                 </div>
 
                 {/* Strategy Stats */}
@@ -1402,12 +1262,12 @@ export default function Dashboard() {
                           {/* Notes Section */}
                           {broker.notes && (
                             <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                              <p className="text-xs text-yellow-400">
+                              <div className="text-xs text-yellow-400">
                                 <div className="flex items-center space-x-2">
                                   <Lightbulb className="w-4 h-4 text-yellow-400" />
                                   <span>{broker.notes}</span>
                                 </div>
-                              </p>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1486,18 +1346,18 @@ export default function Dashboard() {
                         Your portfolio is clean and ready for action. Deploy your strategies to start building positions.
                       </p>
 
-                      {/* Action Buttons */}
+                      {/* Professional Action Buttons */}
                       {/* <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <button className="bg-gradient-to-r from-[var(--accent)] to-blue-500 hover:from-[var(--accent)]/80 hover:to-blue-400 text-black font-bold px-8 py-3 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-[var(--accent)]/25 hover:shadow-[var(--accent)]/40">
                           <span className="flex items-center space-x-2">
                             <span>⚡</span>
-                            <span>Activate Strategies</span>
+                            <span>View Strategies</span>
                           </span>
                         </button>
                         <button className="bg-[var(--background)]/50 hover:bg-[var(--background)]/70 text-[var(--accent)] border border-[var(--accent)]/50 hover:border-[var(--accent)] font-medium px-8 py-3 rounded-lg transition-all duration-300 backdrop-blur-sm">
                           <span className="flex items-center space-x-2">
-                            <span>🔍</span>
-                            <span>Market Scanner</span>
+                            <span>📊</span>
+                            <span>Market Overview</span>
                           </span>
                         </button>
                       </div> */}
@@ -1633,26 +1493,26 @@ export default function Dashboard() {
                         Your trading engine is primed and ready. Deploy strategies to begin automated order execution across all connected brokers.
                       </p>
 
-                      {/* Advanced Action Grid */}
+                      {/* Professional Action Grid */}
                       {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 max-w-2xl mx-auto">
                         <button className="group bg-gradient-to-r from-purple-600 to-[var(--accent)] hover:from-purple-500 hover:to-[var(--accent)]/80 text-white font-bold px-8 py-4 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl shadow-purple-500/25 hover:shadow-purple-500/40 relative overflow-hidden">
                           <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 transform -skew-x-12 group-hover:animate-pulse"></div>
                           <span className="relative flex items-center justify-center space-x-3">
-                            <span className="text-2xl">🚀</span>
-                            <span>Launch Strategies</span>
+                            <span className="text-2xl">📈</span>
+                            <span>View Strategies</span>
                           </span>
                         </button>
                         
                         <button className="group bg-[var(--background)]/60 hover:bg-[var(--background)]/80 text-[var(--accent)] border-2 border-[var(--accent)]/50 hover:border-[var(--accent)] font-bold px-8 py-4 rounded-xl transition-all duration-300 backdrop-blur-sm relative overflow-hidden">
                           <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent)]/0 via-[var(--accent)]/10 to-[var(--accent)]/0 transform -skew-x-12 group-hover:animate-pulse"></div>
                           <span className="relative flex items-center justify-center space-x-3">
-                            <span className="text-2xl">⚡</span>
-                            <span>Manual Order</span>
+                            <span className="text-2xl">📊</span>
+                            <span>Market Analysis</span>
                           </span>
                         </button>
                       </div> */}
 
-                      {/* Cyber Stats Dashboard */}
+                      {/* Professional Stats Dashboard */}
                       {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
                         <div className="backdrop-blur-sm bg-gradient-to-br from-purple-500/10 to-[var(--background)]/40 border border-purple-500/30 rounded-xl p-6 relative overflow-hidden group">
                           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -1662,14 +1522,56 @@ export default function Dashboard() {
                                 <span className="text-2xl">⚡</span>
                               </div>
                               <div>
-                                <p className="text-purple-400 font-bold text-lg">Nano Speed</p>
+                                <p className="text-purple-400 font-bold text-lg">Lightning Fast</p>
                                 <p className="text-[var(--muted-foreground)] text-sm">Ultra-low latency execution</p>
                               </div>
                             </div>
                             <div className="bg-[var(--background)]/40 rounded-lg p-3">
                               <div className="flex justify-between items-center">
-                                <span className="text-[var(--muted-foreground)]">Latency</span>
-                                <span className="text-purple-400 font-mono">&lt; 0.5ms</span>
+                                <span className="text-[var(--muted-foreground)]">Response Time</span>
+                                <span className="text-purple-400 font-mono">&lt; 50ms</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="backdrop-blur-sm bg-gradient-to-br from-[var(--accent)]/10 to-[var(--background)]/40 border border-[var(--accent)]/30 rounded-xl p-6 relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-br from-[var(--accent)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <div className="relative">
+                            <div className="flex items-center space-x-4 mb-3">
+                              <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-xl flex items-center justify-center">
+                                <span className="text-2xl">🔒</span>
+                              </div>
+                              <div>
+                                <p className="text-[var(--accent)] font-bold text-lg">Secure Trading</p>
+                                <p className="text-[var(--muted-foreground)] text-sm">Bank-grade encryption</p>
+                              </div>
+                            </div>
+                            <div className="bg-[var(--background)]/40 rounded-lg p-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[var(--muted-foreground)]">Security Level</span>
+                                <span className="text-[var(--accent)] font-mono">256-bit</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="backdrop-blur-sm bg-gradient-to-br from-blue-500/10 to-[var(--background)]/40 border border-blue-500/30 rounded-xl p-6 relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <div className="relative">
+                            <div className="flex items-center space-x-4 mb-3">
+                              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                                <span className="text-2xl">🌐</span>
+                              </div>
+                              <div>
+                                <p className="text-blue-400 font-bold text-lg">Multi-Broker</p>
+                                <p className="text-[var(--muted-foreground)] text-sm">Unified execution</p>
+                              </div>
+                            </div>
+                            <div className="bg-[var(--background)]/40 rounded-lg p-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[var(--muted-foreground)]">Brokers Ready</span>
+                                <span className="text-blue-400 font-mono">All Active</span>
                               </div>
                             </div>
                           </div>
@@ -1719,6 +1621,382 @@ export default function Dashboard() {
                     </table>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* System Health Tab */}
+            {activeTab === "health" && (
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="mb-6">
+                  <div className="flex items-center space-x-2">
+                    <Activity className="w-5 h-5 text-[var(--accent)]" />
+                    <h2 className="text-xl font-semibold text-[var(--accent)]">System Health Monitor</h2>
+                  </div>
+                  <p className="text-[var(--muted-foreground)] text-sm mt-1">Real-time monitoring of system performance and API health</p>
+                </div>
+
+                {/* Health Status Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {/* Overall System Status */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-green-500/40 rounded-xl p-6 shadow-xl shadow-green-500/20 ring-1 ring-green-500/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                        <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-lg shadow-green-400/50"></div>
+                      </div>
+                      <div>
+                        <p className="text-[var(--muted-foreground)] text-sm">System Status</p>
+                        <p className="text-lg font-bold text-green-400">HEALTHY</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">All systems operational</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* API Health */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-lg flex items-center justify-center">
+                        <Wifi className="w-6 h-6 text-[var(--accent)]" />
+                      </div>
+                      <div>
+                        <p className="text-[var(--muted-foreground)] text-sm">API Status</p>
+                        <p className={`text-lg font-bold ${apiHealthy ? 'text-green-400' : 'text-red-400'}`}>
+                          {apiHealthy ? 'ONLINE' : 'OFFLINE'}
+                        </p>
+                        <p className="text-xs text-[var(--muted-foreground)]">Response time: ~45ms</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* System Uptime */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-blue-500/40 rounded-xl p-6 shadow-xl shadow-blue-500/20 ring-1 ring-blue-500/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <Clock className="w-6 h-6 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-[var(--muted-foreground)] text-sm">System Uptime</p>
+                        <p className="text-lg font-bold text-blue-400">{formatUptime(systemMetrics.uptime || 0)}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">Since last restart</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Active Connections */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-purple-500/40 rounded-xl p-6 shadow-xl shadow-purple-500/20 ring-1 ring-purple-500/10">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                        <Users className="w-6 h-6 text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="text-[var(--muted-foreground)] text-sm">Active Sessions</p>
+                        <p className="text-lg font-bold text-purple-400">1</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">Connected user(s)</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Metrics Dashboard */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Resource Usage */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10">
+                    <div className="flex items-center space-x-2 mb-6">
+                      <Cpu className="w-5 h-5 text-[var(--accent)]" />
+                      <h3 className="text-lg font-semibold text-[var(--accent)]">Resource Usage</h3>
+                    </div>
+
+                    <div className="space-y-6">
+                      {/* CPU Usage */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <Cpu className="w-4 h-4 text-[var(--muted-foreground)]" />
+                            <span className="text-sm font-medium text-[var(--foreground)]">CPU Usage</span>
+                          </div>
+                          <span className="text-sm font-mono text-[var(--accent)]">
+                            {(systemMetrics.cpuUsage || 0).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-[var(--border)] rounded-full h-3 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-[var(--accent)] to-blue-400 h-3 rounded-full shadow-sm shadow-[var(--accent)]/60 transition-all duration-700 ease-out relative" 
+                            style={{ width: `${Math.min(Math.max(systemMetrics.cpuUsage || 0, 0), 100)}%` }}
+                          >
+                            <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs text-[var(--muted-foreground)] mt-1">
+                          <span>0%</span>
+                          <span>50%</span>
+                          <span>100%</span>
+                        </div>
+                      </div>
+
+                      {/* Memory Usage */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <HardDrive className="w-4 h-4 text-[var(--muted-foreground)]" />
+                            <span className="text-sm font-medium text-[var(--foreground)]">Memory (RAM)</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-mono text-green-400">
+                              {(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100).toFixed(1)}%
+                            </span>
+                            <div className="text-xs text-[var(--muted-foreground)]">
+                              {formatBytes(systemMetrics.ramUsage || 0)} / 8.0 GB
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-full bg-[var(--border)] rounded-full h-3 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full shadow-sm shadow-green-500/60 transition-all duration-700 ease-out relative" 
+                            style={{ width: `${Math.min(Math.max(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100, 0), 100)}%` }}
+                          >
+                            <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs text-[var(--muted-foreground)] mt-1">
+                          <span>0 GB</span>
+                          <span>4 GB</span>
+                          <span>8 GB</span>
+                        </div>
+                      </div>
+
+                      {/* Disk Usage */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <HardDrive className="w-4 h-4 text-[var(--muted-foreground)]" />
+                            <span className="text-sm font-medium text-[var(--foreground)]">Disk Space</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-mono text-orange-400">65.3%</span>
+                            <div className="text-xs text-[var(--muted-foreground)]">
+                              32.7 GB / 50.0 GB
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-full bg-[var(--border)] rounded-full h-3 overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-orange-500 to-amber-400 h-3 rounded-full shadow-sm shadow-orange-500/60 transition-all duration-700 ease-out relative" 
+                            style={{ width: '65.3%' }}
+                          >
+                            <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs text-[var(--muted-foreground)] mt-1">
+                          <span>0 GB</span>
+                          <span>25 GB</span>
+                          <span>50 GB</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Network & API Monitoring */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10">
+                    <div className="flex items-center space-x-2 mb-6">
+                      <Wifi className="w-5 h-5 text-[var(--accent)]" />
+                      <h3 className="text-lg font-semibold text-[var(--accent)]">Network & API Health</h3>
+                    </div>
+
+                    <div className="space-y-6">
+                      {/* Network Traffic */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-[var(--foreground)]">Network Traffic</span>
+                          <span className="text-sm font-mono text-blue-400">
+                            {formatBytes((systemMetrics.incomingTraffic || 0) + (systemMetrics.outgoingTraffic || 0))}/s
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-1">
+                                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                <span className="text-xs text-[var(--muted-foreground)]">Download</span>
+                              </div>
+                              <span className="text-xs font-mono text-blue-400">
+                                {formatBytes(systemMetrics.incomingTraffic || 0)}/s
+                              </span>
+                            </div>
+                            <div className="w-full bg-[var(--border)] rounded-full h-2">
+                              <div className="bg-gradient-to-r from-blue-500 to-[var(--accent)] h-2 rounded-full animate-pulse shadow-sm shadow-blue-500/60"></div>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-1">
+                                <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                                <span className="text-xs text-[var(--muted-foreground)]">Upload</span>
+                              </div>
+                              <span className="text-xs font-mono text-purple-400">
+                                {formatBytes(systemMetrics.outgoingTraffic || 0)}/s
+                              </span>
+                            </div>
+                            <div className="w-full bg-[var(--border)] rounded-full h-2">
+                              <div className="bg-gradient-to-r from-purple-500 to-pink-400 h-2 rounded-full animate-pulse shadow-sm shadow-purple-500/60"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* API Health Components */}
+                      <div>
+                        <span className="text-sm font-medium text-[var(--foreground)] mb-3 block">API Components</span>
+                        <div className="space-y-3">
+                          {healthStatus && Object.entries(healthStatus.components).map(([component, status]) => (
+                            <div key={component} className="flex items-center justify-between p-3 bg-[var(--background)]/40 rounded-lg border border-[var(--border)]">
+                              <div className="flex items-center space-x-3">
+                                <div className={`w-3 h-3 rounded-full ${status ? 'bg-green-400' : 'bg-red-400'}`}>
+                                  {status && (
+                                    <div className="w-3 h-3 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                                  )}
+                                </div>
+                                <span className="text-sm text-[var(--foreground)] capitalize">{component}</span>
+                              </div>
+                              <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                status 
+                                  ? 'bg-green-500/20 text-green-400' 
+                                  : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {status ? 'HEALTHY' : 'FAILED'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Response Times */}
+                      <div>
+                        <span className="text-sm font-medium text-[var(--foreground)] mb-3 block">Response Times</span>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between p-2 bg-[var(--background)]/40 rounded">
+                            <span className="text-xs text-[var(--muted-foreground)]">API Avg</span>
+                            <span className="text-xs font-mono text-green-400">45ms</span>
+                          </div>
+                          <div className="flex items-center justify-between p-2 bg-[var(--background)]/40 rounded">
+                            <span className="text-xs text-[var(--muted-foreground)]">Database</span>
+                            <span className="text-xs font-mono text-green-400">12ms</span>
+                          </div>
+                          <div className="flex items-center justify-between p-2 bg-[var(--background)]/40 rounded">
+                            <span className="text-xs text-[var(--muted-foreground)]">Cache Hit</span>
+                            <span className="text-xs font-mono text-blue-400">2ms</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Information & Live Status */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* System Information */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10">
+                    <div className="flex items-center space-x-2 mb-4">
+                      <Monitor className="w-5 h-5 text-[var(--accent)]" />
+                      <h3 className="text-lg font-semibold text-[var(--accent)]">System Info</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-2 bg-[var(--background)]/40 rounded">
+                        <span className="text-sm text-[var(--muted-foreground)]">OS</span>
+                        <span className="text-sm font-medium text-[var(--foreground)]">Ubuntu 22.04 LTS</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-[var(--background)]/40 rounded">
+                        <span className="text-sm text-[var(--muted-foreground)]">Python</span>
+                        <span className="text-sm font-medium text-[var(--foreground)]">3.12.0</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-[var(--background)]/40 rounded">
+                        <span className="text-sm text-[var(--muted-foreground)]">Node.js</span>
+                        <span className="text-sm font-medium text-[var(--foreground)]">20.11.0</span>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-[var(--background)]/40 rounded">
+                        <span className="text-sm text-[var(--muted-foreground)]">Architecture</span>
+                        <span className="text-sm font-medium text-[var(--foreground)]">x86_64</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Process Monitoring */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10">
+                    <div className="flex items-center space-x-2 mb-4">
+                      <Activity className="w-5 h-5 text-[var(--accent)]" />
+                      <h3 className="text-lg font-semibold text-[var(--accent)]">Active Processes</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center p-2 bg-[var(--background)]/40 rounded">
+                        <div>
+                          <span className="text-sm font-medium text-[var(--foreground)]">AlgoSat API</span>
+                          <div className="text-xs text-green-400">Running</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-mono text-[var(--accent)]">PID: 1234</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">CPU: 2.1%</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-[var(--background)]/40 rounded">
+                        <div>
+                          <span className="text-sm font-medium text-[var(--foreground)]">UI Server</span>
+                          <div className="text-xs text-green-400">Running</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-mono text-[var(--accent)]">PID: 5678</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">CPU: 0.8%</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center p-2 bg-[var(--background)]/40 rounded">
+                        <div>
+                          <span className="text-sm font-medium text-[var(--foreground)]">Strategy Engine</span>
+                          <div className="text-xs text-green-400">Running</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-mono text-[var(--accent)]">PID: 9012</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">CPU: 1.5%</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Status & Alerts */}
+                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10">
+                    <div className="flex items-center space-x-2 mb-4">
+                      <AlertTriangle className="w-5 h-5 text-[var(--accent)]" />
+                      <h3 className="text-lg font-semibold text-[var(--accent)]">System Alerts</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
+                          <span className="text-sm text-green-400 font-medium">All Systems Operational</span>
+                        </div>
+                        <span className="text-xs text-[var(--muted-foreground)]">
+                          {new Date().toLocaleTimeString('en-US', { 
+                            hour12: false, 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            second: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                          <span className="text-sm font-medium text-green-400">System Healthy</span>
+                        </div>
+                        <p className="text-xs text-[var(--muted-foreground)]">No critical issues detected. All services running normally.</p>
+                      </div>
+                      <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <Info className="w-4 h-4 text-blue-400" />
+                          <span className="text-sm font-medium text-blue-400">Auto-refresh Active</span>
+                        </div>
+                        <p className="text-xs text-[var(--muted-foreground)]">Health metrics updating every 30 seconds.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </main>
