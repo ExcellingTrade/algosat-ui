@@ -178,7 +178,7 @@ body {
 
 /* StockTicker animation - for individual stocks */
 .animate-ticker-scroll-fast {
-  animation: ticker-scroll-fast 60s linear infinite;
+  animation: ticker-scroll-fast 90s linear infinite;
 }
 
 @keyframes ticker-scroll-market {

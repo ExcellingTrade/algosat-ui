@@ -12,6 +12,7 @@ import {
   Trade,
   SystemStatus,
   HealthStatus,
+  VmDetails,
   apiClient 
 } from "@/lib/api";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -83,6 +84,7 @@ export default function Dashboard() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [vmDetails, setVmDetails] = useState<VmDetails | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics>({
     cpuUsage: 0,
     ramUsage: 0,
@@ -130,25 +132,14 @@ export default function Dashboard() {
     const date = String(istDate.getDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${date}`; // YYYY-MM-DD format
     
-    console.log('=== MARKET STATUS DEBUG ===');
-    console.log('Current IST Time:', `${istHours}:${istMinutes.toString().padStart(2, '0')}`);
-    console.log('Day of week:', istDay, '(0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat)');
-    console.log('Date string:', dateString);
-    console.log('Is Weekend:', istDay === 0 || istDay === 6);
-    console.log('Holidays loaded:', holidaysLoaded);
-    console.log('Total holidays:', holidays.length);
-    console.log('Is Holiday:', holidays.includes(dateString));
-    
     // Check if it's weekend
     if (istDay === 0 || istDay === 6) {
-      console.log('❌ Market CLOSED: Weekend');
       setIsMarketOpen(false);
       return;
     }
     
     // Check if it's a holiday (only if holidays are loaded)
     if (holidaysLoaded && holidays.includes(dateString)) {
-      console.log('❌ Market CLOSED: Holiday');
       setIsMarketOpen(false);
       return;
     }
@@ -159,18 +150,6 @@ export default function Dashboard() {
     const marketCloseMinutes = 15 * 60 + 30; // 3:30 PM = 930 minutes
     
     const isWithinMarketHours = currentTimeMinutes >= marketOpenMinutes && currentTimeMinutes <= marketCloseMinutes;
-    
-    console.log('Current time in minutes:', currentTimeMinutes);
-    console.log('Market open at:', marketOpenMinutes, 'minutes (9:15 AM)');
-    console.log('Market close at:', marketCloseMinutes, 'minutes (3:30 PM)');
-    console.log('Is within market hours:', isWithinMarketHours);
-    
-    if (isWithinMarketHours) {
-      console.log('✅ Market OPEN');
-    } else {
-      console.log('❌ Market CLOSED: Outside trading hours');
-    }
-    console.log('=== END MARKET STATUS DEBUG ===');
     
     setIsMarketOpen(isWithinMarketHours);
   };
@@ -357,7 +336,6 @@ export default function Dashboard() {
       // Handle strategies
       if (strategiesResult.status === 'fulfilled') {
         strategiesData = strategiesResult.value;
-        console.log('Dashboard: Strategies loaded:', strategiesData.length);
       } else {
         console.error('Dashboard: Failed to load strategies:', strategiesResult.reason);
       }
@@ -366,7 +344,6 @@ export default function Dashboard() {
       // Handle brokers
       if (brokersResult.status === 'fulfilled') {
         brokersData = brokersResult.value;
-        console.log('Dashboard: Brokers loaded:', brokersData.length);
       } else {
         console.error('Dashboard: Failed to load brokers:', brokersResult.reason);
       }
@@ -375,7 +352,6 @@ export default function Dashboard() {
       // Handle positions
       if (positionsResult.status === 'fulfilled') {
         positionsData = positionsResult.value;
-        console.log('Dashboard: Positions loaded:', positionsData.length);
       } else {
         console.error('Dashboard: Failed to load positions:', positionsResult.reason);
       }
@@ -384,7 +360,6 @@ export default function Dashboard() {
       // Handle trades
       if (tradesResult.status === 'fulfilled') {
         tradesData = tradesResult.value;
-        console.log('Dashboard: Trades loaded:', tradesData.length);
       } else {
         console.error('Dashboard: Failed to load trades:', tradesResult.reason);
       }
@@ -393,8 +368,12 @@ export default function Dashboard() {
       // Handle system status
       if (systemStatusResult.status === 'fulfilled') {
         systemStatusData = systemStatusResult.value;
-        console.log('Dashboard: System status loaded');
         setSystemStatus(systemStatusData);
+        
+        // Extract VM details if available
+        if (systemStatusData && systemStatusData.vm) {
+          setVmDetails(systemStatusData.vm);
+        }
         
         // Extract latest metrics from system status
         if (systemStatusData) {
@@ -412,13 +391,15 @@ export default function Dashboard() {
           };
 
           try {
+            const metrics = systemStatusData.metrics || {};
+            
             setSystemMetrics({
-              cpuUsage: extractLatestValue(systemStatusData.cpu_usage),
-              ramUsage: extractLatestValue(systemStatusData.ram_usage),
-              diskUsage: extractLatestValue(systemStatusData.disk_space),
-              uptime: extractLatestValue(systemStatusData.uptime),
-              incomingTraffic: extractLatestValue(systemStatusData.incoming_traffic),
-              outgoingTraffic: extractLatestValue(systemStatusData.outgoing_traffic)
+              cpuUsage: extractLatestValue(metrics.cpu_usage),
+              ramUsage: extractLatestValue(metrics.ram_usage),
+              diskUsage: extractLatestValue(metrics.disk_space),
+              uptime: extractLatestValue(metrics.uptime),
+              incomingTraffic: extractLatestValue(metrics.incoming_traffic),
+              outgoingTraffic: extractLatestValue(metrics.outgoing_traffic)
             });
           } catch (error) {
             console.warn('Error setting system metrics:', error);
@@ -440,7 +421,6 @@ export default function Dashboard() {
       // Handle health status
       if (healthResult.status === 'fulfilled') {
         healthStatusData = healthResult.value;
-        console.log('Dashboard: Health status loaded:', healthStatusData.status);
         setHealthStatus(healthStatusData);
         setApiHealthy(healthStatusData.status === 'healthy');
       } else {
@@ -458,8 +438,6 @@ export default function Dashboard() {
         totalPositions: positionsData.length,
         totalPnL
       });
-      
-      console.log('Dashboard: Data loading completed');
     } catch (err) {
       console.error('Dashboard: Critical error:', err);
       setError(err instanceof Error ? err.message : "Failed to load dashboard data");
@@ -538,6 +516,42 @@ export default function Dashboard() {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Helper function to get total memory in bytes from VM details
+  const getTotalMemoryBytes = () => {
+    if (vmDetails?.memory) {
+      const memoryBytes = vmDetails.memory * 1024 * 1024; // Convert MB to bytes
+      return memoryBytes;
+    }
+    return 8 * 1024 * 1024 * 1024; // 8GB fallback
+  };
+
+  // Helper function to get total memory in GB for display
+  const getTotalMemoryGB = () => {
+    if (vmDetails?.memory) {
+      const memoryGB = vmDetails.memory / 1024;
+      return memoryGB;
+    }
+    return 8;
+  };
+
+  // Helper function to get total disk space in bytes from VM details
+  const getTotalDiskBytes = () => {
+    if (vmDetails?.disk) {
+      const diskBytes = vmDetails.disk * 1024 * 1024; // Convert MB to bytes
+      return diskBytes;
+    }
+    return 50 * 1024 * 1024 * 1024; // 50GB fallback
+  };
+
+  // Helper function to get total disk space in GB for display
+  const getTotalDiskGB = () => {
+    if (vmDetails?.disk) {
+      const diskGB = vmDetails.disk / 1024;
+      return diskGB;
+    }
+    return 50;
   };
 
   const formatUptime = (milliseconds: number): string => {
@@ -1337,7 +1351,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* Title with Gradient */}
-                      <h3 className="text-3xl font-bold bg-gradient-to-r from-[var(--accent)] via-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
+                      <h3 className="text-3xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-4">
                         No Active Positions
                       </h3>
                       
@@ -1742,25 +1756,25 @@ export default function Dashboard() {
                           </div>
                           <div className="text-right">
                             <span className="text-sm font-mono text-green-400">
-                              {(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100).toFixed(1)}%
+                              {(((systemMetrics.ramUsage || 0) / getTotalMemoryBytes()) * 100).toFixed(1)}%
                             </span>
                             <div className="text-xs text-[var(--muted-foreground)]">
-                              {formatBytes(systemMetrics.ramUsage || 0)} / 8.0 GB
+                              {formatBytes(systemMetrics.ramUsage || 0)} / {getTotalMemoryGB().toFixed(1)} GB
                             </div>
                           </div>
                         </div>
                         <div className="w-full bg-[var(--border)] rounded-full h-3 overflow-hidden">
                           <div 
                             className="bg-gradient-to-r from-green-500 to-emerald-400 h-3 rounded-full shadow-sm shadow-green-500/60 transition-all duration-700 ease-out relative" 
-                            style={{ width: `${Math.min(Math.max(((systemMetrics.ramUsage || 0) / (8 * 1024 * 1024 * 1024)) * 100, 0), 100)}%` }}
+                            style={{ width: `${Math.min(Math.max(((systemMetrics.ramUsage || 0) / getTotalMemoryBytes()) * 100, 0), 100)}%` }}
                           >
                             <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
                           </div>
                         </div>
                         <div className="flex justify-between text-xs text-[var(--muted-foreground)] mt-1">
                           <span>0 GB</span>
-                          <span>4 GB</span>
-                          <span>8 GB</span>
+                          <span>{(getTotalMemoryGB() / 2).toFixed(1)} GB</span>
+                          <span>{getTotalMemoryGB().toFixed(1)} GB</span>
                         </div>
                       </div>
 
@@ -1772,24 +1786,26 @@ export default function Dashboard() {
                             <span className="text-sm font-medium text-[var(--foreground)]">Disk Space</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-sm font-mono text-orange-400">65.3%</span>
+                            <span className="text-sm font-mono text-orange-400">
+                              {(((systemMetrics.diskUsage || 0) / getTotalDiskBytes()) * 100).toFixed(1)}%
+                            </span>
                             <div className="text-xs text-[var(--muted-foreground)]">
-                              32.7 GB / 50.0 GB
+                              {formatBytes(systemMetrics.diskUsage || 0)} / {getTotalDiskGB().toFixed(1)} GB
                             </div>
                           </div>
                         </div>
                         <div className="w-full bg-[var(--border)] rounded-full h-3 overflow-hidden">
                           <div 
                             className="bg-gradient-to-r from-orange-500 to-amber-400 h-3 rounded-full shadow-sm shadow-orange-500/60 transition-all duration-700 ease-out relative" 
-                            style={{ width: '65.3%' }}
+                            style={{ width: `${Math.min(Math.max(((systemMetrics.diskUsage || 0) / getTotalDiskBytes()) * 100, 0), 100)}%` }}
                           >
                             <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
                           </div>
                         </div>
                         <div className="flex justify-between text-xs text-[var(--muted-foreground)] mt-1">
                           <span>0 GB</span>
-                          <span>25 GB</span>
-                          <span>50 GB</span>
+                          <span>{(getTotalDiskGB() / 2).toFixed(1)} GB</span>
+                          <span>{getTotalDiskGB().toFixed(1)} GB</span>
                         </div>
                       </div>
                     </div>

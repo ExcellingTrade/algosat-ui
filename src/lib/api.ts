@@ -107,12 +107,47 @@ export interface Trade {
   executed_at: string;
 }
 
+export interface VmDetails {
+  id: number;
+  firewall_group_id: number | null;
+  subscription_id: string;
+  plan: string; // Plan name like "KVM 4"
+  hostname: string;
+  state: string; // "running", "stopped", etc.
+  actions_lock: string;
+  cpus: number;
+  memory: number; // Memory in MB
+  disk: number; // Disk in MB
+  bandwidth: number;
+  ns1: string;
+  ns2: string;
+  ipv4: Array<{
+    id: number;
+    address: string;
+    ptr: string;
+  }>;
+  ipv6: Array<{
+    id: number;
+    address: string;
+    ptr: string;
+  }>;
+  template: {
+    id: number;
+    name: string;
+    description: string;
+    documentation: string | null;
+  };
+  created_at: string;
+}
+
 export interface SystemStatusMetric {
   unit: string;
   usage: Record<string, number>;
 }
 
 export interface SystemStatus {
+  vm?: VmDetails; // VM details from Hostinger API
+  metrics?: any; // Hostinger metrics data
   cpu_usage: SystemStatusMetric;
   ram_usage: SystemStatusMetric;
   disk_space: SystemStatusMetric;
