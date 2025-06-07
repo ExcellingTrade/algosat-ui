@@ -570,14 +570,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] overflow-hidden trading-background">
-      {/* Professional gradient background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-[var(--card-background)]/20 via-[var(--background)] to-[var(--card-background)]/10"></div>
-      <div className="fixed top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--accent)]/5 via-transparent to-transparent"></div>
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] overflow-hidden relative">
+      {/* Enhanced Multi-layer Background that respects theme */}
+      <div className="fixed inset-0 bg-gradient-to-br from-blue-50/20 via-transparent to-blue-100/15 dark:from-blue-950/20 dark:via-transparent dark:to-slate-900/15"></div>
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_30%_80%,rgba(59,130,246,0.06),transparent_50%)] dark:bg-[radial-gradient(circle_at_30%_80%,rgba(59,130,246,0.04),transparent_50%)]"></div>
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(99,102,241,0.04),transparent_50%)] dark:bg-[radial-gradient(circle_at_70%_20%,rgba(99,102,241,0.03),transparent_50%)]"></div>
       
       <div className="relative z-10">
-        {/* Header with subtle border - Sticky for better UX */}
-        <header className="sticky top-0 z-30 backdrop-blur-sm bg-[var(--card-background)]/90 border-b border-[var(--border)]/50 px-3 lg:px-6 py-3 shadow-sm">
+        {/* Header with ultra-clean professional styling */}
+        <header className="sticky top-0 z-30 backdrop-blur-xl bg-[var(--card-background)]/90 border-b border-[var(--border)] px-3 lg:px-6 py-3 shadow-lg">
           <div className="flex justify-between items-center gap-2 lg:gap-4 min-w-0">
             <div className="flex items-center space-x-2 lg:space-x-4 min-w-0 flex-1">
               {/* Logo section */}
@@ -673,8 +674,8 @@ export default function Dashboard() {
 
         {/* Main Layout with Perfect Alignment */}
         <div className="flex flex-col lg:flex-row">
-          {/* Enhanced Sidebar with Professional Borders */}
-          <aside className="w-full lg:w-64 backdrop-blur-md bg-gradient-to-b from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-r-2 border-[var(--border)]/60 lg:h-screen lg:sticky lg:top-0 relative shadow-xl shadow-[var(--accent)]/10">
+          {/* Ultra-Clean Professional Sidebar */}
+          <aside className="w-full lg:w-64 backdrop-blur-xl bg-[var(--card-background)]/90 border-r border-[var(--border)] lg:h-screen lg:sticky lg:top-0 relative shadow-xl shadow-[var(--accent)]/10">
             {/* Navigation with enhanced spacing */}
             <nav className="p-6 space-y-3">
               {[
@@ -703,8 +704,8 @@ export default function Dashboard() {
             {/* Sidebar content removed - System Health moved to dedicated tab */}
           </aside>
 
-          {/* Enhanced Main Content with Perfect Alignment */}
-          <main className="flex-1 p-6 overflow-x-hidden bg-gradient-to-br from-[var(--background)]/50 to-[var(--card-background)]/30">
+          {/* Enhanced Main Content with Perfect Glass-morphism */}
+          <main className="flex-1 p-6 overflow-x-hidden bg-gradient-to-br from-[var(--background)]/60 to-[var(--card-background)]/40 backdrop-blur-sm">
             {error && (
               <div className="mb-6 p-4 bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-500/50 rounded-xl text-red-300 backdrop-blur-md shadow-lg shadow-red-500/20">
                 {error}
@@ -716,7 +717,7 @@ export default function Dashboard() {
               <div className="space-y-6">
                 {/* Enhanced Professional Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-[var(--accent)]/40 rounded-xl p-6 shadow-xl shadow-[var(--accent)]/20 ring-1 ring-[var(--accent)]/10 hover:shadow-2xl hover:shadow-[var(--accent)]/30 transition-all duration-300">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-[var(--accent)]/50 rounded-2xl p-6 shadow-2xl shadow-[var(--accent)]/25 ring-1 ring-[var(--accent)]/20 hover:shadow-3xl hover:shadow-[var(--accent)]/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">₹2,57,84,225</p>
@@ -724,7 +725,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-green-500/40 rounded-xl p-6 shadow-xl shadow-green-500/20 ring-1 ring-green-500/10 hover:shadow-2xl hover:shadow-green-500/30 transition-all duration-300">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-green-500/50 rounded-2xl p-6 shadow-2xl shadow-green-500/25 ring-1 ring-green-500/20 hover:shadow-3xl hover:shadow-green-500/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Today's P/L</p>
                       <p className="text-xl lg:text-2xl font-bold text-green-400 break-words">+₹1,84,225</p>
@@ -732,7 +733,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-md bg-gradient-to-br from-[var(--card-background)]/95 to-[var(--card-background)]/85 border-2 border-blue-500/40 rounded-xl p-6 shadow-xl shadow-blue-500/20 ring-1 ring-blue-500/10 hover:shadow-2xl hover:shadow-blue-500/30 transition-all duration-300">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-blue-500/50 rounded-2xl p-6 shadow-2xl shadow-blue-500/25 ring-1 ring-blue-500/20 hover:shadow-3xl hover:shadow-blue-500/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Active Strategies</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)]">{stats.activeStrategies}</p>
@@ -740,7 +741,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-purple-500/30 rounded-lg p-6 shadow-lg shadow-purple-500/10">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-purple-500/40 rounded-2xl p-6 shadow-2xl shadow-purple-500/15 hover:shadow-3xl hover:shadow-purple-500/25 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Trading Volume</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">₹89,42,700</p>
@@ -752,7 +753,7 @@ export default function Dashboard() {
                 {/* Performance Chart & Activity Log */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Performance Overview */}
-                  <div className="lg:col-span-2 backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-6 shadow-lg shadow-[var(--accent)]/10">
+                  <div className="lg:col-span-2 backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/15 hover:shadow-2xl hover:shadow-[var(--accent)]/25 transition-all duration-300">
                     <div className="flex items-center space-x-2 mb-4">
                       <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
                       <h2 className="text-xl font-semibold text-[var(--accent)]">Performance Overview</h2>
@@ -762,8 +763,8 @@ export default function Dashboard() {
                       {[30, 45, 25, 60, 80, 45, 90, 75, 65, 85, 95, 70].map((height, index) => (
                         <div key={index} className="relative group">
                           <div 
-                            className={`w-6 bg-gradient-to-t from-cyan-500 to-blue-400 rounded-t transition-all duration-300 group-hover:from-cyan-400 group-hover:to-blue-300 shadow-lg ${
-                              index === 11 ? 'shadow-cyan-500/50' : 'shadow-cyan-500/20'
+                            className={`w-6 bg-gradient-to-t from-[var(--accent)] to-blue-400 rounded-t transition-all duration-300 group-hover:from-[var(--accent)]/80 group-hover:to-blue-300 shadow-lg ${
+                              index === 11 ? 'shadow-[var(--accent)]/50' : 'shadow-[var(--accent)]/20'
                             }`}
                             style={{ height: `${height}%` }}
                           ></div>
@@ -791,31 +792,31 @@ export default function Dashboard() {
                   </div>
 
                   {/* Activity Log */}
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-6 shadow-lg shadow-[var(--accent)]/10">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/10">
                     <div className="flex items-center space-x-2 mb-4">
                       <Activity className="w-5 h-5 text-[var(--accent)]" />
                       <h2 className="text-xl font-semibold text-[var(--accent)]">Activity Log</h2>
                     </div>
                     <div className="space-y-3 text-sm">
                       <div className="border-l-2 border-green-500 pl-3">
-                        <p className="text-white">SBIN Long position opened</p>
-                        <p className="text-gray-400">2 mins ago • 100 shares at ₹580.50</p>
+                        <p className="text-[var(--foreground)]">SBIN Long position opened</p>
+                        <p className="text-[var(--muted-foreground)]">2 mins ago • 100 shares at ₹580.50</p>
                       </div>
                       <div className="border-l-2 border-red-500 pl-3">
-                        <p className="text-white">NIFTY Short position closed</p>
-                        <p className="text-gray-400">15 mins ago • 25 lots at ₹21,450.75</p>
+                        <p className="text-[var(--foreground)]">NIFTY Short position closed</p>
+                        <p className="text-[var(--muted-foreground)]">15 mins ago • 25 lots at ₹21,450.75</p>
                       </div>
                       <div className="border-l-2 border-blue-500 pl-3">
-                        <p className="text-white">BANKNIFTY Strategy activated</p>
-                        <p className="text-gray-400">42 mins ago • Algorithm #127</p>
+                        <p className="text-[var(--foreground)]">BANKNIFTY Strategy activated</p>
+                        <p className="text-[var(--muted-foreground)]">42 mins ago • Algorithm #127</p>
                       </div>
-                      <div className="border-l-2 border-cyan-500 pl-3">
-                        <p className="text-white">System maintenance completed</p>
-                        <p className="text-gray-400">1 hour ago • Duration: 5 minutes</p>
+                      <div className="border-l-2 border-[var(--accent)] pl-3">
+                        <p className="text-[var(--foreground)]">System maintenance completed</p>
+                        <p className="text-[var(--muted-foreground)]">1 hour ago • Duration: 5 minutes</p>
                       </div>
                       <div className="border-l-2 border-green-500 pl-3">
-                        <p className="text-white">SBIN Long position opened</p>
-                        <p className="text-gray-400">2 hours ago • 200 shares at ₹575.25</p>
+                        <p className="text-[var(--foreground)]">SBIN Long position opened</p>
+                        <p className="text-[var(--muted-foreground)]">2 hours ago • 200 shares at ₹575.25</p>
                       </div>
                     </div>
                     <button className="mt-4 text-cyan-400 hover:text-cyan-300 text-sm transition duration-200">
@@ -840,7 +841,7 @@ export default function Dashboard() {
 
                 {/* Strategy Stats */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-6 shadow-lg shadow-[var(--accent)]/10">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/15 hover:shadow-2xl hover:shadow-[var(--accent)]/25 transition-all duration-300">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-[var(--accent)]/20 rounded-lg flex items-center justify-center">
                         <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
@@ -851,7 +852,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-green-500/30 rounded-lg p-6 shadow-lg shadow-green-500/10">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-green-500/30 rounded-2xl p-6 shadow-xl shadow-green-500/15 hover:shadow-2xl hover:shadow-green-500/25 transition-all duration-300">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
                         <CheckCircle className="w-5 h-5 text-green-400" />
@@ -862,7 +863,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-red-500/30 rounded-lg p-6 shadow-lg shadow-red-500/10">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-red-500/30 rounded-2xl p-6 shadow-xl shadow-red-500/15 hover:shadow-2xl hover:shadow-red-500/25 transition-all duration-300">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
                         <PauseCircle className="w-5 h-5 text-red-400" />
@@ -877,7 +878,7 @@ export default function Dashboard() {
 
                 {/* Strategies Grid */}
                 {strategies.length === 0 ? (
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-12 text-center shadow-lg shadow-[var(--accent)]/10">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-12 text-center shadow-xl shadow-[var(--accent)]/15">
                     <div className="w-16 h-16 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Zap className="w-8 h-8 text-[var(--accent)]" />
                     </div>
@@ -898,7 +899,7 @@ export default function Dashboard() {
                       const avgTrade = mockTrades * 25;
                       
                       return (
-                        <div key={strategy.id} className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg shadow-lg shadow-[var(--accent)]/10 hover:shadow-[var(--accent)]/20 transition-all duration-300 hover:border-[var(--accent)] group overflow-hidden">
+                        <div key={strategy.id} className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl shadow-xl shadow-[var(--accent)]/15 hover:shadow-2xl hover:shadow-[var(--accent)]/25 transition-all duration-300 hover:border-[var(--accent)] group overflow-hidden hover:scale-[1.02]">
                           {/* Ultra-Compact Header */}
                           <div className="p-2 border-b border-[var(--accent)]/20 bg-gradient-to-r from-[var(--card-background)]/50 to-[var(--accent)]/5">
                             <div className="flex items-center justify-between">
@@ -1049,15 +1050,15 @@ export default function Dashboard() {
                   
                   {/* Quick Stats */}
                   <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="backdrop-blur-sm bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                    <div className="backdrop-blur-xl bg-green-500/10 border border-green-500/30 rounded-2xl p-4 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300">
                       <p className="text-2xl font-bold text-green-400">{brokers.filter(b => b.is_enabled).length}</p>
                       <p className="text-xs text-green-300">Active</p>
                     </div>
-                    <div className="backdrop-blur-sm bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                    <div className="backdrop-blur-xl bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300">
                       <p className="text-2xl font-bold text-blue-400">{brokers.filter(b => b.is_data_provider).length}</p>
                       <p className="text-xs text-blue-300">Data Feed</p>
                     </div>
-                    <div className="backdrop-blur-sm bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+                    <div className="backdrop-blur-xl bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300">
                       <p className="text-2xl font-bold text-purple-400">{brokers.filter(b => b.trade_execution_enabled).length}</p>
                       <p className="text-xs text-purple-300">Trading</p>
                     </div>
@@ -1066,7 +1067,7 @@ export default function Dashboard() {
 
                 {/* Broker Cards */}
                 {brokers.length === 0 ? (
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg p-12 text-center shadow-lg shadow-[var(--accent)]/10">
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-12 text-center shadow-xl shadow-[var(--accent)]/15">
                     <div className="w-16 h-16 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Link className="w-8 h-8 text-[var(--accent)]" />
                     </div>
@@ -1309,15 +1310,15 @@ export default function Dashboard() {
                   
                   {/* Position Stats */}
                   <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="backdrop-blur-sm bg-green-500/10 border border-green-500/30 rounded-lg p-2">
+                    <div className="backdrop-blur-xl bg-green-500/10 border border-green-500/30 rounded-2xl p-3 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300">
                       <p className="text-xl font-bold text-green-400">{positions.length}</p>
                       <p className="text-xs text-green-300">Total</p>
                     </div>
-                    <div className="backdrop-blur-sm bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
+                    <div className="backdrop-blur-xl bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300">
                       <p className="text-xl font-bold text-blue-400">{positions.filter(p => p.pnl > 0).length}</p>
                       <p className="text-xs text-blue-300">Profit</p>
                     </div>
-                    <div className="backdrop-blur-sm bg-red-500/10 border border-red-500/30 rounded-lg p-2">
+                    <div className="backdrop-blur-xl bg-red-500/10 border border-red-500/30 rounded-2xl p-3 shadow-lg shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-300">
                       <p className="text-xl font-bold text-red-400">{positions.filter(p => p.pnl < 0).length}</p>
                       <p className="text-xs text-red-300">Loss</p>
                     </div>
@@ -1326,7 +1327,7 @@ export default function Dashboard() {
 
                 {positions.length === 0 ? (
                   /* Cyber-themed Empty State for Positions */
-                  <div className="relative backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-xl p-12 text-center shadow-2xl shadow-[var(--accent)]/20 overflow-hidden">
+                  <div className="relative backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-12 text-center shadow-2xl shadow-[var(--accent)]/20 overflow-hidden">
                     {/* Animated Background */}
                     <div className="absolute inset-0 bg-gradient-to-br from-[var(--accent)]/10 via-[var(--background)] to-blue-900/10"></div>
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--accent)]/5 via-transparent to-transparent"></div>
