@@ -170,6 +170,70 @@ export interface HealthStatus {
   };
 }
 
+export interface LogFile {
+  name: string;
+  path: string;
+  size: number;
+  modified: string;
+  type: string; // 'api', 'algosat', 'rollover'
+  date: string;
+}
+
+export interface LogEntry {
+  timestamp: string;
+  level: string;
+  logger: string;
+  module: string;
+  line: number;
+  message: string;
+  raw: string;
+}
+
+export interface LogResponse {
+  files: LogFile[];
+  stats: LogStats;
+  total_size: number;
+  date_range: {
+    start: string;
+    end: string;
+  };
+}
+
+export interface LogContentResponse {
+  entries: LogEntry[];
+  total_count: number;
+  has_more: boolean;
+  date: string;
+  log_type: string;
+}
+
+export interface LogStreamResponse {
+  entry?: LogEntry;
+  file?: string;
+  position?: number;
+  error?: string;
+}
+
+export interface LogStreamSessionResponse {
+  session_id: string;
+  stream_url: string;
+  expires_in: number;
+  log_type: string;
+  level: string | null;
+}
+
+export interface LogStats {
+  total_dates: number;
+  date_range: {
+    start: string | null;
+    end: string | null;
+  };
+  retention_days: number;
+  log_types: string[];
+  files_by_type: Record<string, { count: number; size: number }>;
+  total_size: number;
+}
+
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -535,6 +599,87 @@ class ApiClient {
   // System Status
   async getSystemStatus(): Promise<any> {
     return this.request('/system/status');
+  }
+
+  // Log Management
+  async getLogOverview(): Promise<LogResponse> {
+    return this.request('/logs/');
+  }
+
+  async getLogDates(): Promise<{ dates: string[] }> {
+    return this.request('/logs/dates');
+  }
+
+  async getLogFiles(date: string): Promise<{ files: LogFile[] }> {
+    return this.request(`/logs/files/${date}`);
+  }
+
+  async getLogContent(
+    date: string,
+    logType?: string,
+    limit: number = 1000,
+    offset: number = 0,
+    level?: string,
+    search?: string
+  ): Promise<LogContentResponse> {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+    });
+    
+    if (logType) params.append('log_type', logType);
+    if (level) params.append('level', level);
+    if (search) params.append('search', search);
+    
+    return this.request(`/logs/content/${date}?${params}`);
+  }
+
+  async cleanupLogs(): Promise<{ message: string; deleted_count: number }> {
+    return this.request('/logs/cleanup', { method: 'POST' });
+  }
+
+  async getLogStats(): Promise<LogStats> {
+    return this.request('/logs/stats');
+  }
+
+  async downloadLogs(date: string, logType?: string): Promise<string> {
+    const params = new URLSearchParams({ date });
+    if (logType) params.append('log_type', logType);
+    
+    const response = await fetch(`${this.baseURL}/logs/download?${params}`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download logs: ${response.statusText}`);
+    }
+    
+    return response.text();
+  }
+
+  // Create EventSource for real-time log streaming
+  async createLogStream(logType?: string, level?: string): Promise<EventSource | null> {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // Step 1: Create a streaming session using proper Bearer authentication
+      const params = new URLSearchParams();
+      if (logType) params.append('log_type', logType);
+      if (level) params.append('level', level);
+      
+      const sessionResponse: LogStreamSessionResponse = await this.request(`/logs/stream/session?${params}`, {
+        method: 'POST'
+      });
+      
+      // Step 2: Use the session ID to create EventSource connection
+      const streamUrl = `${this.baseURL}/logs/stream/live?session_id=${sessionResponse.session_id}`;
+      const eventSource = new EventSource(streamUrl);
+      
+      return eventSource;
+    } catch (error) {
+      console.error('Failed to create log stream session:', error);
+      return null;
+    }
   }
 
   // Debug method to test connection

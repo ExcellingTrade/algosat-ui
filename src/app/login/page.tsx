@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api";
-import { Eye, EyeOff, TrendingUp, Shield, Zap, BarChart3 } from "lucide-react";
+import { BarChart3, Eye, EyeOff, Shield, TrendingUp, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function SignIn() {
   const [username, setUsername] = useState("");

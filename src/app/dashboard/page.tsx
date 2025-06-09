@@ -18,6 +18,8 @@ import {
 import { MarketTicker } from "@/components/MarketTicker";
 import { StockTicker } from "@/components/StockTicker";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LogsManagement } from "@/components/LogsManagement";
+import { StrategiesPage } from "@/components/strategies/StrategiesPage";
 import {
   Home,
   Zap,
@@ -52,7 +54,11 @@ import {
   Server,
   Watch,
   Monitor,
-  Info
+  Info,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 interface DashboardStats {
@@ -115,6 +121,10 @@ export default function Dashboard() {
   // Rate limiting state
   const [lastApiCall, setLastApiCall] = useState<Date>(new Date());
   const MIN_API_INTERVAL = 60000; // Minimum 60 seconds between API calls
+
+  // Sidebar collapse state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Check if market is open - simple function without useCallback to prevent dependency issues
   const checkMarketStatus = () => {
@@ -674,29 +684,62 @@ export default function Dashboard() {
 
         {/* Main Layout with Perfect Alignment */}
         <div className="flex flex-col lg:flex-row">
+          {/* Mobile Menu Button */}
+          <div className="lg:hidden flex justify-between items-center p-4 bg-[var(--card-background)]/90 border-b border-[var(--border)]">
+            <h2 className="text-lg font-semibold text-[var(--foreground)]">AlgoSat Dashboard</h2>
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 rounded-lg bg-[var(--card-background)] border border-[var(--border)] hover:bg-[var(--accent)]/10 transition-colors"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+
           {/* Ultra-Clean Professional Sidebar */}
-          <aside className="w-full lg:w-64 backdrop-blur-xl bg-[var(--card-background)]/90 border-r border-[var(--border)] lg:h-screen lg:sticky lg:top-0 relative shadow-xl shadow-[var(--accent)]/10">
+          <aside className={`
+            ${isMobileMenuOpen ? 'block' : 'hidden'} lg:block
+            ${sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'}
+            w-full backdrop-blur-xl bg-[var(--card-background)]/90 border-r border-[var(--border)] 
+            lg:h-screen lg:sticky lg:top-0 relative shadow-xl shadow-[var(--accent)]/10 
+            transition-all duration-300 ease-in-out
+          `}>
+            {/* Desktop Collapse Button */}
+            <div className="hidden lg:flex justify-end p-2 border-b border-[var(--border)]/50">
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-2 rounded-lg bg-[var(--card-background)] border border-[var(--border)] hover:bg-[var(--accent)]/10 transition-colors"
+                title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              >
+                {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              </button>
+            </div>
+
             {/* Navigation with enhanced spacing */}
-            <nav className="p-6 space-y-3">
+            <nav className={`${sidebarCollapsed ? 'p-2' : 'p-6'} space-y-3 transition-all duration-300`}>
               {[
                 { id: "overview", label: "Dashboard", icon: Home },
                 { id: "strategies", label: "Strategies", icon: Zap },
                 { id: "brokers", label: "Brokers", icon: Link },
                 { id: "positions", label: "Positions", icon: BarChart3 },
                 { id: "orders", label: "Orders", icon: TrendingUp },
+                { id: "logs", label: "Logs", icon: Database },
                 { id: "health", label: "System Health", icon: Activity },
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition duration-200 ${
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setIsMobileMenuOpen(false); // Close mobile menu on selection
+                  }}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-lg transition-all duration-200 ${
                     activeTab === tab.id
                       ? "bg-gradient-to-r from-[var(--accent)]/20 to-blue-500/20 border border-[var(--accent)]/50 text-[var(--accent)] shadow-lg shadow-[var(--accent)]/20"
                       : "text-[var(--muted-foreground)] hover:text-[var(--accent)] hover:bg-[var(--card-background)]/50 border border-transparent"
                   }`}
+                  title={sidebarCollapsed ? tab.label : undefined}
                 >
-                  <tab.icon className="w-5 h-5" />
-                  <span className="font-medium">{tab.label}</span>
+                  <tab.icon className="w-5 h-5 flex-shrink-0" />
+                  {!sidebarCollapsed && <span className="font-medium">{tab.label}</span>}
                 </button>
               ))}
             </nav>
@@ -829,208 +872,7 @@ export default function Dashboard() {
 
             {/* Strategies Tab */}
             {activeTab === "strategies" && (
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="mb-6">
-                  <div className="flex items-center space-x-2">
-                    <Zap className="w-5 h-5 text-[var(--accent)]" />
-                    <h2 className="text-xl font-semibold text-[var(--accent)]">Trading Strategies</h2>
-                  </div>
-                  <p className="text-[var(--muted-foreground)] text-sm mt-1">Manage and monitor your automated trading strategies</p>
-                </div>
-
-                {/* Strategy Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/15 hover:shadow-2xl hover:shadow-[var(--accent)]/25 transition-all duration-300">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-[var(--accent)]/20 rounded-lg flex items-center justify-center">
-                        <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
-                      </div>
-                      <div>
-                        <p className="text-[var(--muted-foreground)] text-sm">Total Strategies</p>
-                        <p className="text-xl font-bold text-[var(--foreground)]">{strategies.length}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-green-500/30 rounded-2xl p-6 shadow-xl shadow-green-500/15 hover:shadow-2xl hover:shadow-green-500/25 transition-all duration-300">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-                        <CheckCircle className="w-5 h-5 text-green-400" />
-                      </div>
-                      <div>
-                        <p className="text-[var(--muted-foreground)] text-sm">Active</p>
-                        <p className="text-xl font-bold text-green-400">{strategies.filter(s => s.enabled).length}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-red-500/30 rounded-2xl p-6 shadow-xl shadow-red-500/15 hover:shadow-2xl hover:shadow-red-500/25 transition-all duration-300">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-                        <PauseCircle className="w-5 h-5 text-red-400" />
-                      </div>
-                      <div>
-                        <p className="text-[var(--muted-foreground)] text-sm">Inactive</p>
-                        <p className="text-xl font-bold text-red-400">{strategies.filter(s => !s.enabled).length}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Strategies Grid */}
-                {strategies.length === 0 ? (
-                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-12 text-center shadow-xl shadow-[var(--accent)]/15">
-                    <div className="w-16 h-16 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Zap className="w-8 h-8 text-[var(--accent)]" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Strategies Found</h3>
-                    <p className="text-[var(--muted-foreground)] mb-6">Get started by creating your first trading strategy</p>
-                    <button className="bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] px-6 py-3 rounded-lg transition duration-200 border border-[var(--accent)]/50 hover:border-[var(--accent)] shadow-lg hover:shadow-[var(--accent)]/20">
-                      Create Strategy
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
-                    {strategies.map((strategy, index) => {
-                      // Generate realistic mock data based on strategy ID
-                      const mockPerformance = ((strategy.id * 7 + 13) % 25) - 5; // -5% to +20%
-                      const mockTrades = (strategy.id * 23 + 47) % 150 + 50; // 50-200 trades
-                      const mockWinRate = ((strategy.id * 11 + 29) % 30) + 55; // 55-85%
-                      const mockDrawdown = -((strategy.id * 3 + 7) % 8 + 2); // -2% to -10%
-                      const avgTrade = mockTrades * 25;
-                      
-                      return (
-                        <div key={strategy.id} className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl shadow-xl shadow-[var(--accent)]/15 hover:shadow-2xl hover:shadow-[var(--accent)]/25 transition-all duration-300 hover:border-[var(--accent)] group overflow-hidden hover:scale-[1.02]">
-                          {/* Ultra-Compact Header */}
-                          <div className="p-2 border-b border-[var(--accent)]/20 bg-gradient-to-r from-[var(--card-background)]/50 to-[var(--accent)]/5">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2 flex-1 min-w-0">
-                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${strategy.enabled ? 'bg-green-400 animate-pulse shadow-lg shadow-green-400/50' : 'bg-red-400'}`}></div>
-                                <div className="min-w-0 flex-1">
-                                  <h3 className="text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--accent)] transition duration-200 truncate">{strategy.name}</h3>
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-2 flex-shrink-0">
-                                <span className="text-xs font-mono text-[var(--muted-foreground)]">#{strategy.id}</span>
-                                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                  strategy.enabled 
-                                    ? 'bg-green-500/20 text-green-400' 
-                                    : 'bg-red-500/20 text-red-400'
-                                }`}>
-                                  {strategy.enabled ? 'ON' : 'OFF'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Super Compact Body */}
-                          <div className="p-2.5">
-                            {/* Performance & Status Row */}
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center space-x-3">
-                                <div className="text-center">
-                                  <p className={`text-lg font-bold leading-none ${mockPerformance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {mockPerformance >= 0 ? '+' : ''}{mockPerformance.toFixed(1)}%
-                                  </p>
-                                  <p className="text-xs text-[var(--muted-foreground)]">P&L</p>
-                                </div>
-                                <div className="w-px h-8 bg-[var(--border)]"></div>
-                                <div className="text-center">
-                                  <p className="text-sm font-bold text-[var(--accent)] leading-none">{mockTrades}</p>
-                                  <p className="text-xs text-[var(--muted-foreground)]">Trades</p>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-bold text-blue-400 leading-none">{mockWinRate}%</p>
-                                <p className="text-xs text-[var(--muted-foreground)]">Win Rate</p>
-                              </div>
-                            </div>
-
-                            {/* Compact Performance Bar */}
-                            <div className="mb-2">
-                              <div className="w-full bg-[var(--border)] rounded-full h-1">
-                                <div 
-                                  className={`h-1 rounded-full transition-all duration-500 ${
-                                    mockPerformance >= 0 
-                                      ? 'bg-gradient-to-r from-green-500 to-emerald-400' 
-                                      : 'bg-gradient-to-r from-red-500 to-orange-400'
-                                  }`}
-                                  style={{ width: `${Math.min(Math.abs(mockPerformance) * 4, 100)}%` }}
-                                ></div>
-                              </div>
-                            </div>
-
-                            {/* Compact Details Grid */}
-                            <div className="grid grid-cols-2 gap-1.5 mb-2 text-xs">
-                              <div className="flex justify-between bg-[var(--background)]/40 rounded px-1.5 py-1">
-                                <span className="text-[var(--muted-foreground)]">Type</span>
-                                <span className="text-blue-400 font-medium">
-                                  {['Scalping', 'Swing', 'Momentum', 'Mean Rev'][strategy.id % 4]}
-                                </span>
-                              </div>
-                              <div className="flex justify-between bg-[var(--background)]/40 rounded px-1.5 py-1">
-                                <span className="text-[var(--muted-foreground)]">Risk</span>
-                                <span className={`font-medium ${['Low', 'Med', 'High'][strategy.id % 3] === 'Low' ? 'text-green-400' : ['Low', 'Med', 'High'][strategy.id % 3] === 'Med' ? 'text-yellow-400' : 'text-red-400'}`}>
-                                  {['Low', 'Med', 'High'][strategy.id % 3]}
-                                </span>
-                              </div>
-                              <div className="flex justify-between bg-[var(--background)]/40 rounded px-1.5 py-1">
-                                <span className="text-[var(--muted-foreground)]">DD</span>
-                                <span className="text-red-400 font-medium">{mockDrawdown.toFixed(1)}%</span>
-                              </div>
-                              <div className="flex justify-between bg-[var(--background)]/40 rounded px-1.5 py-1">
-                                <span className="text-[var(--muted-foreground)]">Avg</span>
-                                <span className="text-[var(--accent)] font-medium">₹{avgTrade > 1000 ? `${(avgTrade/1000).toFixed(1)}k` : avgTrade}</span>
-                              </div>
-                            </div>
-
-                            {/* Compact Status & Time */}
-                            <div className="flex items-center justify-between text-xs mb-2">
-                              <div className="flex items-center space-x-2">
-                                <div className="flex items-center space-x-1">
-                                  <div className="w-1 h-1 bg-[var(--accent)] rounded-full animate-ping"></div>
-                                  <span className="text-[var(--muted-foreground)]">Live</span>
-                                </div>
-                                {strategy.enabled && (
-                                  <>
-                                    <span className="text-[var(--border)]">•</span>
-                                    <div className="flex items-center space-x-1">
-                                      <div className="w-1 h-1 bg-green-400 rounded-full"></div>
-                                      <span className="text-[var(--muted-foreground)]">Active</span>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                              <span className="text-[var(--muted-foreground)] font-mono text-xs">
-                                {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                          </div>                          {/* Ultra-Compact Footer */}
-                          <div className="p-1.5 border-t border-[var(--accent)]/20 bg-[var(--background)]/20">
-                            <div className="flex space-x-1">
-                              <button 
-                                onClick={() => toggleStrategy(strategy.id, !strategy.enabled)}
-                                className={`flex-1 px-2 py-1 rounded text-xs font-medium transition duration-200 ${
-                                  strategy.enabled 
-                                    ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                                    : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                                }`}
-                              >
-                                {strategy.enabled ? <PauseCircle className="w-4 h-4" /> : <PlayCircle className="w-4 h-4" />}
-                              </button>
-                              <button className="flex-1 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 px-2 py-1 rounded text-xs font-medium transition duration-200">
-                                <Settings className="w-4 h-4 mx-auto" />
-                              </button>
-                              <button className="bg-[var(--muted)]/20 text-[var(--muted-foreground)] hover:bg-[var(--muted)]/30 px-2 py-1 rounded text-xs transition duration-200">
-                                <BarChart3 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <StrategiesPage />
             )}
 
             {/* Brokers Tab */}
@@ -1114,7 +956,7 @@ export default function Dashboard() {
                               broker.is_enabled ? 'bg-green-400' : 'bg-red-400'
                             }`}>
                               {broker.is_enabled && (
-                                <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-75"></div>
+                                <div className="absolute inset-0 bg-green-400 rounded-full animate-ping"></div>
                               )}
                             </div>
                           </div>
@@ -1373,156 +1215,6 @@ export default function Dashboard() {
                           <span className="flex items-center space-x-2">
                             <span>📊</span>
                             <span>Market Overview</span>
-                          </span>
-                        </button>
-                      </div> */}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--accent)]/30 rounded-lg overflow-hidden shadow-lg shadow-[var(--accent)]/10">
-                    <table className="w-full">
-                      <thead className="bg-[var(--background)]/50 border-b border-[var(--accent)]/30">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-[var(--accent)]">Broker</th>
-                          <th className="px-4 py-3 text-left text-[var(--accent)]">Symbol</th>
-                          <th className="px-4 py-3 text-left text-[var(--accent)]">Quantity</th>
-                          <th className="px-4 py-3 text-left text-[var(--accent)]">Avg Price</th>
-                          <th className="px-4 py-3 text-left text-[var(--accent)]">Current Price</th>
-                          <th className="px-4 py-3 text-left text-[var(--accent)]">P&L</th>
-                          <th className="px-4 py-3 text-left text-[var(--accent)]">Product Type</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {positions.map((position) => (
-                          <tr key={position.id} className="border-t border-[var(--accent)]/20 hover:bg-[var(--accent)]/5 transition duration-200">
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">{position.broker_name}</td>
-                            <td className="px-4 py-3 font-medium text-[var(--foreground)]">{position.symbol}</td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">{position.quantity}</td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">₹{position.average_price.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">₹{position.current_price.toFixed(2)}</td>
-                            <td className={`px-4 py-3 font-medium ${position.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              ₹{position.pnl.toFixed(2)}
-                            </td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">{position.product_type}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Orders Tab */}
-            {activeTab === "orders" && (
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                  <div>
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-[var(--accent)] to-purple-400 bg-clip-text text-transparent mb-2">
-                      <div className="flex items-center space-x-2">
-                        <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
-                        <span>Order Management</span>
-                      </div>
-                    </h2>
-                    <p className="text-[var(--muted-foreground)]">Track your order history, executions, and trading performance</p>
-                  </div>
-                  
-                  {/* Order Stats */}
-                  <div className="grid grid-cols-4 gap-3 text-center">
-                    <div className="backdrop-blur-sm bg-green-500/10 border border-green-500/30 rounded-lg p-2">
-                      <p className="text-xl font-bold text-green-400">{trades.filter(t => t.status === 'EXECUTED').length}</p>
-                      <p className="text-xs text-green-300">Executed</p>
-                    </div>
-                    <div className="backdrop-blur-sm bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
-                      <p className="text-xl font-bold text-blue-400">{trades.filter(t => t.status === 'PENDING').length}</p>
-                      <p className="text-xs text-blue-300">Pending</p>
-                    </div>
-                    <div className="backdrop-blur-sm bg-red-500/10 border border-red-500/30 rounded-lg p-2">
-                      <p className="text-xl font-bold text-red-400">{trades.filter(t => t.status === 'CANCELLED').length}</p>
-                      <p className="text-xs text-red-300">Cancelled</p>
-                    </div>
-                    <div className="backdrop-blur-sm bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
-                      <p className="text-xl font-bold text-purple-400">{trades.length}</p>
-                      <p className="text-xs text-purple-300">Total</p>
-                    </div>
-                  </div>
-                </div>
-
-                {trades.length === 0 ? (
-                  /* Ultra Cyber-themed Empty State for Orders */
-                  <div className="relative backdrop-blur-sm bg-[var(--card-background)] border border-purple-500/30 rounded-xl p-16 text-center shadow-2xl shadow-purple-500/20 overflow-hidden">
-                    {/* Advanced Animated Background */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-900/10 via-[var(--background)] to-[var(--accent)]/10"></div>
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-purple-500/8 via-transparent to-[var(--accent)]/5"></div>
-                    
-                    {/* Matrix-style Floating Elements */}
-                    <div className="absolute top-6 left-6 w-6 h-6 bg-purple-400/20 rounded-full animate-pulse"></div>
-                    <div className="absolute top-20 right-8 w-4 h-4 bg-[var(--accent)]/30 rounded-full animate-ping"></div>
-                    <div className="absolute bottom-8 left-12 w-3 h-3 bg-blue-400/40 rounded-full animate-bounce"></div>
-                    <div className="absolute bottom-20 right-16 w-5 h-5 bg-purple-400/25 rounded-full animate-pulse"></div>
-                    
-                    {/* Rotating Grid Lines */}
-                    <div className="absolute inset-0 opacity-5">
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[var(--accent)]/20 to-transparent transform rotate-45 animate-pulse"></div>
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/20 to-transparent transform -rotate-45 animate-pulse"></div>
-                    </div>
-                    
-                    <div className="relative z-10">
-                      {/* Main Image with Advanced Effects */}
-                      <div className="mb-10 relative">
-                        <div className="w-56 h-56 mx-auto relative">
-                          <img 
-                            src="/brokers/no-orders.png" 
-                            alt="No Orders" 
-                            className="w-full h-full object-contain filter drop-shadow-2xl animate-pulse"
-                          />
-                          {/* Multi-layer Glow Effect */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-[var(--accent)]/15 to-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
-                          <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent)]/10 to-purple-500/10 rounded-full blur-2xl animate-ping"></div>
-                          
-                          {/* Orbiting Elements */}
-                          <div className="absolute inset-0 animate-spin" style={{ animationDuration: '20s' }}>
-                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-purple-400 rounded-full"></div>
-                            <div className="absolute top-1/2 -right-4 transform -translate-y-1/2 w-2 h-2 bg-[var(--accent)] rounded-full"></div>
-                            <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-blue-400 rounded-full"></div>
-                            <div className="absolute top-1/2 -left-4 transform -translate-y-1/2 w-2 h-2 bg-purple-400 rounded-full"></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Enhanced Title with Animation */}
-                      <h3 className="text-4xl font-bold mb-4">
-                        <span className="bg-gradient-to-r from-purple-400 via-[var(--accent)] to-blue-400 bg-clip-text text-transparent animate-pulse">
-                          Order Queue Empty
-                        </span>
-                      </h3>
-                      
-                      {/* Subtitle */}
-                      <p className="text-xl text-[var(--foreground)] mb-2 font-medium">
-                        Ready for Quantum Trading
-                      </p>
-                      
-                      {/* Description */}
-                      <p className="text-[var(--muted-foreground)] text-lg mb-10 max-w-lg mx-auto leading-relaxed">
-                        Your trading engine is primed and ready. Deploy strategies to begin automated order execution across all connected brokers.
-                      </p>
-
-                      {/* Professional Action Grid */}
-                      {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12 max-w-2xl mx-auto">
-                        <button className="group bg-gradient-to-r from-purple-600 to-[var(--accent)] hover:from-purple-500 hover:to-[var(--accent)]/80 text-white font-bold px-8 py-4 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl shadow-purple-500/25 hover:shadow-purple-500/40 relative overflow-hidden">
-                          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 transform -skew-x-12 group-hover:animate-pulse"></div>
-                          <span className="relative flex items-center justify-center space-x-3">
-                            <span className="text-2xl">📈</span>
-                            <span>View Strategies</span>
-                          </span>
-                        </button>
-                        
-                        <button className="group bg-[var(--background)]/60 hover:bg-[var(--background)]/80 text-[var(--accent)] border-2 border-[var(--accent)]/50 hover:border-[var(--accent)] font-bold px-8 py-4 rounded-xl transition-all duration-300 backdrop-blur-sm relative overflow-hidden">
-                          <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent)]/0 via-[var(--accent)]/10 to-[var(--accent)]/0 transform -skew-x-12 group-hover:animate-pulse"></div>
-                          <span className="relative flex items-center justify-center space-x-3">
-                            <span className="text-2xl">📊</span>
-                            <span>Market Analysis</span>
                           </span>
                         </button>
                       </div> */}
@@ -2014,6 +1706,23 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Logs Tab */}
+            {activeTab === "logs" && (
+              <div className="space-y-6">
+                {/* Header */}
+                <div className="mb-6">
+                  <div className="flex items-center space-x-2">
+                    <Database className="w-5 h-5 text-[var(--accent)]" />
+                    <h2 className="text-xl font-semibold text-[var(--accent)]">Log Management</h2>
+                  </div>
+                  <p className="text-[var(--muted-foreground)] text-sm mt-1">View and manage system logs with real-time monitoring</p>
+                </div>
+
+                {/* Logs Management Component */}
+                <LogsManagement />
               </div>
             )}
           </main>
