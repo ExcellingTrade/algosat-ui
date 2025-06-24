@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { StrategyCard } from "./StrategyCard";
 import { SymbolsPage } from "./SymbolsPage";
 import { TradesPage } from "./TradesPage";
-import { ConfigsModal } from "./ConfigsModal";
+import { ConfigsPage } from "./ConfigsPage";
 import { AddSymbolModal } from "./AddSymbolModal";
 import { apiClient } from "../../lib/api";
 import { 
@@ -37,23 +37,36 @@ export interface Strategy {
 
 export interface StrategySymbol {
   id: number;
-  strategyId: number;
+  strategy_id: number;
   symbol: string;
-  configId: number;
-  configName: string;
-  currentPnL: number;
-  tradeCount: number;
-  enabled: boolean;
+  config_id: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  // Enhanced fields from API joins
+  config_name?: string;
+  config_description?: string;
+  // UI enhancement fields (calculated)
+  currentPnL?: number;
+  tradeCount?: number;
+  enabled?: boolean;
 }
 
 export interface StrategyConfig {
   id: number;
-  strategyId: number;
+  strategy_id: number;
   name: string;
-  description: string;
-  isCustom: boolean;
-  parameters: Record<string, any>;
-  createdAt: string;
+  description?: string;
+  exchange: string;
+  instrument?: string;
+  trade: Record<string, any>;
+  indicators: Record<string, any>;
+  order_type: 'MARKET' | 'LIMIT';
+  product_type: 'INTRADAY' | 'DELIVERY';
+  enabled: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Trade {
@@ -81,46 +94,13 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('strategies');
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<StrategySymbol | null>(null);
-  const [showConfigsModal, setShowConfigsModal] = useState(false);
   const [showAddSymbolModal, setShowAddSymbolModal] = useState(false);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
+  const [symbols, setSymbols] = useState<StrategySymbol[]>([]);
+  const [configs, setConfigs] = useState<StrategyConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Mock data for symbols - replace with API calls later
-  const [symbols] = useState<StrategySymbol[]>([
-    {
-      id: 1,
-      strategyId: 1,
-      symbol: "NIFTY",
-      configId: 1,
-      configName: "Scalping Config v1.2",
-      currentPnL: 8450.25,
-      tradeCount: 45,
-      enabled: true
-    },
-    {
-      id: 2,
-      strategyId: 1,
-      symbol: "BANKNIFTY",
-      configId: 2,
-      configName: "Bank Scalping Config",
-      currentPnL: 3250.50,
-      tradeCount: 32,
-      enabled: true
-    },
-    {
-      id: 3,
-      strategyId: 1,
-      symbol: "RELIANCE",
-      configId: 1,
-      configName: "Scalping Config v1.2",
-      currentPnL: 800.00,
-      tradeCount: 50,
-      enabled: false
-    }
-  ]);
 
   // Generate mock data for strategies to supplement API data
   const generateMockData = (strategy: Partial<Strategy>): Strategy => {
@@ -208,6 +188,50 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
     }
   };
 
+  // Fetch strategy symbols from API
+  const fetchStrategySymbols = async (strategyId: number) => {
+    try {
+      setIsLoading(true);
+      console.log('Fetching symbols for strategy:', strategyId);
+      const apiSymbols = await apiClient.getStrategySymbols(strategyId);
+      console.log('API symbols received:', apiSymbols);
+      
+      // Enhance symbols with UI data (P&L and trades - config info now comes from API)
+      const enhancedSymbols = apiSymbols.map(symbol => ({
+        ...symbol,
+        currentPnL: Math.random() * 10000 - 5000, // Mock data
+        tradeCount: Math.floor(Math.random() * 100),
+        enabled: symbol.status === 'active'
+      }));
+      
+      setSymbols(enhancedSymbols);
+    } catch (err) {
+      console.error('Failed to fetch strategy symbols:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load symbols');
+      setSymbols([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch strategy configs from API
+  const fetchStrategyConfigs = async (strategyId: number) => {
+    try {
+      console.log('Fetching configs for strategy:', strategyId);
+      const apiConfigs = await apiClient.getStrategyConfigs(strategyId);
+      console.log('API configs received:', apiConfigs);
+      
+      // Set configs directly from API (now includes name and description)
+      setConfigs(apiConfigs);
+      return apiConfigs;
+    } catch (err) {
+      console.error('Failed to fetch strategy configs:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load configs');
+      setConfigs([]);
+      return [];
+    }
+  };
+
   // Initial load
   useEffect(() => {
     fetchStrategies();
@@ -218,14 +242,16 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
     await fetchStrategies(false);
   };
 
-  const handleViewSymbols = (strategy: Strategy) => {
+  const handleViewSymbols = async (strategy: Strategy) => {
     setSelectedStrategy(strategy);
+    await fetchStrategySymbols(strategy.id);
     setViewMode('symbols');
   };
 
-  const handleViewConfigs = (strategy: Strategy) => {
+  const handleViewConfigs = async (strategy: Strategy) => {
     setSelectedStrategy(strategy);
-    setShowConfigsModal(true);
+    await fetchStrategyConfigs(strategy.id);
+    setViewMode('configs');
   };
 
   const handleViewTrades = (symbol: StrategySymbol) => {
@@ -233,15 +259,52 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
     setViewMode('trades');
   };
 
-  const handleAddSymbol = () => {
+  const handleAddSymbol = async () => {
+    if (selectedStrategy) {
+      await fetchStrategyConfigs(selectedStrategy.id);
+    }
     setShowAddSymbolModal(true);
+  };
+
+  const handleSymbolAdded = async (symbolData: { symbol: string; configId: number }) => {
+    if (!selectedStrategy) return;
+    
+    try {
+      console.log('Adding symbol:', symbolData);
+      await apiClient.addStrategySymbol(selectedStrategy.id, {
+        strategy_id: selectedStrategy.id,
+        symbol: symbolData.symbol,
+        config_id: symbolData.configId,
+        status: 'active'
+      });
+      
+      // Refresh symbols list
+      await fetchStrategySymbols(selectedStrategy.id);
+      setShowAddSymbolModal(false);
+    } catch (err) {
+      console.error('Failed to add symbol:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add symbol');
+    }
+  };
+
+  const handleToggleSymbol = async (symbolId: number) => {
+    try {
+      await apiClient.toggleSymbolStatus(symbolId);
+      // Refresh symbols list
+      if (selectedStrategy) {
+        await fetchStrategySymbols(selectedStrategy.id);
+      }
+    } catch (err) {
+      console.error('Failed to toggle symbol:', err);
+      setError(err instanceof Error ? err.message : 'Failed to toggle symbol');
+    }
   };
 
   const handleBack = () => {
     if (viewMode === 'trades') {
       setViewMode('symbols');
       setSelectedSymbol(null);
-    } else if (viewMode === 'symbols') {
+    } else if (viewMode === 'symbols' || viewMode === 'configs') {
       setViewMode('strategies');
       setSelectedStrategy(null);
     }
@@ -271,11 +334,20 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
       </button>
     );
 
-    if (viewMode === 'symbols' || viewMode === 'trades') {
+    if (viewMode === 'symbols' || viewMode === 'trades' || viewMode === 'configs') {
       items.push(<span key="sep1" className="text-[var(--muted-foreground)] text-sm">/</span>);
       items.push(
         <span key="strategy" className="text-[var(--foreground)] font-medium text-sm">
           {selectedStrategy?.name}
+        </span>
+      );
+    }
+
+    if (viewMode === 'configs') {
+      items.push(<span key="sep2" className="text-[var(--muted-foreground)] text-sm">/</span>);
+      items.push(
+        <span key="configs" className="text-[var(--accent)] font-medium text-sm">
+          Configurations
         </span>
       );
     }
@@ -291,12 +363,14 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
 
     return (
       <div className="flex items-center space-x-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
-        <button
-          onClick={handleBack}
-          className="mr-2 p-1.5 rounded-lg bg-[var(--card-background)] border border-[var(--border)] hover:bg-[var(--accent)]/10 transition-colors flex-shrink-0"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </button>
+        {(viewMode === 'symbols' || viewMode === 'trades' || viewMode === 'configs') && (
+          <button
+            onClick={handleBack}
+            className="mr-2 p-1.5 rounded-lg bg-[var(--card-background)] border border-[var(--border)] hover:bg-[var(--accent)]/10 transition-colors flex-shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        )}
         <div className="flex items-center space-x-2 whitespace-nowrap">
           {items}
         </div>
@@ -448,9 +522,10 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
       {viewMode === 'symbols' && selectedStrategy && (
         <SymbolsPage
           strategy={selectedStrategy}
-          symbols={symbols.filter(s => s.strategyId === selectedStrategy.id)}
+          symbols={symbols.filter(s => s.strategy_id === selectedStrategy.id)}
           onViewTrades={handleViewTrades}
           onAddSymbol={handleAddSymbol}
+          onToggleSymbol={handleToggleSymbol}
         />
       )}
 
@@ -461,23 +536,24 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
         />
       )}
 
-      {/* Modals */}
-      {showConfigsModal && selectedStrategy && (
-        <ConfigsModal
+      {viewMode === 'configs' && selectedStrategy && (
+        <ConfigsPage
           strategy={selectedStrategy}
-          onClose={() => setShowConfigsModal(false)}
+          configs={configs}
+          symbols={symbols}
+          onBack={handleBack}
+          onRefresh={() => fetchStrategyConfigs(selectedStrategy.id)}
         />
       )}
 
+      {/* Modals */}
       {showAddSymbolModal && selectedStrategy && (
         <AddSymbolModal
           strategy={selectedStrategy}
+          configs={configs}
+          existingSymbols={symbols}
           onClose={() => setShowAddSymbolModal(false)}
-          onAdd={(symbolData: { symbol: string; configId: number }) => {
-            // Handle adding new symbol
-            console.log('Adding symbol:', symbolData);
-            setShowAddSymbolModal(false);
-          }}
+          onAdd={handleSymbolAdded}
         />
       )}
       </div>

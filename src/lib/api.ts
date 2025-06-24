@@ -61,12 +61,36 @@ export interface StrategyConfig {
   id: number;
   strategy_id: number;
   name: string;
-  enabled: boolean;
-  params: Record<string, any>;
+  description?: string;
+  exchange: string;
+  instrument?: string;
+  trade: Record<string, any>;
+  indicators: Record<string, any>;
   order_type: 'MARKET' | 'LIMIT';
   product_type: 'INTRADAY' | 'DELIVERY';
+  enabled: boolean;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface StrategySymbol {
+  id: number;
+  strategy_id: number;
+  symbol: string;
+  config_id: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  config_name?: string;
+  config_description?: string;
+}
+
+export interface StrategySymbolCreate {
+  strategy_id: number;
+  symbol: string;
+  config_id: number;
+  status?: string;
 }
 
 export interface Broker {
@@ -522,27 +546,81 @@ class ApiClient {
     return this.request(`/strategies/${id}/`);
   }
 
+  // Strategy Configs (hierarchical)
   async getStrategyConfigs(strategyId: number): Promise<StrategyConfig[]> {
     return this.request(`/strategies/${strategyId}/configs/`);
   }
 
+  async getStrategyConfig(strategyId: number, configId: number): Promise<StrategyConfig> {
+    return this.request(`/strategies/${strategyId}/configs/${configId}/`);
+  }
+
   async updateStrategyConfig(
+    strategyId: number,
     configId: number,
     update: Partial<StrategyConfig>
   ): Promise<StrategyConfig> {
-    return this.request(`/strategies/configs/${configId}/`, {
+    return this.request(`/strategies/${strategyId}/configs/${configId}/`, {
       method: 'PUT',
       body: JSON.stringify(update),
     });
   }
 
+  async createStrategyConfig(strategyId: number, config: Omit<StrategyConfig, 'id' | 'strategy_id' | 'created_at' | 'updated_at'>): Promise<StrategyConfig> {
+    return this.request(`/strategies/${strategyId}/configs/`, {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async deleteStrategyConfig(strategyId: number, configId: number): Promise<void> {
+    return this.request(`/strategies/${strategyId}/configs/${configId}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Strategy Symbols (hierarchical)
+  async getStrategySymbols(strategyId: number): Promise<StrategySymbol[]> {
+    return this.request(`/strategies/${strategyId}/symbols/`);
+  }
+
+  async addStrategySymbol(strategyId: number, symbolData: StrategySymbolCreate): Promise<StrategySymbol> {
+    return this.request(`/strategies/${strategyId}/symbols/`, {
+      method: 'POST',
+      body: JSON.stringify(symbolData),
+    });
+  }
+
+  async toggleSymbolStatus(symbolId: number): Promise<StrategySymbol> {
+    return this.request(`/strategies/symbols/${symbolId}/status`, {
+      method: 'PUT',
+    });
+  }
+
+  async enableSymbol(symbolId: number): Promise<StrategySymbol> {
+    return this.request(`/strategies/symbols/${symbolId}/enable`, {
+      method: 'PUT',
+    });
+  }
+
+  async disableSymbol(symbolId: number): Promise<StrategySymbol> {
+    return this.request(`/strategies/symbols/${symbolId}/disable`, {
+      method: 'PUT',
+    });
+  }
+
+  // Strategy Symbol Trades
+  async getStrategySymbolTrades(strategySymbolId: number): Promise<Trade[]> {
+    return this.request(`/strategy_symbol/${strategySymbolId}/trades/`);
+  }
+
   async enableStrategy(strategyId: number): Promise<any> {
     // Enable strategy by enabling its default config
     const configs = await this.getStrategyConfigs(strategyId);
-    const defaultConfig = configs.find(config => config.name.includes('default') || configs.length === 1 ? config : configs[0]);
+    const defaultConfig = configs.find(config => config.is_default) || configs[0];
     
     if (defaultConfig) {
-      return this.updateStrategyConfig(defaultConfig.id, { enabled: true });
+      return this.updateStrategyConfig(strategyId, defaultConfig.id, { enabled: true });
     }
     throw new Error('No strategy config found to enable');
   }
@@ -554,7 +632,7 @@ class ApiClient {
     
     // Disable all enabled configs for this strategy
     const disablePromises = enabledConfigs.map(config => 
-      this.updateStrategyConfig(config.id, { enabled: false })
+      this.updateStrategyConfig(strategyId, config.id, { enabled: false })
     );
     
     return Promise.all(disablePromises);

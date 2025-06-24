@@ -23,7 +23,7 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
     existing => existing.symbol.toLowerCase() === symbolName.trim().toLowerCase()
   );
 
-  const canSubmit = symbolName.trim() && selectedConfigId && !isDuplicate && !isSubmitting && configs.length > 0;
+  const canSubmit = symbolName.trim() && selectedConfigId && !isDuplicate && !isSubmitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,22 +150,10 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
             
             {configs.length === 0 ? (
               <div className="p-4 bg-[var(--muted)]/10 border border-[var(--border)] rounded-lg text-center">
-                <AlertCircle className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-                <p className="text-[var(--muted-foreground)] font-medium">No configurations available</p>
+                <p className="text-[var(--muted-foreground)]">No configurations available for this strategy</p>
                 <p className="text-sm text-[var(--muted-foreground)] mt-1">
-                  You must create at least one configuration before adding symbols to this strategy.
+                  Create a configuration first before adding symbols
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    // This would trigger opening the configs modal
-                    // You might want to pass a callback to open configs modal
-                  }}
-                  className="mt-3 px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/80 transition-colors text-sm"
-                >
-                  Create Configuration
-                </button>
               </div>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -183,21 +171,26 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
                           <span className="font-medium text-[var(--foreground)]">
-                            {config.name}
+                            {config.name || `${config.symbol} Config`}
+                          </span>
+                          {config.is_default && (
+                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-xs font-medium">
+                              DEFAULT
+                            </span>
+                          )}
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            config.enabled 
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          }`}>
+                            {config.enabled ? 'ACTIVE' : 'INACTIVE'}
                           </span>
                         </div>
                         <div className="text-sm text-[var(--muted-foreground)]">
-                          <span>{config.exchange}</span>
-                          {config.instrument && (
-                            <>
-                              <span> • </span>
-                              <span>{config.instrument}</span>
-                            </>
-                          )}
-                          <span> • </span>
-                          <span>{config.order_type}</span>
-                          <span> • </span>
-                          <span>{config.product_type}</span>
+                          <span>{config.symbol}</span> • 
+                          <span className="ml-1">{config.exchange}</span> • 
+                          <span className="ml-1">{config.order_type}</span> • 
+                          <span className="ml-1">{config.product_type}</span>
                         </div>
                         {config.description && (
                           <p className="text-sm text-[var(--muted-foreground)] mt-1">{config.description}</p>
@@ -229,7 +222,8 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
                 <div className="md:col-span-2">
                   <p className="text-[var(--muted-foreground)]">Configuration</p>
                   <p className="font-medium text-[var(--foreground)]">
-                    {configs.find(c => c.id === selectedConfigId)?.name}
+                    {configs.find(c => c.id === selectedConfigId)?.name || 
+                     `${configs.find(c => c.id === selectedConfigId)?.symbol} Config`}
                   </p>
                 </div>
               </div>
