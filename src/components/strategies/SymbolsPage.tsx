@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Strategy, StrategySymbol } from "./StrategiesPage";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Strategy, StrategySymbol, StrategyConfig } from "./StrategiesPage";
+import { apiClient, SymbolStats } from "../../lib/api";
 import { 
   Plus, 
   Eye, 
@@ -11,7 +12,9 @@ import {
   Target,
   Activity,
   BarChart3,
-  Zap
+  Zap,
+  Filter,
+  ChevronDown
 } from "lucide-react";
 
 interface SymbolsPageProps {
@@ -20,6 +23,8 @@ interface SymbolsPageProps {
   onViewTrades: (symbol: StrategySymbol) => void;
   onAddSymbol: () => void;
   onToggleSymbol?: (symbolId: number) => Promise<void>;
+  preSelectedConfigId?: number; // Config to pre-select when coming from configs page
+  onClearPreSelection?: () => void; // Function to clear the pre-selection
 }
 
 // Toggle Switch Component
@@ -60,8 +65,145 @@ function ToggleSwitch({
   );
 }
 
-export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onToggleSymbol }: SymbolsPageProps) {
+export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onToggleSymbol, preSelectedConfigId, onClearPreSelection }: SymbolsPageProps) {
   const [toggleStates, setToggleStates] = useState<Record<number, boolean>>({});
+  const [configs, setConfigs] = useState<StrategyConfig[]>([]);
+  const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
+  const [selectedConfigIds, setSelectedConfigIds] = useState<number[]>([]);
+  const [showConfigDropdown, setShowConfigDropdown] = useState(false);
+  const [symbolStats, setSymbolStats] = useState<Record<number, SymbolStats>>({});
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowConfigDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch configs for the strategy (only once per strategy)
+  useEffect(() => {
+    const fetchConfigs = async () => {
+      if (isLoadingConfigs) return; // Prevent duplicate calls
+      
+      setIsLoadingConfigs(true);
+      try {
+        console.log('SymbolsPage: Fetching configs for strategy', strategy.id);
+        const strategyConfigs = await apiClient.getStrategyConfigs(strategy.id);
+        console.log('SymbolsPage: Configs fetched:', strategyConfigs);
+        setConfigs(strategyConfigs);
+      } catch (error) {
+        console.error('SymbolsPage: Failed to fetch configs:', error);
+        setConfigs([]);
+      } finally {
+        setIsLoadingConfigs(false);
+      }
+    };
+
+    if (strategy?.id && configs.length === 0 && !isLoadingConfigs) {
+      fetchConfigs();
+    }
+  }, [strategy.id]);
+
+  // Fetch trade statistics for all symbols
+  useEffect(() => {
+    const fetchSymbolStats = async () => {
+      if (symbols.length === 0) return;
+      
+      setIsLoadingStats(true);
+      try {
+        const statsPromises = symbols.map(symbol => 
+          apiClient.getSymbolStats(symbol.id).catch(error => {
+            console.error(`Failed to fetch stats for symbol ${symbol.id}:`, error);
+            return {
+              symbol_id: symbol.id,
+              live_trades: 0,
+              live_pnl: 0.0,
+              total_trades: 0,
+              total_pnl: 0.0,
+              all_trades: 0,
+              enabled: symbol.enabled || false
+            };
+          })
+        );
+        
+        const allStats = await Promise.all(statsPromises);
+        const statsMap = allStats.reduce((acc, stat) => {
+          acc[stat.symbol_id] = stat;
+          return acc;
+        }, {} as Record<number, any>);
+        
+        setSymbolStats(statsMap);
+        console.log('SymbolsPage: Trade statistics fetched:', statsMap);
+      } catch (error) {
+        console.error('SymbolsPage: Failed to fetch symbol statistics:', error);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchSymbolStats();
+  }, [symbols]);
+
+  // Enhance symbols with config information and trade statistics
+  const enhancedSymbols = useMemo(() => {
+    return symbols.map(symbol => {
+      const config = configs.find(c => c.id === symbol.config_id);
+      const stats = symbolStats[symbol.id] || { 
+        symbol_id: symbol.id,
+        live_trades: 0, 
+        live_pnl: 0.0,
+        total_trades: 0, 
+        total_pnl: 0.0,
+        all_trades: 0,
+        enabled: symbol.status === 'active' 
+      };
+      
+      return {
+        ...symbol,
+        config_name: config?.name || `Config ${symbol.config_id}`,
+        config_description: config?.description || undefined,
+        // New detailed statistics
+        live_trades: stats.live_trades,
+        live_pnl: stats.live_pnl,
+        total_trades: stats.total_trades,
+        total_pnl: stats.total_pnl,
+        all_trades: stats.all_trades,
+        // Backward compatibility
+        tradeCount: stats.all_trades,
+        currentPnL: stats.total_pnl,
+        enabled: stats.enabled
+      };
+    });
+  }, [symbols, configs, symbolStats]);
+
+  // Filter symbols based on selected configs
+  const filteredSymbols = useMemo(() => {
+    if (selectedConfigIds.length === 0) {
+      return enhancedSymbols;
+    }
+    return enhancedSymbols.filter(symbol => selectedConfigIds.includes(symbol.config_id));
+  }, [enhancedSymbols, selectedConfigIds]);
+
+  const handleConfigFilter = (configId: number) => {
+    setSelectedConfigIds(prev => {
+      if (prev.includes(configId)) {
+        return prev.filter(id => id !== configId);
+      } else {
+        return [...prev, configId];
+      }
+    });
+  };
+
+  const clearFilters = () => {
+    setSelectedConfigIds([]);
+  };
 
   const handleToggleSymbol = async (symbolId: number) => {
     setToggleStates(prev => ({ ...prev, [symbolId]: true }));
@@ -88,9 +230,22 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
     return amount >= 0 ? 'text-green-400' : 'text-red-400';
   };
 
-  const totalPnL = symbols.reduce((sum, symbol) => sum + (symbol.currentPnL || 0), 0);
-  const totalTrades = symbols.reduce((sum, symbol) => sum + (symbol.tradeCount || 0), 0);
-  const activeSymbols = symbols.filter(s => s.enabled).length;
+  const totalPnL = enhancedSymbols.reduce((sum, symbol) => sum + (symbol.currentPnL || 0), 0);
+  const totalTrades = enhancedSymbols.reduce((sum, symbol) => sum + (symbol.tradeCount || 0), 0);
+  const activeSymbols = enhancedSymbols.filter(s => s.enabled).length;
+
+  // Apply pre-selected config filter when coming from configs page
+  useEffect(() => {
+    if (preSelectedConfigId && configs.length > 0) {
+      // Check if the pre-selected config exists in the loaded configs
+      const configExists = configs.some(config => config.id === preSelectedConfigId);
+      if (configExists) {
+        setSelectedConfigIds([preSelectedConfigId]);
+        setShowConfigDropdown(false);
+        console.log('SymbolsPage: Applied pre-selected config filter:', preSelectedConfigId);
+      }
+    }
+  }, [preSelectedConfigId, configs]);
 
   return (
     <div className="space-y-6">
@@ -158,6 +313,135 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
         </div>
       </div>
 
+      {/* Pre-filter notification */}
+      {preSelectedConfigId && selectedConfigIds.includes(preSelectedConfigId) && (
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-blue-400 font-medium">
+                Showing symbols for selected configuration: {configs.find(c => c.id === preSelectedConfigId)?.name}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedConfigIds([]);
+                onClearPreSelection?.();
+              }}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded border border-blue-500/30 hover:border-blue-500/50"
+            >
+              Clear Filter
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Config Filter Dropdown */}
+      {configs.length > 0 && (
+        <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-4 shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <Filter className="w-4 h-4 text-[var(--accent)]" />
+              <h3 className="text-sm font-semibold text-[var(--foreground)]">Filter by Configuration</h3>
+            </div>
+            {selectedConfigIds.length > 0 && (
+              <button
+                onClick={clearFilters}
+                className="text-xs text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+              >
+                Clear Filters ({selectedConfigIds.length})
+              </button>
+            )}
+          </div>
+          
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setShowConfigDropdown(!showConfigDropdown)}
+              className="w-full flex items-center justify-between px-4 py-2 bg-[var(--background)]/50 border border-[var(--border)] rounded-lg text-sm transition-all duration-200 hover:border-[var(--accent)]/30"
+            >
+              <span className="text-[var(--foreground)]">
+                {selectedConfigIds.length === 0 
+                  ? 'Select configurations...' 
+                  : `${selectedConfigIds.length} configuration${selectedConfigIds.length === 1 ? '' : 's'} selected`
+                }
+              </span>
+              <ChevronDown className={`w-4 h-4 text-[var(--muted-foreground)] transition-transform ${showConfigDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {showConfigDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--card-background)] border border-[var(--border)] rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+                {configs.map((config) => {
+                  const isSelected = selectedConfigIds.includes(config.id);
+                  const symbolCount = symbols.filter(s => s.config_id === config.id).length;
+                  
+                  return (
+                    <button
+                      key={config.id}
+                      onClick={() => handleConfigFilter(config.id)}
+                      className={`w-full text-left px-4 py-3 border-b border-[var(--border)]/30 last:border-b-0 hover:bg-[var(--background)]/30 transition-colors ${
+                        isSelected ? 'bg-[var(--accent)]/10' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                            isSelected 
+                              ? 'bg-[var(--accent)] border-[var(--accent)]' 
+                              : 'border-[var(--border)] bg-[var(--background)]'
+                          }`}>
+                            {isSelected && (
+                              <div className="w-2 h-2 bg-white rounded-sm"></div>
+                            )}
+                          </div>
+                          <div>
+                            <span className="font-medium text-[var(--foreground)]">{config.name}</span>
+                            {config.description && (
+                              <p className="text-xs text-[var(--muted-foreground)] mt-0.5 line-clamp-1">
+                                {config.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-xs text-[var(--muted-foreground)] bg-[var(--background)]/50 px-2 py-1 rounded">
+                          {symbolCount}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          {selectedConfigIds.length > 0 && (
+            <div className="mt-3 flex items-center justify-between text-xs">
+              <span className="text-[var(--muted-foreground)]">
+                Showing {filteredSymbols.length} of {symbols.length} symbols
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {selectedConfigIds.map(configId => {
+                  const config = configs.find(c => c.id === configId);
+                  return config ? (
+                    <span 
+                      key={configId}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded text-xs"
+                    >
+                      {config.name}
+                      <button
+                        onClick={() => handleConfigFilter(configId)}
+                        className="hover:bg-[var(--accent)]/30 rounded px-1"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Symbols Table */}
       <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl shadow-lg overflow-hidden">
         <div className="p-4 border-b border-[var(--border)]/50 bg-gradient-to-r from-[var(--card-background)]/50 to-[var(--accent)]/5">
@@ -167,21 +451,51 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
           </p>
         </div>
 
-        {symbols.length === 0 ? (
+        {filteredSymbols.length === 0 ? (
           <div className="p-6 md:p-8 text-center">
             <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <Target className="w-6 h-6 text-[var(--accent)]" />
             </div>
-            <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Symbols Added</h3>
-            <p className="text-[var(--muted-foreground)] mb-4">
-              Start by adding trading symbols to this strategy
-            </p>
-            <button
-              onClick={onAddSymbol}
-              className="px-4 py-2 bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] rounded-lg transition-all duration-200 border border-[var(--accent)]/30"
-            >
-              Add Your First Symbol
-            </button>
+            {selectedConfigIds.length > 0 ? (
+              <>
+                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Symbols Match Filter</h3>
+                <p className="text-[var(--muted-foreground)] mb-4">
+                  No symbols found for the selected configuration(s)
+                </p>
+                <button
+                  onClick={clearFilters}
+                  className="px-4 py-2 bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] rounded-lg transition-all duration-200 border border-[var(--accent)]/30"
+                >
+                  Clear Filters
+                </button>
+              </>
+            ) : symbols.length === 0 ? (
+              <>
+                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Symbols Added</h3>
+                <p className="text-[var(--muted-foreground)] mb-4">
+                  Start by adding trading symbols to this strategy
+                </p>
+                <button
+                  onClick={onAddSymbol}
+                  className="px-4 py-2 bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] rounded-lg transition-all duration-200 border border-[var(--accent)]/30"
+                >
+                  Add Your First Symbol
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">All Symbols Filtered</h3>
+                <p className="text-[var(--muted-foreground)] mb-4">
+                  All symbols have been filtered out by the current selection
+                </p>
+                <button
+                  onClick={clearFilters}
+                  className="px-4 py-2 bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] rounded-lg transition-all duration-200 border border-[var(--accent)]/30"
+                >
+                  Clear Filters
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -192,13 +506,13 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                   <tr>
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Symbol</th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Config</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Current P&L</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Trades</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Actions</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">P&L (Total)</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Live / Total</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]/30">
-                  {symbols.map((symbol) => (
+                  {filteredSymbols.map((symbol) => (
                     <tr 
                       key={symbol.id} 
                       className="hover:bg-[var(--background)]/30 transition-colors group"
@@ -231,32 +545,29 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <span className={`font-bold ${getPnLColor(symbol.currentPnL || 0)}`}>
-                          {formatCurrency(symbol.currentPnL || 0)}
+                        <span className={`font-bold ${getPnLColor(symbol.current_pnl || symbol.currentPnL || 0)}`}>
+                          {formatCurrency(symbol.current_pnl || symbol.currentPnL || 0)}
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        <span className="text-[var(--foreground)] font-medium">{symbol.tradeCount || 0}</span>
+                        <button
+                          onClick={() => onViewTrades(symbol)}
+                          className="flex items-center space-x-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 text-sm border border-blue-500/30 hover:border-blue-500/50"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span className="font-medium">{symbol.trade_count || symbol.tradeCount || 0}</span>
+                        </button>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <button
-                            onClick={() => onViewTrades(symbol)}
-                            className="flex items-center space-x-1 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 text-sm border border-blue-500/30 hover:border-blue-500/50"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>Trades</span>
-                          </button>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm text-[var(--muted-foreground)]">
-                              {symbol.enabled ? 'Active' : 'Inactive'}
-                            </span>
-                            <ToggleSwitch
-                              enabled={symbol.enabled ?? false}
-                              loading={toggleStates[symbol.id]}
-                              onChange={() => handleToggleSymbol(symbol.id)}
-                            />
-                          </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-[var(--muted-foreground)]">
+                            {symbol.enabled ? 'Active' : 'Inactive'}
+                          </span>
+                          <ToggleSwitch
+                            enabled={symbol.enabled ?? false}
+                            loading={toggleStates[symbol.id]}
+                            onChange={() => handleToggleSymbol(symbol.id)}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -267,7 +578,7 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
 
             {/* Mobile Card View */}
             <div className="md:hidden p-3 space-y-3">
-              {symbols.map((symbol) => (
+              {filteredSymbols.map((symbol) => (
                 <div
                   key={symbol.id}
                   className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-3 hover:border-[var(--accent)]/50 transition-all duration-200"
@@ -292,14 +603,27 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
 
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="text-center">
-                      <p className="text-xs text-[var(--muted-foreground)]">P&L</p>
-                      <p className={`font-bold text-sm ${getPnLColor(symbol.currentPnL || 0)}`}>
-                        ₹{Math.round(Math.abs(symbol.currentPnL || 0) / 1000)}K
+                      <p className="text-xs text-[var(--muted-foreground)]">Total P&L</p>
+                      <p className={`font-bold text-sm ${getPnLColor(symbol.total_pnl || symbol.currentPnL || 0)}`}>
+                        ₹{Math.round(Math.abs(symbol.total_pnl || symbol.currentPnL || 0) / 1000)}K
                       </p>
+                      {(symbol.live_pnl || 0) !== 0 && (
+                        <p className={`text-xs ${getPnLColor(symbol.live_pnl || 0)}`}>
+                          Live: ₹{Math.round(Math.abs(symbol.live_pnl || 0) / 1000)}K
+                        </p>
+                      )}
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-[var(--muted-foreground)]">Trades</p>
-                      <p className="font-medium text-sm text-[var(--foreground)]">{symbol.tradeCount || 0}</p>
+                      <button
+                        onClick={() => onViewTrades(symbol)}
+                        className="font-medium text-sm text-blue-400 hover:text-blue-300 transition-colors underline-offset-2 hover:underline"
+                      >
+                        {symbol.live_trades || 0}/{symbol.total_trades || 0}
+                      </button>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Total: {symbol.all_trades || symbol.tradeCount || 0}
+                      </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-[var(--muted-foreground)]">Config</p>
@@ -310,23 +634,17 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => onViewTrades(symbol)}
-                      className="flex items-center justify-center space-x-1 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 text-sm border border-blue-500/30"
-                    >
-                      <Eye className="w-4 h-4" />
-                      <span>View Trades</span>
-                    </button>
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm text-[var(--muted-foreground)]">
+                      <span className="text-sm text-[var(--muted-foreground)]">Status:</span>
+                      <span className={`text-sm font-medium ${symbol.enabled ? 'text-green-400' : 'text-red-400'}`}>
                         {symbol.enabled ? 'Active' : 'Inactive'}
                       </span>
-                      <ToggleSwitch
-                        enabled={symbol.enabled ?? false}
-                        loading={toggleStates[symbol.id]}
-                        onChange={() => handleToggleSymbol(symbol.id)}
-                      />
                     </div>
+                    <ToggleSwitch
+                      enabled={symbol.enabled ?? false}
+                      loading={toggleStates[symbol.id]}
+                      onChange={() => handleToggleSymbol(symbol.id)}
+                    />
                   </div>
                 </div>
               ))}

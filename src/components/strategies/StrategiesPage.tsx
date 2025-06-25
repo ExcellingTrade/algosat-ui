@@ -46,10 +46,13 @@ export interface StrategySymbol {
   // Enhanced fields from API joins
   config_name?: string;
   config_description?: string;
-  // UI enhancement fields (calculated)
+  // Real trade data from backend
+  current_pnl?: number;
+  trade_count?: number;
+  enabled?: boolean;
+  // Legacy field names for backward compatibility
   currentPnL?: number;
   tradeCount?: number;
-  enabled?: boolean;
 }
 
 export interface StrategyConfig {
@@ -100,6 +103,7 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [preSelectedConfigId, setPreSelectedConfigId] = useState<number | undefined>(undefined);
 
   // Generate mock data for strategies to supplement API data
   const generateMockData = (strategy: Partial<Strategy>): Strategy => {
@@ -244,12 +248,17 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
   const handleViewSymbols = async (strategy: Strategy) => {
     setSelectedStrategy(strategy);
     await fetchStrategySymbols(strategy.id);
+    setPreSelectedConfigId(undefined); // Clear any previous pre-selection
     setViewMode('symbols');
   };
 
   const handleViewConfigs = async (strategy: Strategy) => {
     setSelectedStrategy(strategy);
-    await fetchStrategyConfigs(strategy.id);
+    // Fetch both configs and symbols for ConfigsPage to show accurate symbol counts
+    await Promise.all([
+      fetchStrategyConfigs(strategy.id),
+      fetchStrategySymbols(strategy.id)
+    ]);
     setViewMode('configs');
   };
 
@@ -306,6 +315,7 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
     } else if (viewMode === 'symbols' || viewMode === 'configs') {
       setViewMode('strategies');
       setSelectedStrategy(null);
+      setPreSelectedConfigId(undefined); // Clear pre-selection when going back to strategies
     }
   };
 
@@ -525,6 +535,8 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
           onViewTrades={handleViewTrades}
           onAddSymbol={handleAddSymbol}
           onToggleSymbol={handleToggleSymbol}
+          preSelectedConfigId={preSelectedConfigId}
+          onClearPreSelection={() => setPreSelectedConfigId(undefined)}
         />
       )}
 
@@ -542,6 +554,13 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
           symbols={symbols}
           onBack={handleBack}
           onRefresh={() => fetchStrategyConfigs(selectedStrategy.id)}
+          onViewSymbols={async (strategy, preSelectedConfigId) => {
+            setSelectedStrategy(strategy);
+            // Ensure symbols are fetched before switching to symbols view
+            await fetchStrategySymbols(strategy.id);
+            setViewMode('symbols');
+            setPreSelectedConfigId(preSelectedConfigId);
+          }}
         />
       )}
 

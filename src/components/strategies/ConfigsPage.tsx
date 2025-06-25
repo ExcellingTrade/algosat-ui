@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { 
-  Plus, 
   Settings, 
   Edit, 
   Trash2, 
   Eye, 
   Users, 
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from "lucide-react";
 import { Strategy, StrategyConfig, StrategySymbol } from "./StrategiesPage";
 import { apiClient } from "../../lib/api";
@@ -20,9 +20,10 @@ interface ConfigsPageProps {
   symbols: StrategySymbol[];
   onBack: () => void;
   onRefresh: () => void;
+  onViewSymbols?: (strategy: Strategy, preSelectedConfigId?: number) => void; // Add navigation to symbols
 }
 
-export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: ConfigsPageProps) {
+export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onViewSymbols }: ConfigsPageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingConfig, setEditingConfig] = useState<StrategyConfig | null>(null);
@@ -31,6 +32,8 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
   const [deletingConfigId, setDeletingConfigId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(12); // 12 configs per page for good grid layout
+  const [configStats, setConfigStats] = useState<Record<number, any>>({});
+  const [loadingStats, setLoadingStats] = useState(false);
   const [newConfig, setNewConfig] = useState({
     name: '',
     description: '',
@@ -64,8 +67,14 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
     return symbols.filter(symbol => symbol.config_id === configId);
   };
 
-  // Get config usage stats
+  // Get config usage stats (now uses real API data with fallback)
   const getConfigStats = (configId: number) => {
+    // Return real stats if available, otherwise fallback to calculated stats
+    if (configStats[configId]) {
+      return configStats[configId];
+    }
+    
+    // Fallback calculation
     const configSymbols = getConfigSymbols(configId);
     const activeSymbols = configSymbols.filter(s => s.status === 'active').length;
     const totalTrades = configSymbols.reduce((sum, s) => sum + (s.tradeCount || 0), 0);
@@ -75,9 +84,66 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
       symbolCount: configSymbols.length,
       activeSymbols,
       totalTrades,
-      totalPnL
+      totalPnL,
+      liveTrades: 0
     };
   };
+
+  // Fetch real P&L data for all configs
+  useEffect(() => {
+    const fetchConfigStats = async () => {
+      setLoadingStats(true);
+      const statsMap: Record<number, any> = {};
+      
+      for (const config of configs) {
+        try {
+          // Get symbols for this config
+          const configSymbols = symbols.filter(symbol => symbol.config_id === config.id);
+          let totalPnL = 0;
+          let totalTrades = 0;
+          let liveTrades = 0;
+          
+          // Fetch stats for each symbol in this config
+          for (const symbol of configSymbols) {
+            try {
+              const symbolStats = await apiClient.getSymbolStats(symbol.id);
+              totalPnL += symbolStats.total_pnl + symbolStats.live_pnl;
+              totalTrades += symbolStats.total_trades;
+              liveTrades += symbolStats.live_trades;
+            } catch (error) {
+              console.error(`Failed to fetch stats for symbol ${symbol.id}:`, error);
+            }
+          }
+          
+          statsMap[config.id] = {
+            symbolCount: configSymbols.length,
+            activeSymbols: configSymbols.filter(s => s.status === 'active').length,
+            totalPnL,
+            totalTrades,
+            liveTrades
+          };
+        } catch (error) {
+          console.error(`Failed to process config ${config.id}:`, error);
+          // Fallback to old calculation
+          const configSymbols = getConfigSymbols(config.id);
+          statsMap[config.id] = {
+            symbolCount: configSymbols.length,
+            activeSymbols: configSymbols.filter(s => s.status === 'active').length,
+            totalPnL: configSymbols.reduce((sum, s) => sum + (s.currentPnL || 0), 0),
+            totalTrades: configSymbols.reduce((sum, s) => sum + (s.tradeCount || 0), 0),
+            liveTrades: 0
+          };
+        }
+      }
+      
+      setConfigStats(statsMap);
+      setLoadingStats(false);
+    };
+
+    if (configs.length > 0 && symbols.length > 0) {
+      fetchConfigStats();
+    }
+  }, [configs, symbols]);
 
   const handleCreateConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -431,64 +497,124 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
       )}
 
       {/* Configs Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {configs.map((config) => {
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
+        {paginatedConfigs.map((config) => {
           const stats = getConfigStats(config.id);
           const configSymbols = getConfigSymbols(config.id);
           
           return (
-            <div key={config.id} className="bg-gradient-to-br from-[var(--card-background)] to-[var(--card-background)]/80 border border-[var(--border)] rounded-xl p-6 space-y-4 hover:shadow-lg transition-all duration-200 hover:border-[var(--accent)]/30">
+            <div key={config.id} className="config-card bg-gradient-to-br from-[var(--card-background)] to-[var(--card-background)]/80 border border-[var(--border)] rounded-xl p-6 hover:shadow-lg transition-all duration-200 hover:border-[var(--accent)]/30 flex flex-col h-full">
               {/* Header */}
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-[var(--foreground)] mb-1">{config.name}</h3>
-                  {config.description && (
-                    <p className="text-sm text-[var(--muted-foreground)]">{config.description}</p>
+              <div className="flex-1 mb-4">
+                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2 line-clamp-2">{config.name}</h3>
+                {config.description && (
+                  <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">{config.description}</p>
+                )}
+              </div>
+
+              {/* Key Parameters - Improved alignment */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-gradient-to-r from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-lg p-3 min-h-[64px] flex flex-col justify-between">
+                  <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">Exchange</p>
+                  <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{config.exchange}</p>
+                </div>
+                
+                <div className="bg-gradient-to-r from-purple-500/10 to-purple-600/5 border border-purple-500/20 rounded-lg p-3 min-h-[64px] flex flex-col justify-between">
+                  <p className="text-xs text-purple-500 font-medium uppercase tracking-wide">Order Type</p>
+                  <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{config.order_type}</p>
+                </div>
+                
+                <div className="bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-lg p-3 min-h-[64px] flex flex-col justify-between">
+                  <p className="text-xs text-emerald-500 font-medium uppercase tracking-wide">Product</p>
+                  <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{config.product_type}</p>
+                </div>
+
+                {/* Enhanced Clickable Symbol Count */}
+                <button 
+                  onClick={() => onViewSymbols?.(strategy, config.id)}
+                  className="symbol-count-button group bg-gradient-to-r from-orange-500/10 to-orange-600/5 border-2 border-orange-500/20 rounded-lg p-3 hover:from-orange-500/20 hover:to-orange-600/10 hover:border-orange-500/40 hover:shadow-md transition-all duration-200 text-left w-full min-h-[64px] flex flex-col justify-between relative overflow-hidden"
+                  title={`View ${stats.symbolCount} symbols using this configuration`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-orange-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-1">
+                      <Users className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform duration-200" />
+                      <div className="w-2 h-2 bg-orange-500 rounded-full group-hover:scale-125 transition-transform duration-200"></div>
+                    </div>
+                    <p className="text-xs text-orange-500 font-medium uppercase tracking-wide">Symbols</p>
+                    <div className="flex items-center justify-between mt-1">
+                      {loadingStats ? (
+                        <div className="shimmer loading-text w-8 h-5"></div>
+                      ) : (
+                        <p className="text-lg font-bold text-[var(--foreground)] group-hover:text-orange-600 transition-colors duration-200">{stats.symbolCount}</p>
+                      )}
+                      <div className="text-xs text-orange-500 opacity-70 group-hover:opacity-100 transition-opacity duration-200">
+                        →
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Statistics Summary */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {/* P&L Display */}
+                <div className="bg-gradient-to-r from-[var(--accent)]/5 to-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-lg p-3 text-center min-h-[72px] flex flex-col justify-center">
+                  <TrendingUp className="w-4 h-4 text-[var(--accent)] mx-auto mb-1" />
+                  <p className="text-xs text-[var(--accent)] font-medium uppercase tracking-wide mb-1">Total P&L</p>
+                  {loadingStats ? (
+                    <div className="skeleton skeleton-text w-16 h-4 mx-auto"></div>
+                  ) : (
+                    <p className={`text-sm font-bold ${stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      ₹{Math.round(stats.totalPnL).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                {/* Active Symbols */}
+                <div className="bg-gradient-to-r from-green-500/10 to-green-600/5 border border-green-500/20 rounded-lg p-3 text-center min-h-[72px] flex flex-col justify-center">
+                  <div className="w-4 h-4 bg-green-500 rounded-full mx-auto mb-1"></div>
+                  <p className="text-xs text-green-500 font-medium uppercase tracking-wide mb-1">Active</p>
+                  {loadingStats ? (
+                    <div className="skeleton skeleton-text w-8 h-4 mx-auto"></div>
+                  ) : (
+                    <p className="text-sm font-bold text-[var(--foreground)]">{stats.activeSymbols}</p>
                   )}
                 </div>
               </div>
 
-              {/* Key Parameters */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gradient-to-r from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-lg p-3">
-                  <p className="text-xs text-blue-500 font-medium mb-1">Exchange</p>
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{config.exchange}</p>
+              {/* Trade Statistics */}
+              {(stats.totalTrades > 0 || stats.liveTrades > 0 || loadingStats) && (
+                <div className="bg-gradient-to-r from-indigo-500/5 to-indigo-600/5 border border-indigo-500/20 rounded-lg p-3 mb-4">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-indigo-500 font-medium uppercase tracking-wide">Total Trades</p>
+                      {loadingStats ? (
+                        <div className="skeleton skeleton-text w-8 h-4 mx-auto mt-1"></div>
+                      ) : (
+                        <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{stats.totalTrades}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-indigo-500 font-medium uppercase tracking-wide">Live Trades</p>
+                      {loadingStats ? (
+                        <div className="skeleton skeleton-text w-8 h-4 mx-auto mt-1"></div>
+                      ) : (
+                        <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{stats.liveTrades}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="bg-gradient-to-r from-purple-500/10 to-purple-600/5 border border-purple-500/20 rounded-lg p-3">
-                  <p className="text-xs text-purple-500 font-medium mb-1">Order Type</p>
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{config.order_type}</p>
-                </div>
-                
-                <div className="bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-lg p-3">
-                  <p className="text-xs text-emerald-500 font-medium mb-1">Product</p>
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{config.product_type}</p>
-                </div>
+              )}
 
-                <div className="bg-gradient-to-r from-orange-500/10 to-orange-600/5 border border-orange-500/20 rounded-lg p-3">
-                  <Users className="w-4 h-4 text-orange-500 mb-1" />
-                  <p className="text-xs text-orange-500 font-medium mb-1">Symbols</p>
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{stats.symbolCount}</p>
-                </div>
-              </div>
-
-              {/* P&L Display */}
-              <div className="bg-gradient-to-r from-[var(--accent)]/5 to-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-lg p-3 text-center">
-                <TrendingUp className="w-5 h-5 text-[var(--accent)] mx-auto mb-1" />
-                <p className="text-xs text-[var(--accent)] font-medium mb-1">Total P&L</p>
-                <p className={`text-lg font-bold ${stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  ₹{Math.round(stats.totalPnL).toLocaleString()}
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
+              {/* Actions - Fixed at bottom */}
+              <div className="flex justify-between items-center pt-3 border-t border-[var(--border)] mt-auto">
                 <button
                   onClick={() => handleViewConfig(config)}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent)]/80 hover:bg-[var(--accent)]/10 rounded-lg transition-colors"
+                  className="flex items-center space-x-1 px-3 py-2 text-sm text-[var(--accent)] hover:text-[var(--accent)]/80 hover:bg-[var(--accent)]/10 rounded-lg transition-colors"
                 >
                   <Eye className="w-4 h-4" />
-                  <span>View Config</span>
+                  <span>View</span>
                 </button>
                 
                 <div className="flex space-x-1">

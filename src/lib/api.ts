@@ -257,6 +257,22 @@ export interface LogStats {
   total_size: number;
 }
 
+export interface SymbolStats {
+  symbol_id: number;
+  live_trades: number;
+  live_pnl: number;
+  total_trades: number;
+  total_pnl: number;
+  all_trades: number;
+  enabled: boolean;
+}
+
+export interface SymbolTradesResponse {
+  symbol_id: number;
+  trades: any[];
+  total_trades: number;
+}
+
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -803,6 +819,15 @@ class ApiClient {
 
   async getNseHolidayList(): Promise<string[]> {
     return this.request<string[]>('/nse/getNseHolidayList');
+  }
+
+  // Strategy Symbol Statistics
+  async getSymbolStats(symbolId: number): Promise<SymbolStats> {
+    return this.request(`/strategies/symbols/${symbolId}/stats`);
+  }
+
+  async getSymbolTrades(symbolId: number, limit: number = 100): Promise<SymbolTradesResponse> {
+    return this.request(`/strategies/symbols/${symbolId}/trades?limit=${limit}`);
   }
 }
 
