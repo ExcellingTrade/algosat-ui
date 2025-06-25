@@ -63,8 +63,7 @@ export interface StrategyConfig {
   indicators: Record<string, any>;
   order_type: 'MARKET' | 'LIMIT';
   product_type: 'INTRADAY' | 'DELIVERY';
-  enabled: boolean;
-  is_default: boolean;
+  is_default?: boolean;  // Made optional to handle API inconsistencies
   created_at: string;
   updated_at: string;
 }

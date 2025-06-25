@@ -68,8 +68,7 @@ export interface StrategyConfig {
   indicators: Record<string, any>;
   order_type: 'MARKET' | 'LIMIT';
   product_type: 'INTRADAY' | 'DELIVERY';
-  enabled: boolean;
-  is_default: boolean;
+  is_default?: boolean;  // Made optional to handle API inconsistencies
   created_at: string;
   updated_at: string;
 }
@@ -560,21 +559,21 @@ class ApiClient {
     configId: number,
     update: Partial<StrategyConfig>
   ): Promise<StrategyConfig> {
-    return this.request(`/strategies/${strategyId}/configs/${configId}/`, {
+    return this.request(`/strategies/${strategyId}/configs/${configId}`, {
       method: 'PUT',
       body: JSON.stringify(update),
     });
   }
 
   async createStrategyConfig(strategyId: number, config: Omit<StrategyConfig, 'id' | 'strategy_id' | 'created_at' | 'updated_at'>): Promise<StrategyConfig> {
-    return this.request(`/strategies/${strategyId}/configs/`, {
+    return this.request(`/strategies/${strategyId}/configs`, {
       method: 'POST',
       body: JSON.stringify(config),
     });
   }
 
   async deleteStrategyConfig(strategyId: number, configId: number): Promise<void> {
-    return this.request(`/strategies/${strategyId}/configs/${configId}/`, {
+    return this.request(`/strategies/${strategyId}/configs/${configId}`, {
       method: 'DELETE',
     });
   }
@@ -615,27 +614,15 @@ class ApiClient {
   }
 
   async enableStrategy(strategyId: number): Promise<any> {
-    // Enable strategy by enabling its default config
-    const configs = await this.getStrategyConfigs(strategyId);
-    const defaultConfig = configs.find(config => config.is_default) || configs[0];
-    
-    if (defaultConfig) {
-      return this.updateStrategyConfig(strategyId, defaultConfig.id, { enabled: true });
-    }
-    throw new Error('No strategy config found to enable');
+    // Since strategy configs don't have enabled field by design,
+    // this would need to be implemented at the strategy level
+    throw new Error('Strategy enable/disable not implemented - configs do not have enabled field');
   }
 
   async disableStrategy(strategyId: number): Promise<any> {
-    // Disable strategy by disabling all its configs
-    const configs = await this.getStrategyConfigs(strategyId);
-    const enabledConfigs = configs.filter(config => config.enabled);
-    
-    // Disable all enabled configs for this strategy
-    const disablePromises = enabledConfigs.map(config => 
-      this.updateStrategyConfig(strategyId, config.id, { enabled: false })
-    );
-    
-    return Promise.all(disablePromises);
+    // Since strategy configs don't have enabled field by design,
+    // this would need to be implemented at the strategy level
+    throw new Error('Strategy enable/disable not implemented - configs do not have enabled field');
   }
 
   // Brokers

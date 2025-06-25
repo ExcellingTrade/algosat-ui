@@ -42,6 +42,17 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
     indicators: '{}'
   });
 
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    description: '',
+    exchange: 'NSE',
+    instrument: '',
+    order_type: 'MARKET' as 'MARKET' | 'LIMIT',
+    product_type: 'INTRADAY' as 'INTRADAY' | 'DELIVERY',
+    trade: '{}',
+    indicators: '{}'
+  });
+
   // Pagination calculations
   const totalPages = Math.ceil(configs.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
@@ -105,9 +116,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
         order_type: newConfig.order_type,
         product_type: newConfig.product_type,
         trade: tradeData,
-        indicators: indicatorsData,
-        enabled: false,
-        is_default: false
+        indicators: indicatorsData
       });
 
       // Reset form and refresh
@@ -132,31 +141,93 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
   };
 
   const handleEditConfig = (config: StrategyConfig) => {
+    setEditFormData({
+      name: config.name,
+      description: config.description || '',
+      exchange: config.exchange,
+      instrument: config.instrument || '',
+      order_type: config.order_type,
+      product_type: config.product_type,
+      trade: JSON.stringify(config.trade, null, 2),
+      indicators: JSON.stringify(config.indicators, null, 2)
+    });
     setEditingConfig(config);
     setError(null);
   };
 
-  const handleUpdateConfig = async (updatedConfig: Partial<StrategyConfig>) => {
+  const handleUpdateConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!editingConfig) return;
     
     setIsLoading(true);
     setError(null);
 
     try {
-      await apiClient.updateStrategyConfig(strategy.id, editingConfig.id, updatedConfig);
+      // Parse JSON fields
+      let tradeData = {};
+      let indicatorsData = {};
+      
+      try {
+        tradeData = JSON.parse(editFormData.trade || '{}');
+      } catch {
+        setError('Invalid JSON format in Trade configuration');
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        indicatorsData = JSON.parse(editFormData.indicators || '{}');
+      } catch {
+        setError('Invalid JSON format in Indicators configuration');
+        setIsLoading(false);
+        return;
+      }
+
+      const updates = {
+        name: editFormData.name.trim(),
+        description: editFormData.description.trim() || undefined,
+        exchange: editFormData.exchange,
+        instrument: editFormData.instrument.trim() || undefined,
+        order_type: editFormData.order_type,
+        product_type: editFormData.product_type,
+        trade: tradeData,
+        indicators: indicatorsData
+      };
+
+      console.log('Updating config with data:', updates);
+      await apiClient.updateStrategyConfig(strategy.id, editingConfig.id, updates);
       setEditingConfig(null);
       onRefresh();
     } catch (err) {
       console.error('Failed to update config:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update config');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        setError(String(err.message));
+      } else {
+        setError('Failed to update config - please check console for details');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleViewConfig = (config: StrategyConfig) => {
-    setViewingConfig(config);
+  const handleViewConfig = async (config: StrategyConfig) => {
+    setIsLoading(true);
     setError(null);
+    
+    try {
+      // Fetch the latest config data from the API to ensure we have up-to-date information
+      const latestConfig = await apiClient.getStrategyConfig(strategy.id, config.id);
+      setViewingConfig(latestConfig);
+    } catch (err) {
+      console.error('Failed to fetch config details:', err);
+      // Fall back to using the passed config if API call fails
+      setViewingConfig(config);
+      setError('Could not fetch latest config data, showing cached data');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteConfig = async (configId: number) => {
@@ -245,7 +316,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                   type="text"
                   value={newConfig.description}
                   onChange={(e) => setNewConfig(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
                   placeholder="Brief description of the configuration"
                 />
               </div>
@@ -258,7 +329,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                 <select
                   value={newConfig.exchange}
                   onChange={(e) => setNewConfig(prev => ({ ...prev, exchange: e.target.value }))}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
                 >
                   <option value="NSE">NSE</option>
                   <option value="BSE">BSE</option>
@@ -274,7 +345,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                 <select
                   value={newConfig.order_type}
                   onChange={(e) => setNewConfig(prev => ({ ...prev, order_type: e.target.value as 'MARKET' | 'LIMIT' }))}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
                 >
                   <option value="MARKET">MARKET</option>
                   <option value="LIMIT">LIMIT</option>
@@ -289,7 +360,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                 <select
                   value={newConfig.product_type}
                   onChange={(e) => setNewConfig(prev => ({ ...prev, product_type: e.target.value as 'INTRADAY' | 'DELIVERY' }))}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
                 >
                   <option value="INTRADAY">INTRADAY</option>
                   <option value="DELIVERY">DELIVERY</option>
@@ -305,7 +376,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                   type="text"
                   value={newConfig.instrument}
                   onChange={(e) => setNewConfig(prev => ({ ...prev, instrument: e.target.value }))}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
                   placeholder="e.g., INDEX, EQUITY"
                 />
               </div>
@@ -320,7 +391,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                 value={newConfig.trade}
                 onChange={(e) => setNewConfig(prev => ({ ...prev, trade: e.target.value }))}
                 rows={4}
-                className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] font-mono text-sm"
+                className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] font-mono text-sm"
                 placeholder='{"exchange": "NSE", "trade_symbol": "NIFTY50", "instrument": "INDEX"}'
               />
             </div>
@@ -334,7 +405,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                 value={newConfig.indicators}
                 onChange={(e) => setNewConfig(prev => ({ ...prev, indicators: e.target.value }))}
                 rows={4}
-                className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] font-mono text-sm"
+                className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] font-mono text-sm"
                 placeholder='{"supertrend_period": 7, "supertrend_multiplier": 3, "sma_period": 14, "atr_multiplier": 14}'
               />
             </div>
@@ -467,7 +538,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 text-sm bg-[var(--card-background)] border border-[var,--border)] rounded-lg hover:bg-[var(--muted)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-2 text-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg hover:bg-[var(--muted)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Previous
           </button>
@@ -492,7 +563,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
                   className={`px-3 py-2 text-sm rounded-lg transition-colors ${
                     currentPage === pageNum
                       ? 'bg-[var(--accent)] text-white'
-                      : 'bg-[var(--card-background)] border border-[var,--border)] hover:bg-[var(--muted)]/20'
+                      : 'bg-[var(--card-background)] border border-[var(--border)] hover:bg-[var(--muted)]/20'
                   }`}
                 >
                   {pageNum}
@@ -504,7 +575,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 text-sm bg-[var(--card-background)] border border-[var,--border)] rounded-lg hover:bg-[var(--muted)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-2 text-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg hover:bg-[var(--muted)]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Next
           </button>
@@ -514,62 +585,129 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
       {/* View Config Modal */}
       {viewingConfig && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--card-background)] border border-[var,--border)] rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-semibold text-[var(--foreground)]">Configuration Details</h3>
               <button
                 onClick={() => setViewingConfig(null)}
-                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors text-2xl"
               >
                 ×
               </button>
             </div>
             
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-[var(--foreground)]">Name:</label>
-                <p className="text-[var(--muted-foreground)]">{viewingConfig.name}</p>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-[var(--muted-foreground)]">Loading configuration details...</div>
               </div>
-              
-              {viewingConfig.description && (
-                <div>
-                  <label className="text-sm font-medium text-[var(--foreground)]">Description:</label>
-                  <p className="text-[var(--muted-foreground)]">{viewingConfig.description}</p>
+            ) : (
+              <div className="space-y-6">
+                {/* Basic Information */}
+                <div className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-4">
+                  <h4 className="text-lg font-medium text-[var(--foreground)] mb-3">Basic Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-[var(--foreground)]">Name:</label>
+                      <p className="text-[var(--muted-foreground)] mt-1">{viewingConfig.name}</p>
+                    </div>
+                    
+                    {viewingConfig.description && (
+                      <div>
+                        <label className="text-sm font-medium text-[var(--foreground)]">Description:</label>
+                        <p className="text-[var(--muted-foreground)] mt-1">{viewingConfig.description}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-[var(--foreground)]">Exchange:</label>
-                  <p className="text-[var(--muted-foreground)]">{viewingConfig.exchange}</p>
+
+                {/* Trading Parameters */}
+                <div className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-4">
+                  <h4 className="text-lg font-medium text-[var(--foreground)] mb-3">Trading Parameters</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-[var(--foreground)]">Exchange:</label>
+                      <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.exchange}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-[var(--foreground)]">Order Type:</label>
+                      <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.order_type}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-[var(--foreground)]">Product Type:</label>
+                      <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.product_type}</p>
+                    </div>
+                    {viewingConfig.instrument && (
+                      <div>
+                        <label className="text-sm font-medium text-[var(--foreground)]">Instrument:</label>
+                        <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.instrument}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-[var(--foreground)]">Order Type:</label>
-                  <p className="text-[var(--muted-foreground)]">{viewingConfig.order_type}</p>
+
+                {/* Configuration Data */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Trade Configuration */}
+                  <div className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-4">
+                    <h4 className="text-lg font-medium text-[var(--foreground)] mb-3">Trade Configuration</h4>
+                    <div className="bg-[var(--background)] border border-[var(--border)] rounded-lg p-3 max-h-64 overflow-y-auto">
+                      {viewingConfig.trade && Object.keys(viewingConfig.trade).length > 0 ? (
+                        <pre className="text-sm font-mono whitespace-pre-wrap text-[var(--foreground)]">
+                          {JSON.stringify(viewingConfig.trade, null, 2)}
+                        </pre>
+                      ) : (
+                        <p className="text-[var(--muted-foreground)] text-sm italic">No trade configuration data</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Indicators Configuration */}
+                  <div className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-4">
+                    <h4 className="text-lg font-medium text-[var(--foreground)] mb-3">Indicators Configuration</h4>
+                    <div className="bg-[var(--background)] border border-[var(--border)] rounded-lg p-3 max-h-64 overflow-y-auto">
+                      {viewingConfig.indicators && Object.keys(viewingConfig.indicators).length > 0 ? (
+                        <pre className="text-sm font-mono whitespace-pre-wrap text-[var(--foreground)]">
+                          {JSON.stringify(viewingConfig.indicators, null, 2)}
+                        </pre>
+                      ) : (
+                        <p className="text-[var(--muted-foreground)] text-sm italic">No indicators configuration data</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-[var(--foreground)]">Product Type:</label>
-                  <p className="text-[var(--muted-foreground)]">{viewingConfig.product_type}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-[var(--foreground)]">Enabled:</label>
-                  <p className="text-[var(--muted-foreground)]">{viewingConfig.enabled ? 'Yes' : 'No'}</p>
+
+                {/* Metadata */}
+                <div className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-4">
+                  <h4 className="text-lg font-medium text-[var(--foreground)] mb-3">Metadata</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <label className="text-sm font-medium text-[var(--foreground)]">Config ID:</label>
+                      <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.id}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-[var(--foreground)]">Created:</label>
+                      <p className="text-[var(--muted-foreground)] mt-1">
+                        {new Date(viewingConfig.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-[var(--foreground)]">Last Updated:</label>
+                      <p className="text-[var(--muted-foreground)] mt-1">
+                        {new Date(viewingConfig.updated_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              
-              <div>
-                <label className="text-sm font-medium text-[var(--foreground)]">Trade Configuration:</label>
-                <pre className="bg-[var(--background)] border border-[var,--border)] rounded-lg p-3 text-sm font-mono overflow-x-auto">
-                  {JSON.stringify(viewingConfig.trade, null, 2)}
-                </pre>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-[var(--foreground)]">Indicators Configuration:</label>
-                <pre className="bg-[var(--background)] border border-[var,--border)] rounded-lg p-3 text-sm font-mono overflow-x-auto">
-                  {JSON.stringify(viewingConfig.indicators, null, 2)}
-                </pre>
-              </div>
+            )}
+            
+            <div className="flex justify-end mt-6 pt-4 border-t border-[var(--border)]">
+              <button
+                onClick={() => setViewingConfig(null)}
+                className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent)]/80 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -578,7 +716,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
       {/* Edit Config Modal */}
       {editingConfig && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--card-background)] border border-[var,--border)] rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-[var(--foreground)]">Edit Configuration</h3>
               <button
@@ -589,33 +727,125 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh }: C
               </button>
             </div>
             
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const updates: Partial<StrategyConfig> = {};
-              
-              const enabled = formData.get('enabled') as string;
-              if (enabled !== undefined) {
-                updates.enabled = enabled === 'true';
-              }
-              
-              handleUpdateConfig(updates);
-            }} className="space-y-4">
+            <form onSubmit={handleUpdateConfig} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Name */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                    required
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                    Description
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.description}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  />
+                </div>
+
+                {/* Exchange */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                    Exchange
+                  </label>
+                  <select
+                    value={editFormData.exchange}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, exchange: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  >
+                    <option value="NSE">NSE</option>
+                    <option value="BSE">BSE</option>
+                    <option value="MCX">MCX</option>
+                  </select>
+                </div>
+
+                {/* Order Type */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                    Order Type
+                  </label>
+                  <select
+                    value={editFormData.order_type}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, order_type: e.target.value as 'MARKET' | 'LIMIT' }))}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  >
+                    <option value="MARKET">MARKET</option>
+                    <option value="LIMIT">LIMIT</option>
+                  </select>
+                </div>
+
+                {/* Product Type */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                    Product Type
+                  </label>
+                  <select
+                    value={editFormData.product_type}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, product_type: e.target.value as 'INTRADAY' | 'DELIVERY' }))}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                  >
+                    <option value="INTRADAY">INTRADAY</option>
+                    <option value="DELIVERY">DELIVERY</option>
+                  </select>
+                </div>
+
+                {/* Instrument */}
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                    Instrument
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.instrument}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, instrument: e.target.value }))}
+                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
+                    placeholder="e.g., INDEX, EQUITY"
+                  />
+                </div>
+              </div>
+
+              {/* Trade Configuration */}
               <div>
                 <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                  Enabled
+                  Trade Configuration (JSON)
                 </label>
-                <select
-                  name="enabled"
-                  defaultValue={editingConfig.enabled.toString()}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var,--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
+                <textarea
+                  value={editFormData.trade}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, trade: e.target.value }))}
+                  rows={6}
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] font-mono text-sm"
+                  placeholder='{"exchange": "NSE", "trade_symbol": "NIFTY50", "instrument": "INDEX"}'
+                />
+              </div>
+
+              {/* Indicators Configuration */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                  Indicators Configuration (JSON)
+                </label>
+                <textarea
+                  value={editFormData.indicators}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, indicators: e.target.value }))}
+                  rows={6}
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] font-mono text-sm"
+                  placeholder='{"supertrend_period": 7, "supertrend_multiplier": 3, "sma_period": 14, "atr_multiplier": 14}'
+                />
               </div>
               
-              <div className="flex justify-end space-x-3">
+              <div className="flex justify-end space-x-3 pt-4 border-t border-[var(--border)]">
                 <button
                   type="button"
                   onClick={() => setEditingConfig(null)}
