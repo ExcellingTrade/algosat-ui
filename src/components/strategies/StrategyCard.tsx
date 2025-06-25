@@ -31,7 +31,13 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
   const [isToggling, setIsToggling] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    order_type: strategy.order_type,
+    product_type: strategy.product_type
+  });
 
   const handleToggle = async () => {
     if (isToggling) return;
@@ -52,16 +58,49 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
       if (onStrategyUpdated) {
         onStrategyUpdated(updatedStrategy);
       }
-      
-      // Show success feedback
-      setTimeout(() => {
-        setIsToggling(false);
-      }, 500);
-      
     } catch (err) {
       console.error('Failed to toggle strategy:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update strategy');
+      setError(err instanceof Error ? err.message : 'Failed to toggle strategy');
+    } finally {
       setIsToggling(false);
+    }
+  };
+
+  const handleEdit = () => {
+    setEditFormData({
+      order_type: strategy.order_type,
+      product_type: strategy.product_type
+    });
+    setShowEditModal(true);
+    setShowDropdown(false);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isEditing) return;
+    
+    setIsEditing(true);
+    setError(null);
+    
+    try {
+      const updatedStrategy = await apiClient.updateStrategy(strategy.id, {
+        order_type: editFormData.order_type,
+        product_type: editFormData.product_type
+      });
+      
+      console.log('Strategy edited successfully:', updatedStrategy);
+      
+      // Update the strategy in the parent component
+      if (onStrategyUpdated) {
+        onStrategyUpdated(updatedStrategy);
+      }
+      
+      setShowEditModal(false);
+    } catch (err) {
+      console.error('Failed to edit strategy:', err);
+      setError(err instanceof Error ? err.message : 'Failed to edit strategy');
+    } finally {
+      setIsEditing(false);
     }
   };
 
@@ -90,11 +129,31 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Unknown';
       
-      return date.toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      });
+      const now = new Date();
+      const timeDiff = now.getTime() - date.getTime();
+      const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+      const minutes = Math.floor(timeDiff / (1000 * 60));
+      
+      // Show relative time for recent dates
+      if (minutes < 1) {
+        return 'just now';
+      } else if (minutes < 60) {
+        return `${minutes}m ago`;
+      } else if (hours < 24) {
+        return `${hours}h ago`;
+      } else if (days === 1) {
+        return 'yesterday';
+      } else if (days < 7) {
+        return `${days}d ago`;
+      } else {
+        // Show formatted date for older dates
+        return date.toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+        });
+      }
     } catch (error) {
       return 'Unknown';
     }
@@ -182,7 +241,10 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
                     onClick={() => setShowDropdown(false)}
                   />
                   <div className="absolute right-0 top-full mt-1 w-32 bg-[var(--card-background)] border border-[var(--border)] rounded-lg shadow-lg z-20">
-                    <button className="w-full px-3 py-2 text-xs text-left hover:bg-[var(--accent)]/10 transition-colors flex items-center space-x-2">
+                    <button 
+                      onClick={handleEdit}
+                      className="w-full px-3 py-2 text-xs text-left hover:bg-[var(--accent)]/10 transition-colors flex items-center space-x-2"
+                    >
                       <Edit3 className="w-3 h-3" />
                       <span>Edit</span>
                     </button>
@@ -307,12 +369,112 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
           </button>
         </div>
 
-        <div className="flex items-center justify-center space-x-1 text-xs text-[var(--muted-foreground)]/70">
-          <Clock className="w-3 h-3" />
-          <span className="hidden md:inline">Created {formatDate(strategy.created_at)}</span>
-          <span className="md:hidden">{formatDate(strategy.created_at)}</span>
+        {/* Date Information - Enhanced to show both created and updated */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-center space-x-1 text-xs text-[var(--muted-foreground)]/70">
+            <Clock className="w-3 h-3" />
+            <span className="hidden md:inline">Created {formatDate(strategy.created_at)}</span>
+            <span className="md:hidden">Created {formatDate(strategy.created_at)}</span>
+          </div>
+          
+          {/* Show updated date if different from created date */}
+          {strategy.updated_at && strategy.updated_at !== strategy.created_at && (
+            <div className="flex items-center justify-center space-x-1 text-xs text-[var(--accent)]/80">
+              <div className="w-3 h-3 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 bg-[var(--accent)] rounded-full"></div>
+              </div>
+              <span className="hidden md:inline">Updated {formatDate(strategy.updated_at)}</span>
+              <span className="md:hidden">Upd. {formatDate(strategy.updated_at)}</span>
+            </div>
+          )}
+          
+          {/* Show "Just updated" indicator for recent updates (within 5 minutes) */}
+          {strategy.updated_at && (() => {
+            const updatedTime = new Date(strategy.updated_at).getTime();
+            const now = new Date().getTime();
+            const timeDiff = now - updatedTime;
+            const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+            return timeDiff < fiveMinutes && timeDiff > 0;
+          })() && (
+            <div className="flex items-center justify-center space-x-1 text-xs animate-pulse">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
+              <span className="text-green-400 font-medium">Recently Updated</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Edit Strategy Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            onClick={() => setShowEditModal(false)}
+          />
+          
+          {/* Modal */}
+          <div className="relative w-full max-w-md bg-[var(--card-background)] border-2 border-[var(--border)] rounded-xl shadow-2xl p-6 transform scale-100 transition-all duration-200">
+            <h4 className="text-lg font-bold text-[var(--foreground)] mb-4">
+              Edit Strategy #{strategy.id}
+            </h4>
+            
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              {/* Order Type */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1">
+                  Order Type
+                </label>
+                <select
+                  value={editFormData.order_type}
+                  onChange={(e) => setEditFormData({ ...editFormData, order_type: e.target.value as 'MARKET' | 'LIMIT' })}
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--background)]/60 border border-[var(--border)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none transition-all"
+                  required
+                >
+                  <option value="MARKET">MARKET</option>
+                  <option value="LIMIT">LIMIT</option>
+                </select>
+              </div>
+              
+              {/* Product Type */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--muted-foreground)] mb-1">
+                  Product Type
+                </label>
+                <select
+                  value={editFormData.product_type}
+                  onChange={(e) => setEditFormData({ ...editFormData, product_type: e.target.value as 'INTRADAY' | 'DELIVERY' })}
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--background)]/60 border border-[var(--border)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none transition-all"
+                  required
+                >
+                  <option value="INTRADAY">INTRADAY</option>
+                  <option value="DELIVERY">DELIVERY</option>
+                </select>
+              </div>
+              
+              {/* Submit and Cancel Buttons */}
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-3 py-2 text-sm rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 transition-all"
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-3 py-2 text-sm rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-400 transition-all flex items-center justify-center space-x-2"
+                >
+                  {isEditing && (
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  )}
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

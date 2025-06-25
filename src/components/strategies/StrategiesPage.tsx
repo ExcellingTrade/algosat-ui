@@ -106,6 +106,67 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [preSelectedConfigId, setPreSelectedConfigId] = useState<number | undefined>(undefined);
 
+  // Background stats fetching (non-blocking)
+  const fetchStrategiesStats = async (strategies: Strategy[]) => {
+    console.log('Starting background stats fetching...');
+    
+    for (const strategy of strategies) {
+      try {
+        // Get strategy symbols to calculate symbol count
+        const strategySymbols = await apiClient.getStrategySymbols(strategy.id);
+        
+        // Calculate basic stats quickly - limit to prevent overload
+        let totalPnL = 0;
+        let livePnL = 0;
+        let totalTrades = 0;
+        
+        // Limit concurrent API calls to prevent overload (max 5 symbols per strategy)
+        const symbolsToProcess = strategySymbols.slice(0, 5);
+        const symbolStatsPromises = symbolsToProcess.map(async (symbol) => {
+          try {
+            const symbolStats = await apiClient.getSymbolStats(symbol.id);
+            return {
+              totalPnL: symbolStats.total_pnl || 0,
+              livePnL: symbolStats.live_pnl || 0,
+              totalTrades: symbolStats.total_trades || 0
+            };
+          } catch (error) {
+            console.warn(`Failed to fetch stats for symbol ${symbol.id}:`, error);
+            return { totalPnL: 0, livePnL: 0, totalTrades: 0 };
+          }
+        });
+        
+        const symbolsStats = await Promise.all(symbolStatsPromises);
+        
+        // Aggregate stats
+        symbolsStats.forEach(stats => {
+          totalPnL += stats.totalPnL;
+          livePnL += stats.livePnL;
+          totalTrades += stats.totalTrades;
+        });
+        
+        // Update the specific strategy with real stats
+        setStrategies(prev => prev.map(s => 
+          s.id === strategy.id ? {
+            ...s,
+            livePnL,
+            overallPnL: totalPnL,
+            symbolCount: strategySymbols.length,
+            tradeCount: totalTrades,
+            winRate: totalTrades > 0 ? Math.round((totalTrades * 0.7)) : 0 // Placeholder calculation
+          } : s
+        ));
+        
+        // Small delay to prevent API rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (error) {
+        console.warn(`Failed to fetch stats for strategy ${strategy.id}:`, error);
+      }
+    }
+    
+    console.log('Background stats fetching completed');
+  };
 
   // Fetch strategies from API with real statistics
   const fetchStrategies = async (showLoading = true) => {
@@ -117,64 +178,29 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
       const apiStrategies = await apiClient.getStrategies();
       console.log('API strategies received:', apiStrategies);
       
-      // Fetch real statistics for each strategy
-      const enrichedStrategies = await Promise.all(
-        apiStrategies.map(async (strategy) => {
-          try {
-            // Get strategy symbols to calculate symbol count
-            const strategySymbols = await apiClient.getStrategySymbols(strategy.id);
-            
-            // Calculate real P&L and trade counts from symbols
-            let totalPnL = 0;
-            let livePnL = 0;
-            let totalTrades = 0;
-            
-            // Fetch stats for each symbol
-            for (const symbol of strategySymbols) {
-              try {
-                const symbolStats = await apiClient.getSymbolStats(symbol.id);
-                totalPnL += symbolStats.total_pnl || 0;
-                livePnL += symbolStats.live_pnl || 0;
-                totalTrades += symbolStats.total_trades || 0;
-              } catch (error) {
-                console.warn(`Failed to fetch stats for symbol ${symbol.id}:`, error);
-              }
-            }
-            
-            return {
-              ...strategy,
-              description: strategy.name?.includes('Option') ? 
-                'High-frequency option trading strategy with advanced risk management' :
-                'Algorithmic trading strategy optimized for market conditions',
-              livePnL,
-              overallPnL: totalPnL,
-              symbolCount: strategySymbols.length,
-              tradeCount: totalTrades,
-              winRate: totalTrades > 0 ? Math.round((totalTrades * 0.7)) : 0 // Placeholder calculation
-            } as Strategy;
-          } catch (error) {
-            console.warn(`Failed to fetch stats for strategy ${strategy.id}:`, error);
-            // Return strategy with basic info if stats fetching fails
-            return {
-              ...strategy,
-              description: strategy.name?.includes('Option') ? 
-                'High-frequency option trading strategy with advanced risk management' :
-                'Algorithmic trading strategy optimized for market conditions',
-              livePnL: 0,
-              overallPnL: 0,
-              symbolCount: 0,
-              tradeCount: 0,
-              winRate: 0
-            } as Strategy;
-          }
-        })
-      );
+      // Immediately set strategies with basic info and placeholders for fast loading
+      const basicStrategies = apiStrategies.map(strategy => ({
+        ...strategy,
+        description: strategy.name?.includes('Option') ? 
+          'High-frequency option trading strategy with advanced risk management' :
+          'Algorithmic trading strategy optimized for market conditions',
+        livePnL: 0,
+        overallPnL: 0,
+        symbolCount: 0,
+        tradeCount: 0,
+        winRate: 0
+      })) as Strategy[];
       
-      setStrategies(enrichedStrategies);
+      setStrategies(basicStrategies);
+      setIsLoading(false);
+      
+      // Load stats in background (non-blocking)
+      fetchStrategiesStats(basicStrategies);
       
     } catch (err) {
       console.error('Failed to fetch strategies:', err);
       setError(err instanceof Error ? err.message : 'Failed to load strategies');
+      setIsLoading(false);
       
       // Fallback to mock data if API fails
       const fallbackStrategies: Strategy[] = [

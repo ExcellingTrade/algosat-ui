@@ -641,6 +641,17 @@ class ApiClient {
     });
   }
 
+  async updateStrategy(strategyId: number, updates: {
+    name?: string;
+    order_type?: 'MARKET' | 'LIMIT';
+    product_type?: 'INTRADAY' | 'DELIVERY';
+  }): Promise<any> {
+    return this.request(`/strategies/${strategyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+  }
+
   // Brokers
   async getBrokers(): Promise<Broker[]> {
     return this.request('/brokers/');
