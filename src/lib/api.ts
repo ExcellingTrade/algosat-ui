@@ -630,15 +630,15 @@ class ApiClient {
   }
 
   async enableStrategy(strategyId: number): Promise<any> {
-    // Since strategy configs don't have enabled field by design,
-    // this would need to be implemented at the strategy level
-    throw new Error('Strategy enable/disable not implemented - configs do not have enabled field');
+    return this.request(`/strategies/${strategyId}/enable`, {
+      method: 'PUT'
+    });
   }
 
   async disableStrategy(strategyId: number): Promise<any> {
-    // Since strategy configs don't have enabled field by design,
-    // this would need to be implemented at the strategy level
-    throw new Error('Strategy enable/disable not implemented - configs do not have enabled field');
+    return this.request(`/strategies/${strategyId}/disable`, {
+      method: 'PUT'
+    });
   }
 
   // Brokers

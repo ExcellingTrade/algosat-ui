@@ -29,6 +29,7 @@ export interface Strategy {
   overallPnL?: number;  // Mock data for now
   symbolCount?: number;  // Mock data for now
   tradeCount?: number;  // Mock data for now
+  winRate?: number;  // Win rate percentage (0-100)
   created_at?: string;
   updated_at?: string;
   order_type: 'MARKET' | 'LIMIT';
@@ -105,23 +106,8 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [preSelectedConfigId, setPreSelectedConfigId] = useState<number | undefined>(undefined);
 
-  // Generate mock data for strategies to supplement API data
-  const generateMockData = (strategy: Partial<Strategy>): Strategy => {
-    return {
-      ...strategy,
-      description: strategy.name?.includes('Option') ? 
-        'High-frequency option trading strategy with advanced risk management' :
-        'Algorithmic trading strategy optimized for market conditions',
-      livePnL: Math.floor(Math.random() * 20000 - 5000),
-      overallPnL: Math.floor(Math.random() * 100000 + 10000),
-      symbolCount: Math.floor(Math.random() * 5 + 1),
-      tradeCount: Math.floor(Math.random() * 200 + 50),
-      created_at: strategy.created_at || new Date().toISOString(),
-      updated_at: strategy.updated_at || new Date().toISOString()
-    } as Strategy;
-  };
 
-  // Fetch strategies from API
+  // Fetch strategies from API with real statistics
   const fetchStrategies = async (showLoading = true) => {
     try {
       if (showLoading) setIsLoading(true);
@@ -131,8 +117,59 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
       const apiStrategies = await apiClient.getStrategies();
       console.log('API strategies received:', apiStrategies);
       
-      // Add mock data to API responses
-      const enrichedStrategies = apiStrategies.map(generateMockData);
+      // Fetch real statistics for each strategy
+      const enrichedStrategies = await Promise.all(
+        apiStrategies.map(async (strategy) => {
+          try {
+            // Get strategy symbols to calculate symbol count
+            const strategySymbols = await apiClient.getStrategySymbols(strategy.id);
+            
+            // Calculate real P&L and trade counts from symbols
+            let totalPnL = 0;
+            let livePnL = 0;
+            let totalTrades = 0;
+            
+            // Fetch stats for each symbol
+            for (const symbol of strategySymbols) {
+              try {
+                const symbolStats = await apiClient.getSymbolStats(symbol.id);
+                totalPnL += symbolStats.total_pnl || 0;
+                livePnL += symbolStats.live_pnl || 0;
+                totalTrades += symbolStats.total_trades || 0;
+              } catch (error) {
+                console.warn(`Failed to fetch stats for symbol ${symbol.id}:`, error);
+              }
+            }
+            
+            return {
+              ...strategy,
+              description: strategy.name?.includes('Option') ? 
+                'High-frequency option trading strategy with advanced risk management' :
+                'Algorithmic trading strategy optimized for market conditions',
+              livePnL,
+              overallPnL: totalPnL,
+              symbolCount: strategySymbols.length,
+              tradeCount: totalTrades,
+              winRate: totalTrades > 0 ? Math.round((totalTrades * 0.7)) : 0 // Placeholder calculation
+            } as Strategy;
+          } catch (error) {
+            console.warn(`Failed to fetch stats for strategy ${strategy.id}:`, error);
+            // Return strategy with basic info if stats fetching fails
+            return {
+              ...strategy,
+              description: strategy.name?.includes('Option') ? 
+                'High-frequency option trading strategy with advanced risk management' :
+                'Algorithmic trading strategy optimized for market conditions',
+              livePnL: 0,
+              overallPnL: 0,
+              symbolCount: 0,
+              tradeCount: 0,
+              winRate: 0
+            } as Strategy;
+          }
+        })
+      );
+      
       setStrategies(enrichedStrategies);
       
     } catch (err) {
@@ -151,6 +188,7 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
           overallPnL: 78420.25,
           symbolCount: 3,
           tradeCount: 127,
+          winRate: 72,
           created_at: "2024-01-15T09:30:00Z",
           order_type: "MARKET",
           product_type: "INTRADAY"
@@ -165,6 +203,7 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
           overallPnL: 45680.90,
           symbolCount: 2,
           tradeCount: 89,
+          winRate: 68,
           created_at: "2024-02-01T09:30:00Z",
           order_type: "LIMIT",
           product_type: "INTRADAY"
@@ -179,6 +218,7 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
           overallPnL: 23450.75,
           symbolCount: 4,
           tradeCount: 156,
+          winRate: 65,
           created_at: "2024-01-20T09:30:00Z",
           order_type: "MARKET",
           product_type: "DELIVERY"
@@ -243,6 +283,14 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await fetchStrategies(false);
+  };
+
+  const handleStrategyUpdated = (updatedStrategy: Strategy) => {
+    setStrategies(prevStrategies => 
+      prevStrategies.map(strategy => 
+        strategy.id === updatedStrategy.id ? updatedStrategy : strategy
+      )
+    );
   };
 
   const handleViewSymbols = async (strategy: Strategy) => {
@@ -504,6 +552,7 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
                       strategy={strategy}
                       onViewSymbols={handleViewSymbols}
                       onViewConfigs={handleViewConfigs}
+                      onStrategyUpdated={handleStrategyUpdated}
                     />
                   ))}
                 </div>

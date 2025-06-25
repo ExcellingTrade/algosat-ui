@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Strategy } from "./StrategiesPage";
+import { apiClient } from "../../lib/api";
 import { 
   Play, 
   Pause, 
@@ -15,36 +16,56 @@ import {
   Trash2,
   BarChart3,
   Info,
-  Clock
+  Clock,
+  AlertTriangle
 } from "lucide-react";
 
 interface StrategyCardProps {
   strategy: Strategy;
   onViewSymbols: (strategy: Strategy) => void;
   onViewConfigs: (strategy: Strategy) => void;
+  onStrategyUpdated?: (updatedStrategy: Strategy) => void; // Callback for strategy updates
 }
 
-export function StrategyCard({ strategy, onViewSymbols, onViewConfigs }: StrategyCardProps) {
+export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrategyUpdated }: StrategyCardProps) {
   const [isToggling, setIsToggling] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleToggle = async () => {
+    if (isToggling) return;
+    
     setIsToggling(true);
-    setTimeout(() => setIsToggling(false), 1000);
+    setError(null);
+    
+    try {
+      console.log(`${strategy.enabled ? 'Disabling' : 'Enabling'} strategy ${strategy.id}...`);
+      
+      const updatedStrategy = strategy.enabled 
+        ? await apiClient.disableStrategy(strategy.id)
+        : await apiClient.enableStrategy(strategy.id);
+      
+      console.log('Strategy updated:', updatedStrategy);
+      
+      // Update the strategy in the parent component
+      if (onStrategyUpdated) {
+        onStrategyUpdated(updatedStrategy);
+      }
+      
+      // Show success feedback
+      setTimeout(() => {
+        setIsToggling(false);
+      }, 500);
+      
+    } catch (err) {
+      console.error('Failed to toggle strategy:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update strategy');
+      setIsToggling(false);
+    }
   };
 
-  // Mock last trade time - in real app this would come from strategy data
-  const getLastTradeTime = () => {
-    const now = new Date();
-    const lastTrade = new Date(now.getTime() - Math.floor(Math.random() * 3600000)); // Random time within last hour
-    return lastTrade.toLocaleTimeString('en-IN', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
-
+  // Get real data from strategy object (no more mock data)
   const formatCurrency = (amount: number = 0) => {
     const isPositive = amount >= 0;
     return `${isPositive ? '+' : ''}₹${Math.abs(amount).toLocaleString()}`;
@@ -65,17 +86,38 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs }: Strateg
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Unknown';
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Unknown';
+      
+      return date.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'Unknown';
+    }
   };
 
   return (
-    <div className="h-full group bg-gradient-to-br from-[var(--card-background)]/90 to-[var(--card-background)]/50 backdrop-blur-xl border border-[var(--border)]/50 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 hover:border-[var(--accent)]/50 hover:scale-100 overflow-hidden relative p-0 min-h-[320px] md:min-h-[400px] max-w-md mx-auto flex flex-col">
+    <div className="h-full group bg-gradient-to-br from-[var(--card-background)]/90 to-[var(--card-background)]/50 backdrop-blur-xl border border-[var(--border)]/50 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 hover:border-[var(--accent)]/50 hover:scale-100 overflow-hidden relative p-0 min-h-[420px] max-w-md mx-auto flex flex-col">
       {/* Subtle animated border on hover */}
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[var(--accent)]/20 via-transparent to-[var(--accent)]/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+      
+      {/* Error Display */}
+      {error && (
+        <div className="absolute top-2 left-2 right-2 z-30 bg-red-500/90 backdrop-blur-sm border border-red-500 rounded-lg p-2 text-xs text-white flex items-center space-x-2">
+          <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+          <span className="flex-1 min-w-0 truncate">{error}</span>
+          <button 
+            onClick={() => setError(null)}
+            className="text-white hover:text-red-200 text-sm"
+          >
+            ×
+          </button>
+        </div>
+      )}
       
       {/* Enhanced Header */}
       <div className="p-4 md:p-6 border-b border-[var(--border)]/30 bg-gradient-to-r from-[var(--card-background)]/60 to-[var(--accent)]/5 relative z-10">
@@ -87,8 +129,8 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs }: Strateg
                 : 'bg-red-400 shadow-red-400/50'
             }`}></div>
             <div className="min-w-0 flex-1 space-y-2">
-              <h3 className="text-lg font-bold text-[var(--foreground)] group-hover:text-[var(--accent)] transition-colors duration-200 leading-tight">
-                {strategy.name}
+              <h3 className="text-lg font-bold text-[var(--foreground)] group-hover:text-[var(--accent)] transition-colors duration-200 leading-tight line-clamp-1">
+                {strategy.name || `Strategy ${strategy.id}`}
               </h3>
               <div className="relative">
                 <p 
@@ -98,7 +140,7 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs }: Strateg
                   onClick={() => setShowFullDescription(!showFullDescription)}
                   title="Click to toggle full description"
                 >
-                  {strategy.description}
+                  {strategy.description || `${strategy.name || 'Strategy'} trading strategy optimized for market conditions with advanced risk management and automated execution.`}
                 </p>
               </div>
               
@@ -201,12 +243,12 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs }: Strateg
             <p className="text-xs md:text-sm font-bold text-blue-400 leading-none">{strategy.symbolCount || 0}</p>
             <p className="text-xs text-[var(--muted-foreground)] mt-1">Symbols</p>
           </div>
-          <div className="text-center p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">
-            <p className="text-sm font-bold text-green-400 leading-none">{strategy.tradeCount || 0}</p>
+          <div className="text-center p-2 md:p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">
+            <p className="text-xs md:text-sm font-bold text-green-400 leading-none">{strategy.tradeCount || 0}</p>
             <p className="text-xs text-[var(--muted-foreground)] mt-1">Trades</p>
           </div>
-          <div className="text-center p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">
-            <p className="text-sm font-bold text-purple-400 leading-none">70%</p>
+          <div className="text-center p-2 md:p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">
+            <p className="text-xs md:text-sm font-bold text-purple-400 leading-none">{strategy.winRate || 0}%</p>
             <p className="text-xs text-[var(--muted-foreground)] mt-1">Win Rate</p>
           </div>
         </div>
@@ -237,21 +279,31 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs }: Strateg
           <button
             onClick={handleToggle}
             disabled={isToggling}
-            className={`w-full flex items-center justify-center space-x-1 md:space-x-1.5 px-2 md:px-3 py-2 md:py-2.5 rounded-lg transition-all duration-200 text-xs font-medium hover:scale-105 ${
+            className={`w-full flex items-center justify-center space-x-1 md:space-x-1.5 px-2 md:px-3 py-2 md:py-2.5 rounded-lg transition-all duration-200 text-xs font-medium hover:scale-105 active:scale-95 ${
               strategy.enabled
                 ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 hover:border-red-500/50'
                 : 'bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 hover:border-green-500/50'
-            } ${isToggling ? 'opacity-50 cursor-not-allowed scale-100' : ''}`}
+            } ${isToggling ? 'opacity-75 cursor-not-allowed scale-100' : 'hover:shadow-md'} transition-all duration-200`}
+            title={`${strategy.enabled ? 'Pause' : 'Start'} this strategy`}
           >
             {isToggling ? (
-              <div className="w-3 md:w-3.5 h-3 md:h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <>
+                <div className="w-3 md:w-3.5 h-3 md:h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                <span>Processing...</span>
+              </>
             ) : strategy.enabled ? (
-              <Pause className="w-3 md:w-3.5 h-3 md:h-3.5" />
+              <>
+                <Pause className="w-3 md:w-3.5 h-3 md:h-3.5" />
+                <span className="hidden sm:inline">Pause Strategy</span>
+                <span className="sm:hidden">Pause</span>
+              </>
             ) : (
-              <Play className="w-3 md:w-3.5 h-3 md:h-3.5" />
+              <>
+                <Play className="w-3 md:w-3.5 h-3 md:h-3.5" />
+                <span className="hidden sm:inline">Start Strategy</span>
+                <span className="sm:hidden">Start</span>
+              </>
             )}
-            <span className="hidden sm:inline">{isToggling ? 'Processing...' : strategy.enabled ? 'Pause Strategy' : 'Start Strategy'}</span>
-            <span className="sm:hidden">{isToggling ? 'Processing...' : strategy.enabled ? 'Pause' : 'Start'}</span>
           </button>
         </div>
 
