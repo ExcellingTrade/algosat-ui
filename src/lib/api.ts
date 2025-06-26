@@ -273,6 +273,19 @@ export interface SymbolTradesResponse {
   total_trades: number;
 }
 
+export interface BalanceSummary {
+  total_balance: number;
+  available: number;
+  utilized: number;
+}
+
+export interface BrokerBalanceSummary {
+  broker_id: number;
+  broker_name: string;
+  summary: BalanceSummary;
+  fetched_at: string;
+}
+
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -389,9 +402,9 @@ class ApiClient {
     if (!this.refreshToken) {
       console.log('No refresh token available, clearing session');
       this.clearTokens();
-      // Redirect to login
+      // Emit auth failure event for the AuthContext to handle
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('auth-failure'));
       }
       return;
     }
@@ -404,7 +417,7 @@ class ApiClient {
       console.log('Session expired due to 1 hour of inactivity, logging out');
       this.clearTokens();
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('auth-failure'));
       }
       return;
     }
@@ -430,14 +443,14 @@ class ApiClient {
         console.log('Token refresh failed, clearing session');
         this.clearTokens();
         if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+          window.dispatchEvent(new CustomEvent('auth-failure'));
         }
       }
     } catch (error) {
       console.error('Token refresh error:', error);
       this.clearTokens();
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('auth-failure'));
       }
     }
   }
@@ -488,12 +501,18 @@ class ApiClient {
         if (response.status === 401) {
           // Try to refresh token once more
           if (this.refreshToken && !this.refreshPromise) {
+            console.log('401 received, attempting token refresh...');
             await this.refreshAccessToken();
             // Retry the request with new token
             return this.request(endpoint, options);
           } else {
+            console.log('401 received, no refresh token or refresh in progress, clearing session');
             this.clearTokens();
-            throw new Error('Authentication failed');
+            // Emit auth failure event for the AuthContext to handle
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('auth-failure'));
+            }
+            throw new Error('Authentication failed - session expired');
           }
         }
         const error = await response.text();
@@ -692,6 +711,10 @@ class ApiClient {
 
   async reauthBroker(name: string): Promise<any> {
     return this.request(`/brokers/${name}/auth/`, { method: 'POST' });
+  }
+
+  async getBalanceSummaries(): Promise<BrokerBalanceSummary[]> {
+    return this.request('/balance_summary/');
   }
 
   // Positions

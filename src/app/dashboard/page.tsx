@@ -13,6 +13,7 @@ import {
   SystemStatus,
   HealthStatus,
   VmDetails,
+  BrokerBalanceSummary,
   apiClient 
 } from "@/lib/api";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -88,6 +89,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [brokers, setBrokers] = useState<Broker[]>([]);
+  const [balanceSummaries, setBalanceSummaries] = useState<BrokerBalanceSummary[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
@@ -126,6 +128,30 @@ export default function Dashboard() {
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Helper function to get balance summary for a specific broker
+  const getBrokerBalance = (brokerName: string) => {
+    const balanceSummary = balanceSummaries.find(
+      summary => summary.broker_name.toLowerCase() === brokerName.toLowerCase()
+    );
+    
+    if (balanceSummary) {
+      return {
+        total_balance: balanceSummary.summary.total_balance,
+        available: balanceSummary.summary.available,
+        utilized: balanceSummary.summary.utilized,
+        fetched_at: balanceSummary.fetched_at
+      };
+    }
+    
+    // Return default values if no balance summary found
+    return {
+      total_balance: 0,
+      available: 0,
+      utilized: 0,
+      fetched_at: null
+    };
+  };
 
   // Check if market is open - simple function without useCallback to prevent dependency issues
   const checkMarketStatus = () => {
@@ -328,16 +354,18 @@ export default function Dashboard() {
       // Initialize arrays in case API calls fail
       let strategiesData: Strategy[] = [];
       let brokersData: Broker[] = [];
+      let balanceSummariesData: BrokerBalanceSummary[] = [];
       let positionsData: Position[] = [];
       let tradesData: Trade[] = [];
       let systemStatusData: SystemStatus | null = null;
       let healthStatusData: HealthStatus | null = null;
 
       // Load data concurrently for better performance
-      const [strategiesResult, brokersResult, positionsResult, tradesResult, systemStatusResult, healthResult] = 
+      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, systemStatusResult, healthResult] = 
         await Promise.allSettled([
           apiClient.getStrategies(),
           apiClient.getBrokers(),
+          apiClient.getBalanceSummaries(),
           apiClient.getPositions(),
           apiClient.getTrades(),
           apiClient.getSystemStatus(),
@@ -359,6 +387,14 @@ export default function Dashboard() {
         console.error('Dashboard: Failed to load brokers:', brokersResult.reason);
       }
       setBrokers(brokersData);
+
+      // Handle balance summaries
+      if (balanceSummariesResult.status === 'fulfilled') {
+        balanceSummariesData = balanceSummariesResult.value;
+      } else {
+        console.error('Dashboard: Failed to load balance summaries:', balanceSummariesResult.reason);
+      }
+      setBalanceSummaries(balanceSummariesData);
 
       // Handle positions
       if (positionsResult.status === 'fulfilled') {
@@ -461,9 +497,59 @@ export default function Dashboard() {
     }
   };
 
+  const loadBrokerData = async () => {
+    try {
+      console.log('Dashboard: Loading broker data...');
+      
+      // Load both brokers and balance summaries concurrently
+      const [brokersResult, balanceSummariesResult] = await Promise.allSettled([
+        apiClient.getBrokers(),
+        apiClient.getBalanceSummaries()
+      ]);
+      
+      // Handle brokers
+      let brokersData: Broker[] = [];
+      if (brokersResult.status === 'fulfilled') {
+        brokersData = brokersResult.value;
+        setBrokers(brokersData);
+      } else {
+        console.error('Dashboard: Failed to load brokers:', brokersResult.reason);
+      }
+      
+      // Handle balance summaries
+      if (balanceSummariesResult.status === 'fulfilled') {
+        setBalanceSummaries(balanceSummariesResult.value);
+        console.log('Dashboard: Balance summaries loaded:', balanceSummariesResult.value.length);
+      } else {
+        console.error('Dashboard: Failed to load balance summaries:', balanceSummariesResult.reason);
+      }
+      
+      // Update stats with fresh broker data
+      setStats(prevStats => ({
+        ...prevStats,
+        totalBrokers: brokersData.length,
+        activeBrokers: brokersData.filter(b => b.is_enabled).length,
+      }));
+      
+      console.log('Dashboard: Broker data loaded successfully');
+    } catch (err) {
+      console.error('Dashboard: Failed to load broker data:', err);
+      setError(err instanceof Error ? err.message : "Failed to load broker data");
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push("/login");
+  };
+
+  const handleTabChange = async (tabId: string) => {
+    setActiveTab(tabId);
+    
+    // Reload data for specific tabs to ensure fresh data after auth issues
+    if (tabId === "brokers") {
+      await loadBrokerData();
+    }
   };
 
   const toggleBroker = async (brokerName: string, enabled: boolean) => {
@@ -765,7 +851,7 @@ export default function Dashboard() {
                 <button
                   key={tab.id}
                   onClick={() => {
-                    setActiveTab(tab.id);
+                    handleTabChange(tab.id);
                     setIsMobileMenuOpen(false); // Close mobile menu on selection
                   }}
                   className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-lg transition-all duration-200 ${
@@ -956,10 +1042,11 @@ export default function Dashboard() {
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     {brokers.map((broker, index) => {
-                      // Generate mock balance data based on broker name - simplified version
-                      const mockBalance = broker.is_enabled ? 2450000 + (index * 300000) : 0;
-                      const mockAvailableBalance = mockBalance * 0.7;
-                      const mockUtilizedMargin = mockBalance * 0.3;
+                      // Get real balance data from API
+                      const balanceData = getBrokerBalance(broker.broker_name);
+                      const totalBalance = balanceData.total_balance;
+                      const availableBalance = balanceData.available;
+                      const utilizedMargin = balanceData.utilized;
                       
                       // Get broker logo - using real PNG logos
                       const getBrokerLogo = (brokerName: string) => {
@@ -1045,19 +1132,27 @@ export default function Dashboard() {
                               <div className="backdrop-blur-sm bg-[var(--background)]/30 rounded-lg p-4 border border-[var(--border)]">
                                 <div className="flex justify-between items-center mb-2">
                                   <span className="text-[var(--muted-foreground)] text-sm">Total Balance</span>
-                                  <span className="text-green-400 text-xs">↗ +2.3%</span>
+                                  {balanceData.fetched_at && (
+                                    <span className="text-blue-400 text-xs">
+                                      {new Date(balanceData.fetched_at).toLocaleTimeString()}
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="text-2xl font-bold text-[var(--foreground)]">
-                                  ₹{(mockBalance / 100000).toFixed(1)}L
+                                  ₹{totalBalance > 100000 ? (totalBalance / 100000).toFixed(1) + 'L' : totalBalance.toLocaleString()}
                                 </p>
                                 <div className="mt-3 space-y-2">
                                   <div className="flex justify-between text-sm">
                                     <span className="text-[var(--muted-foreground)]">Available</span>
-                                    <span className="text-[var(--accent)]">₹{(mockAvailableBalance / 100000).toFixed(1)}L</span>
+                                    <span className="text-[var(--accent)]">
+                                      ₹{availableBalance > 100000 ? (availableBalance / 100000).toFixed(1) + 'L' : availableBalance.toLocaleString()}
+                                    </span>
                                   </div>
                                   <div className="flex justify-between text-sm">
                                     <span className="text-[var(--muted-foreground)]">Used Margin</span>
-                                    <span className="text-orange-300">₹{(mockUtilizedMargin / 100000).toFixed(1)}L</span>
+                                    <span className="text-orange-300">
+                                      ₹{utilizedMargin > 100000 ? (utilizedMargin / 100000).toFixed(1) + 'L' : utilizedMargin.toLocaleString()}
+                                    </span>
                                   </div>
                                 </div>
                                 
@@ -1066,12 +1161,12 @@ export default function Dashboard() {
                                   <div className="w-full bg-[var(--border)] rounded-full h-2">
                                     <div 
                                       className="bg-gradient-to-r from-green-500 to-[var(--accent)] h-2 rounded-full transition-all duration-700" 
-                                      style={{ width: `${mockBalance > 0 ? (mockAvailableBalance / mockBalance) * 100 : 0}%` }}
+                                      style={{ width: `${totalBalance > 0 ? (availableBalance / totalBalance) * 100 : 0}%` }}
                                     ></div>
                                   </div>
                                   <div className="flex justify-between text-xs text-[var(--muted-foreground)] mt-1">
                                     <span>Margin Used</span>
-                                    <span>{mockBalance > 0 ? ((mockUtilizedMargin / mockBalance) * 100).toFixed(1) : '0'}%</span>
+                                    <span>{totalBalance > 0 ? ((utilizedMargin / totalBalance) * 100).toFixed(1) : '0'}%</span>
                                   </div>
                                 </div>
                               </div>

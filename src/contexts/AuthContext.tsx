@@ -81,7 +81,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
+    // Listen for auth failure events from the API client
+    const handleAuthFailure = async () => {
+      console.log('AuthContext: Received auth failure event, logging out...');
+      await logout();
+      // Redirect to login page if not already there
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth-failure', handleAuthFailure);
+    }
+
     checkAuth();
+
+    // Cleanup event listener
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('auth-failure', handleAuthFailure);
+      }
+    };
   }, []);
 
   const login = async (credentials: LoginRequest) => {
