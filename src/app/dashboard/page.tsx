@@ -571,6 +571,24 @@ export default function Dashboard() {
     return `${hours}h ${minutes}m`;
   };
 
+  // Helper: Responsive MarketTicker wrapper for mobile
+  function ResponsiveMarketTicker({ symbols }) {
+    // Show up to 3 stocks in a row, scroll if more
+    if (!symbols || symbols.length <= 3) {
+      return (
+        <div className="flex flex-row flex-wrap gap-2 w-full">
+          <MarketTicker symbols={symbols} className="flex-1 min-w-0 text-xs rounded-lg shadow bg-[var(--card-background)]/80 border border-[var(--border)]" />
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex flex-nowrap gap-2 overflow-x-auto w-full pb-1">
+          <MarketTicker symbols={symbols} className="flex-shrink-0 min-w-[90vw] max-w-[400px] text-xs rounded-lg shadow bg-[var(--card-background)]/80 border border-[var(--border)]" />
+        </div>
+      );
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
@@ -635,52 +653,58 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-              
-              {/* Market Data Ticker - expanded width for better visibility */}
+
+                        
               {/* Desktop/XL view */}
               <div className="hidden xl:flex flex-1 max-w-4xl mx-2">
                 <MarketTicker className="w-full" />
               </div>
-              {/* Mobile/Tablet view */}
-              <div className="flex xl:hidden w-full mt-2">
-                <MarketTicker className="w-full min-w-0 text-xs px-1" />
-              </div>
-            </div>
+      
             
-            {/* Right section - responsive spacing and proper flex shrink */}
-            <div className="flex items-center space-x-2 lg:space-x-4 xl:space-x-6 flex-shrink-0 ml-auto">
-              {/* User info - hidden on small screens */}
-              <div className="text-right hidden sm:block">
-                <p className="text-xs lg:text-sm text-[var(--muted-foreground)]">Welcome back</p>
-                <p className="text-sm lg:text-base text-[var(--accent)] font-medium">
-                  {user?.username && user.username.charAt(0).toUpperCase() + user.username.slice(1)}
-                </p>
-              </div>
+
               
-              {/* Theme Toggle */}
-              <div className="flex-shrink-0">
-                <ThemeToggle />
-              </div>
-              
-              {/* Professional Logout Icon with Tooltip - always visible */}
-              <div className="relative group flex-shrink-0">
-                <button
-                  onClick={handleLogout}
-                  className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 hover:border-red-400/50 transition-all duration-200 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-red-500/20"
-                  title="Logout"
-                >
-                  <LogOut className="w-4 h-4 lg:w-5 lg:h-5 text-red-500 group-hover:text-red-400 transition-colors duration-200" />
-                </button>
+              {/* Right section - responsive spacing and proper flex shrink */}
+              <div className="flex items-center space-x-2 lg:space-x-4 xl:space-x-6 flex-shrink-0 ml-auto">
+                {/* User info - hidden on small screens */}
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs lg:text-sm text-[var(--muted-foreground)]">Welcome back</p>
+                  <p className="text-sm lg:text-base text-[var(--accent)] font-medium">
+                    {user?.username && user.username.charAt(0).toUpperCase() + user.username.slice(1)}
+                  </p>
+                </div>
                 
-                {/* Tooltip */}
-                <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-[var(--card-background)] border border-[var(--border)] rounded text-xs text-[var(--foreground)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap shadow-lg z-50">
-                  Logout
-                  <div className="absolute top-full right-2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-[var(--border)]"></div>
+                {/* Theme Toggle */}
+                <div className="flex-shrink-0">
+                  <ThemeToggle />
+                </div>
+                
+                {/* Professional Logout Icon with Tooltip - always visible */}
+                <div className="relative group flex-shrink-0">
+                  <button
+                    onClick={handleLogout}
+                    className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 hover:border-red-400/50 transition-all duration-200 flex items-center justify-center group-hover:shadow-lg group-hover:shadow-red-500/20"
+                    title="Logout"
+                  >
+                    <LogOut className="w-4 h-4 lg:w-5 lg:h-5 text-red-500 group-hover:text-red-400 transition-colors duration-200" />
+                  </button>
+                  
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-[var(--card-background)] border border-[var(--border)] rounded text-xs text-[var(--foreground)] opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap shadow-lg z-50">
+                    Logout
+                    <div className="absolute top-full right-2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-[var(--border)]"></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </header>
+
+        {/* Market Data Ticker - Mobile/Tablet only, full width below header */}
+        <div className="block xl:hidden w-full px-2 py-1">
+          <div className="flex flex-nowrap gap-2 overflow-x-auto max-w-full">
+            <MarketTicker className="flex-shrink-0 min-w-[90vw] max-w-[400px] text-xs rounded-lg shadow bg-[var(--card-background)]/80 border border-[var(--border)]" />
+          </div>
+        </div>
 
         {/* Professional Stock Ticker - Full Width with proper spacing */}
         {/* <div className="w-full">
@@ -1177,7 +1201,7 @@ export default function Dashboard() {
                   <div className="relative backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-12 text-center shadow-2xl shadow-[var(--accent)]/20 overflow-hidden">
                     {/* Animated Background */}
                     <div className="absolute inset-0 bg-gradient-to-br from-[var(--accent)]/10 via-[var(--background)] to-blue-900/10"></div>
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--accent)]/5 via-transparent to-transparent"></div>
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--accent)]/5 to-transparent"></div>
                     
                     {/* Floating Orbs */}
                     <div className="absolute top-8 left-8 w-4 h-4 bg-[var(--accent)]/30 rounded-full animate-pulse"></div>
@@ -1377,7 +1401,7 @@ export default function Dashboard() {
                         </p>
                         <p className="text-xs text-[var(--muted-foreground)]">Response time: ~45ms</p>
                       </div>
-                    </div>
+                                       </div>
                   </div>
 
                   {/* System Uptime */}
