@@ -316,6 +316,7 @@ class ApiClient {
         localStorage.setItem('refresh_token', refreshToken);
       }
       localStorage.setItem('token_expiry', expiryTime.toString());
+      localStorage.setItem('last_activity_time', Date.now().toString());
     }
     
     // Restart the refresh timer
@@ -336,6 +337,8 @@ class ApiClient {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('token_expiry');
+      localStorage.removeItem('last_activity_time');
+      localStorage.removeItem('initial_login_time');
     }
   }
 
@@ -343,6 +346,12 @@ class ApiClient {
     if (!this.tokenExpiry) return true;
     // Consider token expired 30 seconds before actual expiry for safety
     return Date.now() > (this.tokenExpiry - 30000);
+  }
+
+  private updateLastActivity() {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('last_activity_time', Date.now().toString());
+    }
   }
 
   private startTokenRefreshTimer() {
@@ -359,6 +368,7 @@ class ApiClient {
       this.refreshTimer = setTimeout(() => {
         this.refreshAccessToken();
       }, refreshTime);
+      console.log(`Token refresh scheduled in ${Math.round(refreshTime / 1000)} seconds`);
     }
   }
 
@@ -386,10 +396,12 @@ class ApiClient {
       return;
     }
 
-    // Check if we've been refreshing for more than 2 hours since login
-    const initialLoginTime = localStorage.getItem('initial_login_time');
-    if (initialLoginTime && Date.now() - parseInt(initialLoginTime) > 2 * 60 * 60 * 1000) {
-      console.log('Session expired after 2 hours, logging out');
+    // Check for 1 hour of inactivity instead of 2-hour total session limit
+    const lastActivityTime = localStorage.getItem('last_activity_time');
+    const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+    
+    if (lastActivityTime && Date.now() - parseInt(lastActivityTime) > oneHourInMs) {
+      console.log('Session expired due to 1 hour of inactivity, logging out');
       this.clearTokens();
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
@@ -402,15 +414,17 @@ class ApiClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.token}`,
         },
-        body: JSON.stringify({
-          refresh_token: this.refreshToken
-        }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        this.saveTokens(result.access_token, result.refresh_token, result.expires_in);
+        this.saveTokens(result.access_token, this.refreshToken, result.expires_in);
+        // Update last activity time on successful refresh
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('last_activity_time', Date.now().toString());
+        }
         console.log('Token refreshed successfully');
       } else {
         console.log('Token refresh failed, clearing session');
@@ -489,6 +503,12 @@ class ApiClient {
 
       const result = await response.json();
       console.log('Response data received successfully:', result);
+      
+      // Update last activity time on successful API requests (not auth endpoints)
+      if (!endpoint.startsWith('/auth/')) {
+        this.updateLastActivity();
+      }
+      
       return result;
     } catch (error) {
       console.error('Request failed with error:', error);
@@ -527,9 +547,10 @@ class ApiClient {
       
       this.saveTokens(response.access_token, response.refresh_token, response.expires_in);
       
-      // Store initial login time for 2-hour session limit
+      // Store initial login time for session tracking and set activity time
       if (typeof window !== 'undefined') {
         localStorage.setItem('initial_login_time', Date.now().toString());
+        localStorage.setItem('last_activity_time', Date.now().toString());
       }
       console.log('Token saved successfully');
       return response;

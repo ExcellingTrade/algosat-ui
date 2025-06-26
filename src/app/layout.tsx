@@ -2,6 +2,7 @@ import React from "react";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { RouteGuard } from "@/components/RouteGuard";
 import { Inter, JetBrains_Mono } from 'next/font/google';
 
 const inter = Inter({
@@ -27,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-inter">
         <ThemeProvider>
           <AuthProvider>
-            {children}
+            <RouteGuard>
+              {children}
+            </RouteGuard>
           </AuthProvider>
         </ThemeProvider>
       </body>

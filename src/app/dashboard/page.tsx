@@ -20,6 +20,7 @@ import { MarketTicker } from "@/components/MarketTicker";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogsManagement } from "@/components/LogsManagement";
 import { StrategiesPage } from "@/components/strategies/StrategiesPage";
+import { ActivityTracker } from "@/components/ActivityTracker";
 import {
   Home,
   Zap,
@@ -599,6 +600,13 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] overflow-hidden relative">
+      {/* Activity Tracker for idle logout */}
+      <ActivityTracker onActivity={() => {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('last_activity_time', Date.now().toString());
+        }
+      }} />
+      
       {/* Enhanced Multi-layer Background that respects theme */}
       <div className="fixed inset-0 bg-gradient-to-br from-blue-50/20 via-transparent to-blue-100/15 dark:from-blue-950/20 dark:via-transparent dark:to-slate-900/15"></div>
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_30%_80%,rgba(59,130,246,0.06),transparent_50%)] dark:bg-[radial-gradient(circle_at_30%_80%,rgba(59,130,246,0.04),transparent_50%)]"></div>

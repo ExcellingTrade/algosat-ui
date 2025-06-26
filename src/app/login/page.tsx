@@ -2,7 +2,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api";
 import { BarChart3, Eye, EyeOff, Shield, TrendingUp, Zap } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function SignIn() {
@@ -13,8 +12,7 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'testing' | 'connected' | 'failed'>('testing');
   
-  const { login, isAuthenticated } = useAuth();
-  const router = useRouter();
+  const { login } = useAuth();
 
   useEffect(() => {
     // Test API connection on component mount
@@ -34,12 +32,6 @@ export default function SignIn() {
 
     testConnection();
   }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.push("/dashboard");
-    }
-  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

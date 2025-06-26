@@ -38,10 +38,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (apiClient.isAuthenticated()) {
           console.log('AuthContext: Token found, validating...');
           
-          // Check if session has expired (2 hours since login)
-          const initialLoginTime = localStorage.getItem('initial_login_time');
-          if (initialLoginTime && Date.now() - parseInt(initialLoginTime) > 2 * 60 * 60 * 1000) {
-            console.log('AuthContext: Session expired after 2 hours, logging out');
+          // Check for 1 hour of inactivity instead of 2-hour total session
+          const lastActivityTime = localStorage.getItem('last_activity_time');
+          const oneHourInMs = 60 * 60 * 1000; // 1 hour in milliseconds
+          
+          if (lastActivityTime && Date.now() - parseInt(lastActivityTime) > oneHourInMs) {
+            console.log('AuthContext: Session expired due to 1 hour of inactivity, logging out');
             await logout();
             return;
           }
@@ -122,6 +124,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Clear user info from localStorage
       localStorage.removeItem('user_info');
       localStorage.removeItem('initial_login_time');
+      localStorage.removeItem('last_activity_time');
       setUser(null);
       setIsLoading(false);
     }
