@@ -1,20 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface IndexData {
+// Define IndexData right here
+export interface IndexData {
+  id: string | number;
   indexName: string;
-  open: number;
-  high: number;
-  low: number;
   last: number;
-  previousClose: number;
+  change: number;
   percChange: number;
-  yearHigh: number;
-  yearLow: number;
-  timeVal: string;
+  isIndex: boolean;
 }
 
 interface MarketTickerProps {
@@ -26,43 +23,104 @@ export function MarketTicker({ className = "" }: MarketTickerProps) {
   const [indexData, setIndexData] = useState<IndexData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Check if this is mobile/centered version
   const isMobile = className.includes('justify-center');
 
-  const fetchIndexData = async () => {
-    try {
-      if (!isAuthenticated) {
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsLoading(false);
+      return;
+    }
+
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsHost = window.location.hostname;
+      const wsPort = '8001';
+      const token = localStorage.getItem('auth_token');
+
+      if (!token) {
         setError('Not authenticated');
+        setIsLoading(false);
         return;
       }
 
-      const response = await apiClient.getIndexData();
-      
-      if (response.data && Array.isArray(response.data)) {
-        setIndexData(response.data);
+      const wsUrl = `${wsProtocol}://${wsHost}:${wsPort}/ws/livefeed?token=${token}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[MarketTicker] WebSocket connected:', wsUrl);
         setError(null);
-      } else {
-        setError('Invalid data format');
+        setIsLoading(false); // Connection is open, stop loading
+      };
+
+      ws.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data);
+
+            const processMessage = (item: any): IndexData | null => {
+                const rawSymbol = item.symbol;
+                if (!rawSymbol || item.ltp == null || item.chp == null || item.ch == null) {
+                    return null;
+                }
+                const coreSymbol = rawSymbol.split(':')[1]?.split('-')[0] || rawSymbol;
+                return {
+                  id: coreSymbol,
+                  indexName: coreSymbol,
+                  last: item.ltp,
+                  percChange: item.chp,
+                  change: item.ch,
+                  isIndex: rawSymbol.includes('-INDEX'),
+                };
+            };
+
+            const itemsToProcess = Array.isArray(msg) ? msg : [msg];
+            const newUpdates = itemsToProcess.map(processMessage).filter((d): d is IndexData => d !== null);
+
+            if (newUpdates.length > 0) {
+                setIndexData(prevData => {
+                    const dataMap = new Map(prevData.map(d => [d.id, d]));
+                    newUpdates.forEach(update => {
+                        const existingData = dataMap.get(update.id) || {};
+                        dataMap.set(update.id, { ...existingData, ...update });
+                    });
+                    return Array.from(dataMap.values());
+                });
+            }
+        } catch (e) {
+            console.error('[MarketTicker] WebSocket message parse error:', e, event.data);
+        }
+      };
+
+      ws.onerror = (event) => {
+        console.error('[MarketTicker] WebSocket error:', event);
+        setError('WebSocket connection failed.');
+        setIsLoading(false);
+      };
+
+      ws.onclose = (event) => {
+        console.warn('[MarketTicker] WebSocket closed:', event);
+        if (!event.wasClean) {
+          setError('Connection lost. Reconnecting...');
+          setIsLoading(true); // Show loading during reconnection attempt
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connect, 5000);
+        }
+      };
+    };
+
+    connect();
+
+    return () => {
+      clearTimeout(reconnectTimeout);
+      if (wsRef.current) {
+        wsRef.current.close();
       }
-    } catch (err) {
-      console.error('Failed to fetch index data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    
-    // Initial fetch
-    fetchIndexData();
-
-    // Refresh data every 60 seconds (changed from 30 for rate limiting)
-    const dataRefreshInterval = setInterval(fetchIndexData, 60000);
-
-    return () => clearInterval(dataRefreshInterval);
+    };
   }, [isAuthenticated]);
 
   if (isLoading) {
@@ -98,99 +156,52 @@ export function MarketTicker({ className = "" }: MarketTickerProps) {
     <div className={isMobile ? `w-full max-w-4xl mx-auto ${className}` : `w-full max-w-4xl ${className}`}>
       {/* Enhanced Professional Ticker Container */}
       <div className={`
-        flex items-center px-4 py-2.5
+        flex items-center p-2
         bg-gradient-to-r from-[var(--card-background)]/95 to-[var(--card-background)]/85
         backdrop-blur-md
         rounded-xl border-2 border-[var(--border)]/60
         shadow-lg shadow-[var(--accent)]/20
-        transition-all duration-300 ease-in-out
-        hover:border-[var(--accent)]/60 hover:shadow-xl hover:shadow-[var(--accent)]/30
-        hover:bg-gradient-to-r hover:from-[var(--card-background)] hover:to-[var(--card-background)]/90
         overflow-hidden relative
         ring-1 ring-[var(--accent)]/10
       `}>
         
-        {/* Auto-scrolling ticker content */}
-        <div className="flex-1 overflow-hidden">
-          <div className="flex items-center gap-8 animate-ticker-scroll-market whitespace-nowrap">
-            {/* First set of data - Enhanced */}
-            {indexData.map((data, index) => {
-              const isPositive = data.percChange >= 0;
+        <div className="flex-1 overflow-x-auto">
+          <div className="flex items-center gap-3 whitespace-nowrap">
+            {indexData.map((data) => {
+              const isPositive = data.change >= 0;
               const changeColor = isPositive ? 'text-[var(--trading-green)]' : 'text-[var(--trading-red)]';
-              
+
               return (
                 <div
-                  key={`${data.indexName}-1`}
-                  className="flex items-center gap-3 flex-shrink-0 whitespace-nowrap"
+                  key={data.id}
+                  className={`
+                    flex-shrink-0 px-3 py-1.5 rounded-md
+                    border
+                    ${isPositive ? 'border-[var(--trading-green)]/70' : 'border-[var(--trading-red)]/70'}
+                    bg-[var(--card-background)]/80
+                  `}
                 >
-                  {/* Enhanced Trend icon */}
-                  {isPositive ? (
-                    <TrendingUp className={`w-3.5 h-3.5 ${changeColor} flex-shrink-0 drop-shadow-sm`} />
-                  ) : (
-                    <TrendingDown className={`w-3.5 h-3.5 ${changeColor} flex-shrink-0 drop-shadow-sm`} />
-                  )}
-                  
-                  {/* Enhanced Index info with professional styling */}
-                  <div className="flex items-center gap-3">
-                    {/* Index name - enhanced typography */}
-                    <span className="text-sm font-bold text-[var(--foreground)] tracking-wide drop-shadow-sm">
-                      {formatIndexName(data.indexName)}
-                    </span>
-                    
-                    {/* Price with professional styling */}
-                    <span className="text-sm font-mono font-semibold text-[var(--foreground)] bg-[var(--background)]/20 px-2 py-1 rounded-md backdrop-blur-sm">
-                      ₹{data.last.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </span>
-                    
-                    {/* Change percentage with enhanced styling */}
-                    <span className={`text-sm font-bold ${changeColor} bg-current/10 px-2 py-1 rounded-md backdrop-blur-sm`}>
-                      {isPositive ? '+' : ''}{data.percChange.toFixed(2)}%
-                    </span>
+                  <div className="flex flex-col">
+                    {/* Top row: Index Name & Price */}
+                    <div className="flex items-baseline justify-between gap-4">
+                      <span className="text-sm font-semibold text-[var(--foreground)]">
+                        {formatIndexName(data.indexName)}
+                      </span>
+                      <span className="text-sm font-mono font-medium text-[var(--foreground)]">
+                        {data.last.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    {/* Bottom row: Change */}
+                    <div className="flex items-baseline justify-between gap-4">
+                      <span className={`text-base font-bold ${changeColor}`}>
+                        {isPositive ? '+' : ''}{data.change.toFixed(2)}
+                      </span>
+                      <span className={`text-xs font-medium ${changeColor}`}>
+                        ({isPositive ? '+' : ''}{data.percChange.toFixed(2)}%)
+                      </span>
+                    </div>
                   </div>
-                  
-                  {/* Enhanced separator */}
-                  <div className="w-px h-6 bg-gradient-to-b from-transparent via-[var(--border)]/70 to-transparent flex-shrink-0"></div>
-                </div>
-              );
-            })}
-            
-            {/* Duplicate set for seamless scrolling - Enhanced */}
-            {indexData.map((data, index) => {
-              const isPositive = data.percChange >= 0;
-              const changeColor = isPositive ? 'text-[var(--trading-green)]' : 'text-[var(--trading-red)]';
-              
-              return (
-                <div
-                  key={`${data.indexName}-2`}
-                  className="flex items-center gap-3 flex-shrink-0 whitespace-nowrap"
-                >
-                  {/* Enhanced Trend icon */}
-                  {isPositive ? (
-                    <TrendingUp className={`w-3.5 h-3.5 ${changeColor} flex-shrink-0 drop-shadow-sm`} />
-                  ) : (
-                    <TrendingDown className={`w-3.5 h-3.5 ${changeColor} flex-shrink-0 drop-shadow-sm`} />
-                  )}
-                  
-                  {/* Enhanced Index info with professional styling */}
-                  <div className="flex items-center gap-3">
-                    {/* Index name - enhanced typography */}
-                    <span className="text-sm font-bold text-[var(--foreground)] tracking-wide drop-shadow-sm">
-                      {formatIndexName(data.indexName)}
-                    </span>
-                    
-                    {/* Price with professional styling */}
-                    <span className="text-sm font-mono font-semibold text-[var(--foreground)] bg-[var(--background)]/20 px-2 py-1 rounded-md backdrop-blur-sm">
-                      ₹{data.last.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                    </span>
-                    
-                    {/* Change percentage with enhanced styling */}
-                    <span className={`text-sm font-bold ${changeColor} bg-current/10 px-2 py-1 rounded-md backdrop-blur-sm`}>
-                      {isPositive ? '+' : ''}{data.percChange.toFixed(2)}%
-                    </span>
-                  </div>
-                  
-                  {/* Enhanced separator */}
-                  <div className="w-px h-6 bg-gradient-to-b from-transparent via-[var(--border)]/70 to-transparent flex-shrink-0"></div>
                 </div>
               );
             })}

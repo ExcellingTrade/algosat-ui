@@ -16,7 +16,7 @@ import {
   apiClient 
 } from "@/lib/api";
 import { MarketTicker } from "@/components/MarketTicker";
-import { StockTicker } from "@/components/StockTicker";
+// import { StockTicker } from "@/components/StockTicker";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogsManagement } from "@/components/LogsManagement";
 import { StrategiesPage } from "@/components/strategies/StrategiesPage";
@@ -637,8 +637,13 @@ export default function Dashboard() {
               </div>
               
               {/* Market Data Ticker - expanded width for better visibility */}
+              {/* Desktop/XL view */}
               <div className="hidden xl:flex flex-1 max-w-4xl mx-2">
                 <MarketTicker className="w-full" />
+              </div>
+              {/* Mobile/Tablet view */}
+              <div className="flex xl:hidden w-full mt-2">
+                <MarketTicker className="w-full min-w-0 text-xs px-1" />
               </div>
             </div>
             
@@ -678,9 +683,9 @@ export default function Dashboard() {
         </header>
 
         {/* Professional Stock Ticker - Full Width with proper spacing */}
-        <div className="w-full">
+        {/* <div className="w-full">
           <StockTicker />
-        </div>
+        </div> */}
 
         {/* Main Layout with Perfect Alignment */}
         <div className="flex flex-col lg:flex-row">

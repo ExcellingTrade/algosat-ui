@@ -9,7 +9,11 @@ import {
   Users, 
   TrendingUp,
   AlertCircle,
-  Plus
+  Plus,
+  Search,
+  Filter,
+  ArrowUpDown,
+  X
 } from "lucide-react";
 import { Strategy, StrategyConfig, StrategySymbol } from "./StrategiesPage";
 import { apiClient } from "../../lib/api";
@@ -31,16 +35,22 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
   const [showAddForm, setShowAddForm] = useState(false);
   const [deletingConfigId, setDeletingConfigId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(12); // 12 configs per page for good grid layout
+  const [pageSize] = useState(12); // 12 configs per page for good table layout
   const [configStats, setConfigStats] = useState<Record<number, any>>({});
   const [loadingStats, setLoadingStats] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedExchange, setSelectedExchange] = useState('');
+  const [sortField, setSortField] = useState<'name' | 'updated_at' | 'pnl' | 'symbols'>('updated_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  // Cache for detailed config data
+  const [configCache, setConfigCache] = useState<Record<number, StrategyConfig>>({});
+  
   const [newConfig, setNewConfig] = useState({
     name: '',
     description: '',
     exchange: 'NSE',
     instrument: '',
-    order_type: 'MARKET' as 'MARKET' | 'LIMIT',
-    product_type: 'INTRADAY' as 'INTRADAY' | 'DELIVERY',
     trade: '{}',
     indicators: '{}'
   });
@@ -50,17 +60,82 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
     description: '',
     exchange: 'NSE',
     instrument: '',
-    order_type: 'MARKET' as 'MARKET' | 'LIMIT',
-    product_type: 'INTRADAY' as 'INTRADAY' | 'DELIVERY',
     trade: '{}',
     indicators: '{}'
   });
 
-  // Pagination calculations
-  const totalPages = Math.ceil(configs.length / pageSize);
+  // Filter and search logic
+  const filteredConfigs = configs.filter(config => {
+    const matchesSearch = searchTerm === '' || 
+      config.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (config.description && config.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesExchange = selectedExchange === '' || config.exchange === selectedExchange;
+    
+    return matchesSearch && matchesExchange;
+  });
+
+  // Sort configs
+  const sortedConfigs = [...filteredConfigs].sort((a, b) => {
+    try {
+      let aValue: string | number;
+      let bValue: string | number;
+      
+      switch (sortField) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'updated_at':
+          aValue = new Date(a.updated_at).getTime();
+          bValue = new Date(b.updated_at).getTime();
+          break;
+        case 'pnl':
+          // Safe access to stats with fallback
+          const aStats = getConfigStats(a.id);
+          const bStats = getConfigStats(b.id);
+          aValue = aStats?.totalPnL || 0;
+          bValue = bStats?.totalPnL || 0;
+          break;
+        case 'symbols':
+          // Safe access to stats with fallback
+          const aSymbolStats = getConfigStats(a.id);
+          const bSymbolStats = getConfigStats(b.id);
+          aValue = aSymbolStats?.symbolCount || 0;
+          bValue = bSymbolStats?.symbolCount || 0;
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+      
+      if (sortDirection === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    } catch (error) {
+      console.warn('Error in sort function:', error);
+      return 0; // Keep original order if sort fails
+    }
+  });
+
+  // Pagination calculations for sorted and filtered results
+  const totalPages = Math.ceil(sortedConfigs.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedConfigs = configs.slice(startIndex, endIndex);
+  const paginatedConfigs = sortedConfigs.slice(startIndex, endIndex);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedExchange, sortField, sortDirection]);
+
+  // Clear cache when configs change (external refresh)
+  useEffect(() => {
+    console.log('Configs prop changed, clearing cache');
+    setConfigCache({});
+  }, [configs]);
 
   // Get symbols using each config
   const getConfigSymbols = (configId: number) => {
@@ -69,24 +144,35 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
 
   // Get config usage stats (now uses real API data with fallback)
   const getConfigStats = (configId: number) => {
-    // Return real stats if available, otherwise fallback to calculated stats
-    if (configStats[configId]) {
-      return configStats[configId];
+    try {
+      // Return real stats if available, otherwise fallback to calculated stats
+      if (configStats[configId]) {
+        return configStats[configId];
+      }
+      
+      // Fallback calculation
+      const configSymbols = getConfigSymbols(configId);
+      const activeSymbols = configSymbols.filter(s => s.status === 'active').length;
+      const totalTrades = configSymbols.reduce((sum, s) => sum + (s.tradeCount || 0), 0);
+      const totalPnL = configSymbols.reduce((sum, s) => sum + (s.currentPnL || 0), 0);
+      
+      return {
+        symbolCount: configSymbols.length,
+        activeSymbols,
+        totalTrades,
+        totalPnL,
+        liveTrades: 0
+      };
+    } catch (error) {
+      console.warn(`Error getting stats for config ${configId}:`, error);
+      return {
+        symbolCount: 0,
+        activeSymbols: 0,
+        totalTrades: 0,
+        totalPnL: 0,
+        liveTrades: 0
+      };
     }
-    
-    // Fallback calculation
-    const configSymbols = getConfigSymbols(configId);
-    const activeSymbols = configSymbols.filter(s => s.status === 'active').length;
-    const totalTrades = configSymbols.reduce((sum, s) => sum + (s.tradeCount || 0), 0);
-    const totalPnL = configSymbols.reduce((sum, s) => sum + (s.currentPnL || 0), 0);
-    
-    return {
-      symbolCount: configSymbols.length,
-      activeSymbols,
-      totalTrades,
-      totalPnL,
-      liveTrades: 0
-    };
   };
 
   // Fetch real P&L data for all configs
@@ -145,6 +231,16 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
     }
   }, [configs, symbols]);
 
+  const handleSort = (field: 'name' | 'updated_at' | 'pnl' | 'symbols') => {
+    console.log(`Sorting by: ${field}`);
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
   const handleCreateConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newConfig.name.trim()) {
@@ -179,8 +275,6 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
         description: newConfig.description.trim() || undefined,
         exchange: newConfig.exchange,
         instrument: newConfig.instrument.trim() || undefined,
-        order_type: newConfig.order_type,
-        product_type: newConfig.product_type,
         trade: tradeData,
         indicators: indicatorsData
       });
@@ -191,12 +285,15 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
         description: '',
         exchange: 'NSE',
         instrument: '',
-        order_type: 'MARKET',
-        product_type: 'INTRADAY',
         trade: '{}',
         indicators: '{}'
       });
       setShowAddForm(false);
+      
+      // Clear the entire cache since we have new configs
+      setConfigCache({});
+      console.log('Cache cleared after creating new config');
+      
       onRefresh();
     } catch (err) {
       console.error('Failed to create config:', err);
@@ -206,19 +303,132 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
     }
   };
 
-  const handleEditConfig = (config: StrategyConfig) => {
-    setEditFormData({
-      name: config.name,
-      description: config.description || '',
-      exchange: config.exchange,
-      instrument: config.instrument || '',
-      order_type: config.order_type,
-      product_type: config.product_type,
-      trade: JSON.stringify(config.trade, null, 2),
-      indicators: JSON.stringify(config.indicators, null, 2)
-    });
-    setEditingConfig(config);
+  const handleEditConfig = async (config: StrategyConfig) => {
+    console.log('Edit config - fetching latest data for config:', config.id);
+    setIsLoading(true);
     setError(null);
+    
+    try {
+      // Fetch the latest config data from the API to ensure we have up-to-date information
+      const latestConfig = await apiClient.getStrategyConfig(strategy.id, config.id);
+      console.log('Fetched latest config data:', latestConfig);
+      console.log('Trade data type:', typeof latestConfig.trade, 'Value:', latestConfig.trade);
+      console.log('Indicators data type:', typeof latestConfig.indicators, 'Value:', latestConfig.indicators);
+      
+      // Safely handle JSON fields - handle both object and string types
+      let safeTradeJSON = '{}';
+      if (latestConfig.trade) {
+        if (typeof latestConfig.trade === 'string') {
+          // If it's already a string, use it as is (but validate it's proper JSON)
+          try {
+            const parsed = JSON.parse(latestConfig.trade);
+            safeTradeJSON = JSON.stringify(parsed, null, 2);
+          } catch {
+            safeTradeJSON = latestConfig.trade; // Use as-is if it's not valid JSON
+          }
+        } else if (typeof latestConfig.trade === 'object' && latestConfig.trade !== null) {
+          // If it's an object, stringify it with proper formatting
+          try {
+            safeTradeJSON = JSON.stringify(latestConfig.trade, null, 2);
+          } catch {
+            safeTradeJSON = '{}';
+          }
+        }
+      }
+      
+      let safeIndicatorsJSON = '{}';
+      if (latestConfig.indicators) {
+        if (typeof latestConfig.indicators === 'string') {
+          // If it's already a string, use it as is (but validate it's proper JSON)
+          try {
+            const parsed = JSON.parse(latestConfig.indicators);
+            safeIndicatorsJSON = JSON.stringify(parsed, null, 2);
+          } catch {
+            safeIndicatorsJSON = latestConfig.indicators; // Use as-is if it's not valid JSON
+          }
+        } else if (typeof latestConfig.indicators === 'object' && latestConfig.indicators !== null) {
+          // If it's an object, stringify it with proper formatting
+          try {
+            safeIndicatorsJSON = JSON.stringify(latestConfig.indicators, null, 2);
+          } catch {
+            safeIndicatorsJSON = '{}';
+          }
+        }
+      }
+      
+      console.log('Processed JSON strings:');
+      console.log('Trade JSON:', safeTradeJSON);
+      console.log('Indicators JSON:', safeIndicatorsJSON);
+      
+      const formData = {
+        name: latestConfig.name,
+        description: latestConfig.description || '',
+        exchange: latestConfig.exchange,
+        instrument: latestConfig.instrument || '',
+        trade: safeTradeJSON,
+        indicators: safeIndicatorsJSON
+      };
+      
+      console.log('Setting edit form data:', formData);
+      
+      setEditFormData(formData);
+      setEditingConfig(latestConfig);
+      setError(null);
+      
+    } catch (err) {
+      console.error('Failed to fetch config details for editing:', err);
+      // Fall back to using the passed config if API call fails
+      setError('Could not fetch latest config data, showing cached data');
+      
+      // Fallback to cached data processing
+      let safeTradeJSON = '{}';
+      if (config.trade) {
+        if (typeof config.trade === 'string') {
+          try {
+            const parsed = JSON.parse(config.trade);
+            safeTradeJSON = JSON.stringify(parsed, null, 2);
+          } catch {
+            safeTradeJSON = config.trade;
+          }
+        } else if (typeof config.trade === 'object' && config.trade !== null) {
+          try {
+            safeTradeJSON = JSON.stringify(config.trade, null, 2);
+          } catch {
+            safeTradeJSON = '{}';
+          }
+        }
+      }
+      
+      let safeIndicatorsJSON = '{}';
+      if (config.indicators) {
+        if (typeof config.indicators === 'string') {
+          try {
+            const parsed = JSON.parse(config.indicators);
+            safeIndicatorsJSON = JSON.stringify(parsed, null, 2);
+          } catch {
+            safeIndicatorsJSON = config.indicators;
+          }
+        } else if (typeof config.indicators === 'object' && config.indicators !== null) {
+          try {
+            safeIndicatorsJSON = JSON.stringify(config.indicators, null, 2);
+          } catch {
+            safeIndicatorsJSON = '{}';
+          }
+        }
+      }
+      
+      setEditFormData({
+        name: config.name,
+        description: config.description || '',
+        exchange: config.exchange,
+        instrument: config.instrument || '',
+        trade: safeTradeJSON,
+        indicators: safeIndicatorsJSON
+      });
+      setEditingConfig(config);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleUpdateConfig = async (e: React.FormEvent) => {
@@ -254,14 +464,21 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
         description: editFormData.description.trim() || undefined,
         exchange: editFormData.exchange,
         instrument: editFormData.instrument.trim() || undefined,
-        order_type: editFormData.order_type,
-        product_type: editFormData.product_type,
         trade: tradeData,
         indicators: indicatorsData
       };
 
       console.log('Updating config with data:', updates);
       await apiClient.updateStrategyConfig(strategy.id, editingConfig.id, updates);
+      
+      // Clear the cache for this config to ensure fresh data on next view/edit
+      setConfigCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[editingConfig.id];
+        console.log('Cache cleared for config:', editingConfig.id);
+        return newCache;
+      });
+      
       setEditingConfig(null);
       onRefresh();
     } catch (err) {
@@ -279,12 +496,29 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
   };
 
   const handleViewConfig = async (config: StrategyConfig) => {
+    console.log('View config - checking cache for config:', config.id);
     setIsLoading(true);
     setError(null);
     
     try {
-      // Fetch the latest config data from the API to ensure we have up-to-date information
-      const latestConfig = await apiClient.getStrategyConfig(strategy.id, config.id);
+      // Check if we have cached data first
+      let latestConfig = configCache[config.id];
+      
+      if (!latestConfig) {
+        // Fetch the latest config data from the API if not cached
+        console.log('No cache found, fetching from API...');
+        latestConfig = await apiClient.getStrategyConfig(strategy.id, config.id);
+        
+        // Cache the fetched data
+        setConfigCache(prev => ({
+          ...prev,
+          [config.id]: latestConfig
+        }));
+        console.log('Config cached for future use');
+      } else {
+        console.log('Using cached config data');
+      }
+      
       setViewingConfig(latestConfig);
     } catch (err) {
       console.error('Failed to fetch config details:', err);
@@ -307,6 +541,15 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
 
     try {
       await apiClient.deleteStrategyConfig(strategy.id, configId);
+      
+      // Clear the cache for this config
+      setConfigCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[configId];
+        console.log('Cache cleared for deleted config:', configId);
+        return newCache;
+      });
+      
       onRefresh();
     } catch (err) {
       console.error('Failed to delete config:', err);
@@ -403,36 +646,6 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
                 </select>
               </div>
 
-              {/* Order Type */}
-              <div>
-                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                  Order Type
-                </label>
-                <select
-                  value={newConfig.order_type}
-                  onChange={(e) => setNewConfig(prev => ({ ...prev, order_type: e.target.value as 'MARKET' | 'LIMIT' }))}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                >
-                  <option value="MARKET">MARKET</option>
-                  <option value="LIMIT">LIMIT</option>
-                </select>
-              </div>
-
-              {/* Product Type */}
-              <div>
-                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                  Product Type
-                </label>
-                <select
-                  value={newConfig.product_type}
-                  onChange={(e) => setNewConfig(prev => ({ ...prev, product_type: e.target.value as 'INTRADAY' | 'DELIVERY' }))}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                >
-                  <option value="INTRADAY">INTRADAY</option>
-                  <option value="DELIVERY">DELIVERY</option>
-                </select>
-              </div>
-
               {/* Instrument */}
               <div>
                 <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
@@ -443,7 +656,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
                   value={newConfig.instrument}
                   onChange={(e) => setNewConfig(prev => ({ ...prev, instrument: e.target.value }))}
                   className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                  placeholder="e.g., INDEX, EQUITY"
+                  placeholder="e.g., EQUITY, INDEX, FUTURES"
                 />
               </div>
             </div>
@@ -496,150 +709,332 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
         </div>
       )}
 
-      {/* Configs Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-        {paginatedConfigs.map((config) => {
-          const stats = getConfigStats(config.id);
-          const configSymbols = getConfigSymbols(config.id);
-          
-          return (
-            <div key={config.id} className="config-card bg-gradient-to-br from-[var(--card-background)] to-[var(--card-background)]/80 border border-[var(--border)] rounded-xl p-6 hover:shadow-lg transition-all duration-200 hover:border-[var(--accent)]/30 flex flex-col h-full">
-              {/* Header */}
-              <div className="flex-1 mb-4">
-                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2 line-clamp-2">{config.name}</h3>
-                {config.description && (
-                  <p className="text-sm text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">{config.description}</p>
-                )}
-              </div>
-
-              {/* Key Parameters - Improved alignment */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-gradient-to-r from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-lg p-3 min-h-[64px] flex flex-col justify-between">
-                  <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">Exchange</p>
-                  <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{config.exchange}</p>
-                </div>
-                
-                <div className="bg-gradient-to-r from-purple-500/10 to-purple-600/5 border border-purple-500/20 rounded-lg p-3 min-h-[64px] flex flex-col justify-between">
-                  <p className="text-xs text-purple-500 font-medium uppercase tracking-wide">Order Type</p>
-                  <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{config.order_type}</p>
-                </div>
-                
-                <div className="bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-lg p-3 min-h-[64px] flex flex-col justify-between">
-                  <p className="text-xs text-emerald-500 font-medium uppercase tracking-wide">Product</p>
-                  <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{config.product_type}</p>
-                </div>
-
-                {/* Enhanced Clickable Symbol Count */}
-                <button 
-                  onClick={() => onViewSymbols?.(strategy, config.id)}
-                  className="symbol-count-button group bg-gradient-to-r from-orange-500/10 to-orange-600/5 border-2 border-orange-500/20 rounded-lg p-3 hover:from-orange-500/20 hover:to-orange-600/10 hover:border-orange-500/40 hover:shadow-md transition-all duration-200 text-left w-full min-h-[64px] flex flex-col justify-between relative overflow-hidden"
-                  title={`View ${stats.symbolCount} symbols using this configuration`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-orange-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-1">
-                      <Users className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform duration-200" />
-                      <div className="w-2 h-2 bg-orange-500 rounded-full group-hover:scale-125 transition-transform duration-200"></div>
-                    </div>
-                    <p className="text-xs text-orange-500 font-medium uppercase tracking-wide">Symbols</p>
-                    <div className="flex items-center justify-between mt-1">
-                      {loadingStats ? (
-                        <div className="shimmer loading-text w-8 h-5"></div>
-                      ) : (
-                        <p className="text-lg font-bold text-[var(--foreground)] group-hover:text-orange-600 transition-colors duration-200">{stats.symbolCount}</p>
-                      )}
-                      <div className="text-xs text-orange-500 opacity-70 group-hover:opacity-100 transition-opacity duration-200">
-                        →
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              {/* Statistics Summary */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                {/* P&L Display */}
-                <div className="bg-gradient-to-r from-[var(--accent)]/5 to-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-lg p-3 text-center min-h-[72px] flex flex-col justify-center">
-                  <TrendingUp className="w-4 h-4 text-[var(--accent)] mx-auto mb-1" />
-                  <p className="text-xs text-[var(--accent)] font-medium uppercase tracking-wide mb-1">Total P&L</p>
-                  {loadingStats ? (
-                    <div className="skeleton skeleton-text w-16 h-4 mx-auto"></div>
-                  ) : (
-                    <p className={`text-sm font-bold ${stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      ₹{Math.round(stats.totalPnL).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-
-                {/* Active Symbols */}
-                <div className="bg-gradient-to-r from-green-500/10 to-green-600/5 border border-green-500/20 rounded-lg p-3 text-center min-h-[72px] flex flex-col justify-center">
-                  <div className="w-4 h-4 bg-green-500 rounded-full mx-auto mb-1"></div>
-                  <p className="text-xs text-green-500 font-medium uppercase tracking-wide mb-1">Active</p>
-                  {loadingStats ? (
-                    <div className="skeleton skeleton-text w-8 h-4 mx-auto"></div>
-                  ) : (
-                    <p className="text-sm font-bold text-[var(--foreground)]">{stats.activeSymbols}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Trade Statistics */}
-              {(stats.totalTrades > 0 || stats.liveTrades > 0 || loadingStats) && (
-                <div className="bg-gradient-to-r from-indigo-500/5 to-indigo-600/5 border border-indigo-500/20 rounded-lg p-3 mb-4">
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div>
-                      <p className="text-xs text-indigo-500 font-medium uppercase tracking-wide">Total Trades</p>
-                      {loadingStats ? (
-                        <div className="skeleton skeleton-text w-8 h-4 mx-auto mt-1"></div>
-                      ) : (
-                        <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{stats.totalTrades}</p>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-xs text-indigo-500 font-medium uppercase tracking-wide">Live Trades</p>
-                      {loadingStats ? (
-                        <div className="skeleton skeleton-text w-8 h-4 mx-auto mt-1"></div>
-                      ) : (
-                        <p className="text-sm font-semibold text-[var(--foreground)] mt-1">{stats.liveTrades}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Actions - Fixed at bottom */}
-              <div className="flex justify-between items-center pt-3 border-t border-[var(--border)] mt-auto">
-                <button
-                  onClick={() => handleViewConfig(config)}
-                  className="flex items-center space-x-1 px-3 py-2 text-sm text-[var(--accent)] hover:text-[var(--accent)]/80 hover:bg-[var(--accent)]/10 rounded-lg transition-colors"
-                >
-                  <Eye className="w-4 h-4" />
-                  <span>View</span>
-                </button>
-                
-                <div className="flex space-x-1">
-                  <button
-                    onClick={() => handleEditConfig(config)}
-                    className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]/10 rounded-lg transition-colors"
-                    title="Edit Configuration"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteConfig(config.id)}
-                    className="p-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                    title="Delete Configuration"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+      {/* Search and Filter Bar */}
+      {configs.length > 0 && (
+        <div className="space-y-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)]" />
+              <input
+                type="text"
+                placeholder="Search configurations..."
+                className="w-full pl-10 pr-4 py-2 bg-[var(--card-background)] border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] transition-colors text-[var(--foreground)] placeholder-[var(--muted-foreground)]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-          );
-        })}
+            <div className="flex items-center space-x-2">
+              <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
+              <select
+                value={selectedExchange}
+                onChange={(e) => setSelectedExchange(e.target.value)}
+                className="px-3 py-2 bg-[var(--card-background)] border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] transition-colors text-[var(--foreground)]"
+              >
+                <option value="">All Exchanges</option>
+                <option value="NSE">NSE</option>
+                <option value="BSE">BSE</option>
+                <option value="MCX">MCX</option>
+              </select>
+            </div>
+          </div>
+          {/* Results count */}
+          <div className="flex justify-between items-center text-sm text-[var(--muted-foreground)]">
+            <span>
+              Showing {Math.min(sortedConfigs.length, pageSize)} of {sortedConfigs.length} configuration{sortedConfigs.length === 1 ? '' : 's'}
+              {(searchTerm || selectedExchange) && ` (filtered from ${configs.length} total)`}
+            </span>
+            {(searchTerm || selectedExchange) && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedExchange('');
+                }}
+                className="text-[var(--accent)] hover:text-[var(--accent)]/80 transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Responsive Table */}
+      <div className="overflow-hidden bg-[var(--card-background)] border border-[var(--border)] rounded-xl">
+        {/* Desktop Table */}
+        <div className="hidden md:block">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gradient-to-r from-[var(--muted)]/5 to-[var(--muted)]/10 border-b border-[var(--border)]">
+                <th className="text-left p-4">
+                  <button
+                    onClick={() => handleSort('name')}
+                    className="flex items-center space-x-2 text-sm font-semibold text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                  >
+                    <span>Configuration</span>
+                    <ArrowUpDown className="w-4 h-4" />
+                  </button>
+                </th>
+                <th className="text-center p-4">
+                  <button
+                    onClick={() => handleSort('symbols')}
+                    className="flex items-center justify-center space-x-2 text-sm font-semibold text-[var(--foreground)] hover:text-[var(--accent)] transition-colors w-full"
+                  >
+                    <span>Symbols</span>
+                    <ArrowUpDown className="w-4 h-4" />
+                  </button>
+                </th>
+                <th className="text-center p-4">
+                  <button
+                    onClick={() => handleSort('pnl')}
+                    className="flex items-center justify-center space-x-2 text-sm font-semibold text-[var(--foreground)] hover:text-[var(--accent)] transition-colors w-full"
+                  >
+                    <span>P&L</span>
+                    <ArrowUpDown className="w-4 h-4" />
+                  </button>
+                </th>
+                <th className="text-center p-4 text-sm font-semibold text-[var(--foreground)]">Trades</th>
+                <th className="text-center p-4">
+                  <button
+                    onClick={() => handleSort('updated_at')}
+                    className="flex items-center justify-center space-x-2 text-sm font-semibold text-[var(--foreground)] hover:text-[var(--accent)] transition-colors w-full"
+                  >
+                    <span>Last Modified</span>
+                    <ArrowUpDown className="w-4 h-4" />
+                  </button>
+                </th>
+                <th className="text-center p-4 text-sm font-semibold text-[var(--foreground)]">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedConfigs.map((config, index) => {
+                const stats = getConfigStats(config.id);
+                return (
+                  <tr 
+                    key={config.id} 
+                    className={`border-b border-[var(--border)] hover:bg-[var(--muted)]/5 transition-colors ${
+                      index % 2 === 0 ? 'bg-[var(--background)]' : 'bg-[var(--card-background)]'
+                    }`}
+                  >
+                    {/* Configuration Info */}
+                    <td className="p-4">
+                      <button
+                        onClick={() => handleViewConfig(config)}
+                        className="w-full text-left space-y-1 hover:bg-[var(--muted)]/10 p-2 rounded-lg transition-colors"
+                        title="Click to view configuration details"
+                      >
+                        <h3 className="font-semibold text-[var(--foreground)] line-clamp-1">{config.name}</h3>
+                        {config.description && (
+                          <p className="text-sm text-[var(--muted-foreground)] line-clamp-2">{config.description}</p>
+                        )}
+                        <div className="flex items-center space-x-2 text-xs text-[var(--muted-foreground)]">
+                          <span className="bg-[var(--muted)]/20 px-2 py-0.5 rounded">{config.exchange}</span>
+                          {config.instrument && (
+                            <span className="bg-[var(--accent)]/20 text-[var(--accent)] px-2 py-0.5 rounded">{config.instrument}</span>
+                          )}
+                        </div>
+                      </button>
+                    </td>
+                    
+                    {/* Symbols Count */}
+                    <td className="p-4 text-center">
+                      <button 
+                        onClick={() => onViewSymbols?.(strategy, config.id)}
+                        className="group inline-flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-orange-500/10 to-orange-600/5 border border-orange-500/20 rounded-lg hover:from-orange-500/20 hover:to-orange-600/10 hover:border-orange-500/40 transition-all duration-200"
+                        title={`View ${stats.symbolCount} symbols using this configuration`}
+                      >
+                        <Users className="w-4 h-4 text-orange-500" />
+                        {loadingStats ? (
+                          <div className="w-6 h-4 bg-[var(--muted)]/20 rounded animate-pulse"></div>
+                        ) : (
+                          <span className="font-semibold text-[var(--foreground)] group-hover:text-orange-600 transition-colors">{stats.symbolCount}</span>
+                        )}
+                      </button>
+                    </td>
+                    
+                    {/* P&L */}
+                    <td className="p-4 text-center">
+                      {loadingStats ? (
+                        <div className="w-16 h-4 bg-[var(--muted)]/20 rounded animate-pulse mx-auto"></div>
+                      ) : (
+                        <div className="inline-flex items-center space-x-1">
+                          <TrendingUp className={`w-4 h-4 ${stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+                          <span className={`font-semibold ${stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            ₹{Math.round(stats.totalPnL).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    </td>
+                    
+                    {/* Trades */}
+                    <td className="p-4 text-center">
+                      {loadingStats ? (
+                        <div className="w-12 h-4 bg-[var(--muted)]/20 rounded animate-pulse mx-auto"></div>
+                      ) : (
+                        <div className="text-center">
+                          <div className="font-semibold text-[var(--foreground)]">{stats.totalTrades}</div>
+                          {stats.liveTrades > 0 && (
+                            <div className="text-xs text-green-500">+{stats.liveTrades} live</div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    
+                    {/* Last Modified */}
+                    <td className="p-4 text-center">
+                      <div className="text-center">
+                        <div className="text-sm text-[var(--foreground)]">
+                          {new Date(config.updated_at).toLocaleDateString()}
+                        </div>
+                        <div className="text-xs text-[var(--muted-foreground)]">
+                          {new Date(config.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </td>
+                    
+                    {/* Actions */}
+                    <td className="p-4">
+                      <div className="flex justify-center items-center space-x-1">
+                        <button
+                          onClick={() => handleViewConfig(config)}
+                          className="p-2 text-[var(--accent)] hover:text-[var(--accent)]/80 hover:bg-[var(--accent)]/10 rounded-lg transition-colors"
+                          title="View Configuration"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEditConfig(config)}
+                          className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]/10 rounded-lg transition-colors"
+                          title="Edit Configuration"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteConfig(config.id)}
+                          className="p-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Delete Configuration"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="md:hidden space-y-4 p-4">
+          {paginatedConfigs.map((config) => {
+            const stats = getConfigStats(config.id);
+            return (
+              <div key={config.id} className="bg-[var(--background)] border border-[var(--border)] rounded-lg p-4 space-y-3">
+                {/* Header */}
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-[var(--foreground)]">{config.name}</h3>
+                  {config.description && (
+                    <p className="text-sm text-[var(--muted-foreground)]">{config.description}</p>
+                  )}
+                  <div className="flex items-center space-x-2 text-xs">
+                    <span className="bg-[var(--muted)]/20 px-2 py-0.5 rounded text-[var(--muted-foreground)]">{config.exchange}</span>
+                    {config.instrument && (
+                      <span className="bg-[var(--accent)]/20 text-[var(--accent)] px-2 py-0.5 rounded">{config.instrument}</span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  <button 
+                    onClick={() => onViewSymbols?.(strategy, config.id)}
+                    className="flex flex-col items-center space-y-1 p-2 bg-gradient-to-r from-orange-500/10 to-orange-600/5 border border-orange-500/20 rounded-lg"
+                  >
+                    <Users className="w-4 h-4 text-orange-500" />
+                    <span className="text-xs text-orange-500">Symbols</span>
+                    {loadingStats ? (
+                      <div className="w-6 h-3 bg-[var(--muted)]/20 rounded animate-pulse"></div>
+                    ) : (
+                      <span className="text-sm font-semibold text-[var(--foreground)]">{stats.symbolCount}</span>
+                    )}
+                  </button>
+                  
+                  <div className="flex flex-col items-center space-y-1 p-2 bg-gradient-to-r from-[var(--accent)]/5 to-[var(--accent)]/10 border border-[var(--accent)]/20 rounded-lg">
+                    <TrendingUp className={`w-4 h-4 ${stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+                    <span className="text-xs text-[var(--muted-foreground)]">P&L</span>
+                    {loadingStats ? (
+                      <div className="w-8 h-3 bg-[var(--muted)]/20 rounded animate-pulse"></div>
+                    ) : (
+                      <span className={`text-sm font-semibold ${stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        ₹{Math.round(stats.totalPnL / 1000)}K
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col items-center space-y-1 p-2 bg-gradient-to-r from-purple-500/10 to-purple-600/5 border border-purple-500/20 rounded-lg">
+                    <AlertCircle className="w-4 h-4 text-purple-500" />
+                    <span className="text-xs text-purple-500">Trades</span>
+                    {loadingStats ? (
+                      <div className="w-6 h-3 bg-[var(--muted)]/20 rounded animate-pulse"></div>
+                    ) : (
+                      <span className="text-sm font-semibold text-[var(--foreground)]">{stats.totalTrades}</span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Actions */}
+                <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
+                  <button
+                    onClick={() => handleViewConfig(config)}
+                    className="flex items-center space-x-1 px-3 py-2 text-sm text-[var(--accent)] hover:bg-[var(--accent)]/10 rounded-lg transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>View</span>
+                  </button>
+                  
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => handleEditConfig(config)}
+                      className="p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]/10 rounded-lg transition-colors"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteConfig(config.id)}
+                      className="p-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Empty State */}
+      {sortedConfigs.length === 0 && configs.length > 0 && (
+        <div className="text-center py-20">
+          <div className="w-20 h-20 bg-gradient-to-r from-[var(--muted)] to-[var(--muted)]/80 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Search className="w-10 h-10 text-[var(--muted-foreground)]" />
+          </div>
+          <h3 className="text-xl font-bold text-[var(--foreground)] mb-2">No configurations match your search</h3>
+          <p className="text-[var(--muted-foreground)] text-base mb-6 max-w-md mx-auto">
+            Try adjusting your search terms or filters to find what you're looking for
+          </p>
+          <button 
+            onClick={() => {
+              setSearchTerm('');
+              setSelectedExchange('');
+            }}
+            className="px-6 py-3 bg-[var(--accent)] hover:bg-[var(--accent)]/80 text-white rounded-lg transition-all duration-200 shadow-md font-medium text-base"
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
       {configs.length === 0 && (
         <div className="text-center py-20">
           <div className="w-20 h-20 bg-gradient-to-r from-[var(--accent)] to-[var(--accent)]/80 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
@@ -659,7 +1054,7 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
       )}
 
       {/* Pagination */}
-      {configs.length > pageSize && (
+      {sortedConfigs.length > pageSize && (
         <div className="flex justify-center items-center space-x-4 py-4">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
@@ -710,15 +1105,23 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
 
       {/* View Config Modal */}
       {viewingConfig && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setViewingConfig(null)}
+        >
+          <div 
+            className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-semibold text-[var(--foreground)]">Configuration Details</h3>
               <button
                 onClick={() => setViewingConfig(null)}
-                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors text-2xl"
+                className="flex items-center justify-center w-8 h-8 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]/20 rounded-lg transition-all duration-200 cursor-pointer"
+                title="Close modal"
+                type="button"
               >
-                ×
+                <X className="w-5 h-5" />
               </button>
             </div>
             
@@ -748,19 +1151,11 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
 
                 {/* Trading Parameters */}
                 <div className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-4">
-                  <h4 className="text-lg font-medium text-[var(--foreground)] mb-3">Trading Parameters</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <h4 className="text-lg font-medium text-[var(--foreground)] mb-3">Configuration Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-[var(--foreground)]">Exchange:</label>
                       <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.exchange}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-[var(--foreground)]">Order Type:</label>
-                      <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.order_type}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-[var(--foreground)]">Product Type:</label>
-                      <p className="text-[var(--muted-foreground)] mt-1 font-mono">{viewingConfig.product_type}</p>
                     </div>
                     {viewingConfig.instrument && (
                       <div>
@@ -841,15 +1236,23 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
 
       {/* Edit Config Modal */}
       {editingConfig && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setEditingConfig(null)}
+        >
+          <div 
+            className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-[var(--foreground)]">Edit Configuration</h3>
               <button
                 onClick={() => setEditingConfig(null)}
-                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                className="flex items-center justify-center w-8 h-8 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]/20 rounded-lg transition-all duration-200 cursor-pointer"
+                title="Close modal"
+                type="button"
               >
-                ×
+                <X className="w-5 h-5" />
               </button>
             </div>
             
@@ -895,36 +1298,6 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
                     <option value="NSE">NSE</option>
                     <option value="BSE">BSE</option>
                     <option value="MCX">MCX</option>
-                  </select>
-                </div>
-
-                {/* Order Type */}
-                <div>
-                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                    Order Type
-                  </label>
-                  <select
-                    value={editFormData.order_type}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, order_type: e.target.value as 'MARKET' | 'LIMIT' }))}
-                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                  >
-                    <option value="MARKET">MARKET</option>
-                    <option value="LIMIT">LIMIT</option>
-                  </select>
-                </div>
-
-                {/* Product Type */}
-                <div>
-                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                    Product Type
-                  </label>
-                  <select
-                    value={editFormData.product_type}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, product_type: e.target.value as 'INTRADAY' | 'DELIVERY' }))}
-                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                  >
-                    <option value="INTRADAY">INTRADAY</option>
-                    <option value="DELIVERY">DELIVERY</option>
                   </select>
                 </div>
 
