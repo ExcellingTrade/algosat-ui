@@ -714,7 +714,7 @@ class ApiClient {
   }
 
   async getBalanceSummaries(): Promise<BrokerBalanceSummary[]> {
-    return this.request('/balance_summary/');
+    return this.request('/api/v1/balance_summary/');
   }
 
   // Positions

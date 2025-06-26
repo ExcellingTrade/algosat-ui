@@ -1160,8 +1160,8 @@ export default function Dashboard() {
                                 <div className="mt-3">
                                   <div className="w-full bg-[var(--border)] rounded-full h-2">
                                     <div 
-                                      className="bg-gradient-to-r from-green-500 to-[var(--accent)] h-2 rounded-full transition-all duration-700" 
-                                      style={{ width: `${totalBalance > 0 ? (availableBalance / totalBalance) * 100 : 0}%` }}
+                                      className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full transition-all duration-700" 
+                                      style={{ width: `${totalBalance > 0 ? (utilizedMargin / totalBalance) * 100 : 0}%` }}
                                     ></div>
                                   </div>
                                   <div className="flex justify-between text-xs text-[var(--muted-foreground)] mt-1">
