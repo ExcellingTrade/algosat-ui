@@ -14,7 +14,9 @@ import {
   BarChart3,
   Zap,
   Filter,
-  ChevronDown
+  ChevronDown,
+  Edit3,
+  Trash2
 } from "lucide-react";
 
 interface SymbolsPageProps {
@@ -23,6 +25,7 @@ interface SymbolsPageProps {
   onViewTrades: (symbol: StrategySymbol) => void;
   onAddSymbol: () => void;
   onToggleSymbol?: (symbolId: number) => Promise<void>;
+  onRefreshSymbols?: () => Promise<void>; // Add refresh callback
   preSelectedConfigId?: number; // Config to pre-select when coming from configs page
   onClearPreSelection?: () => void; // Function to clear the pre-selection
 }
@@ -65,7 +68,7 @@ function ToggleSwitch({
   );
 }
 
-export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onToggleSymbol, preSelectedConfigId, onClearPreSelection }: SymbolsPageProps) {
+export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onToggleSymbol, onRefreshSymbols, preSelectedConfigId, onClearPreSelection }: SymbolsPageProps) {
   const [toggleStates, setToggleStates] = useState<Record<number, boolean>>({});
   const [configs, setConfigs] = useState<StrategyConfig[]>([]);
   const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
@@ -73,6 +76,11 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
   const [showConfigDropdown, setShowConfigDropdown] = useState(false);
   const [symbolStats, setSymbolStats] = useState<Record<number, SymbolStats>>({});
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [editingSymbol, setEditingSymbol] = useState<StrategySymbol | null>(null);
+  const [originalConfigId, setOriginalConfigId] = useState<number | null>(null);
+  const [isUpdatingSymbol, setIsUpdatingSymbol] = useState(false);
+  const [deletingSymbol, setDeletingSymbol] = useState<StrategySymbol | null>(null);
+  const [isDeletingSymbol, setIsDeletingSymbol] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -219,6 +227,73 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
     setTimeout(() => {
       setToggleStates(prev => ({ ...prev, [symbolId]: false }));
     }, 1000);
+  };
+
+  const handleEditSymbol = (symbol: StrategySymbol) => {
+    setEditingSymbol(symbol);
+    setOriginalConfigId(symbol.config_id);
+  };
+
+  const handleUpdateSymbol = async (newConfigId: number) => {
+    if (!editingSymbol) return;
+    
+    setIsUpdatingSymbol(true);
+    try {
+      await apiClient.updateStrategySymbol(editingSymbol.id, { config_id: newConfigId });
+      console.log(`Symbol ${editingSymbol.id} updated to use config ${newConfigId}`);
+      setEditingSymbol(null);
+      setOriginalConfigId(null);
+      
+      // Refresh the symbols data using the callback if available
+      if (onRefreshSymbols) {
+        await onRefreshSymbols();
+      } else {
+        // Fallback to page reload if no refresh callback is provided
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Failed to update symbol:', error);
+      alert('Failed to update symbol configuration. Please try again.');
+    } finally {
+      setIsUpdatingSymbol(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingSymbol(null);
+    setOriginalConfigId(null);
+  };
+
+  const handleDeleteSymbol = (symbol: StrategySymbol) => {
+    setDeletingSymbol(symbol);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingSymbol) return;
+    
+    setIsDeletingSymbol(true);
+    try {
+      await apiClient.deleteStrategySymbol(deletingSymbol.id);
+      console.log(`Symbol ${deletingSymbol.id} deleted successfully`);
+      setDeletingSymbol(null);
+      
+      // Refresh the symbols data using the callback if available
+      if (onRefreshSymbols) {
+        await onRefreshSymbols();
+      } else {
+        // Fallback to page reload if no refresh callback is provided
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Failed to delete symbol:', error);
+      alert('Failed to delete symbol. Please try again.');
+    } finally {
+      setIsDeletingSymbol(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setDeletingSymbol(null);
   };
 
   const formatCurrency = (amount: number) => {
@@ -529,7 +604,7 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                       </td>
                       <td className="py-4 px-6">
                         <div className="flex items-center space-x-2">
-                          <div>
+                          <div className="flex-1">
                             <span className="text-[var(--foreground)] font-medium">
                               {symbol.config_name || `Config ${symbol.config_id}`}
                             </span>
@@ -539,9 +614,22 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                               </p>
                             )}
                           </div>
-                          <button className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Settings className="w-4 h-4 text-[var(--muted-foreground)] hover:text-[var(--accent)]" />
-                          </button>
+                          <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => handleEditSymbol(symbol)}
+                              className="px-2 py-1 rounded hover:bg-[var(--accent)]/10"
+                              title="Edit symbol configuration"
+                            >
+                              <Edit3 className="w-4 h-4 text-[var(--muted-foreground)] hover:text-[var(--accent)]" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteSymbol(symbol)}
+                              className="px-2 py-1 rounded hover:bg-red-500/10"
+                              title="Delete symbol"
+                            >
+                              <Trash2 className="w-4 h-4 text-[var(--muted-foreground)] hover:text-red-500" />
+                            </button>
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 px-6">
@@ -634,11 +722,29 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm text-[var(--muted-foreground)]">Status:</span>
-                      <span className={`text-sm font-medium ${symbol.enabled ? 'text-green-400' : 'text-red-400'}`}>
-                        {symbol.enabled ? 'Active' : 'Inactive'}
-                      </span>
+                    <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-[var(--muted-foreground)]">Status:</span>
+                        <span className={`text-sm font-medium ${symbol.enabled ? 'text-green-400' : 'text-red-400'}`}>
+                          {symbol.enabled ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleEditSymbol(symbol)}
+                          className="p-1.5 rounded-lg bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20 text-[var(--accent)] transition-all duration-200 border border-[var(--accent)]/30"
+                          title="Edit configuration"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSymbol(symbol)}
+                          className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-all duration-200 border border-red-500/30"
+                          title="Delete symbol"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                     <ToggleSwitch
                       enabled={symbol.enabled ?? false}
@@ -652,6 +758,152 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
           </>
         )}
       </div>
+
+      {/* Edit Symbol Modal */}
+      {editingSymbol && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-[var(--foreground)] mb-4">
+                Edit Symbol Configuration
+              </h3>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                  Symbol
+                </label>
+                <div className="px-3 py-2 bg-[var(--background)]/50 border border-[var(--border)] rounded-lg text-sm text-[var(--muted-foreground)]">
+                  {editingSymbol.symbol} (Read-only)
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+                  Configuration
+                </label>
+                <select
+                  value={editingSymbol.config_id}
+                  onChange={(e) => setEditingSymbol({ ...editingSymbol, config_id: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 bg-[var(--background)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
+                  disabled={isUpdatingSymbol}
+                >
+                  {configs.map((config) => (
+                    <option key={config.id} value={config.id}>
+                      {config.name}
+                      {config.description && ` - ${config.description.substring(0, 50)}${config.description.length > 50 ? '...' : ''}`}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  {editingSymbol.config_id === originalConfigId 
+                    ? "Current configuration - select a different one to update"
+                    : "Select the configuration you want to use for this symbol"
+                  }
+                </p>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={isUpdatingSymbol}
+                  className="flex-1 px-4 py-2 bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] rounded-lg hover:bg-[var(--background)]/80 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleUpdateSymbol(editingSymbol.config_id)}
+                  disabled={isUpdatingSymbol || editingSymbol.config_id === originalConfigId}
+                  className="flex-1 px-4 py-2 bg-[var(--accent)] text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                >
+                  {isUpdatingSymbol ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <span>Update Configuration</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Symbol Confirmation Modal */}
+      {deletingSymbol && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--card-background)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-[var(--foreground)]">
+                  Delete Symbol
+                </h3>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-[var(--foreground)] mb-2">
+                  Are you sure you want to delete this symbol?
+                </p>
+                
+                <div className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-[var(--foreground)]">{deletingSymbol.symbol}</span>
+                      <p className="text-sm text-[var(--muted-foreground)]">
+                        Config: {deletingSymbol.config_name || `Config ${deletingSymbol.config_id}`}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      deletingSymbol.enabled 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {deletingSymbol.enabled ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+                
+                <p className="text-sm text-red-400 mt-3">
+                  <strong>Warning:</strong> This action cannot be undone. All trade history and statistics for this symbol will be permanently deleted.
+                </p>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancelDelete}
+                  disabled={isDeletingSymbol}
+                  className="flex-1 px-4 py-2 bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] rounded-lg hover:bg-[var(--background)]/80 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={isDeletingSymbol}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                >
+                  {isDeletingSymbol ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete Symbol</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 }

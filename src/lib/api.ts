@@ -664,6 +664,19 @@ class ApiClient {
     });
   }
 
+  async updateStrategySymbol(symbolId: number, updateData: { config_id: number }): Promise<StrategySymbol> {
+    return this.request(`/strategies/symbols/${symbolId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    });
+  }
+
+  async deleteStrategySymbol(symbolId: number): Promise<{ message: string; symbol_id: number }> {
+    return this.request(`/strategies/symbols/${symbolId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Strategy Symbol Trades
   async getStrategySymbolTrades(strategySymbolId: number): Promise<Trade[]> {
     return this.request(`/strategy_symbol/${strategySymbolId}/trades/`);

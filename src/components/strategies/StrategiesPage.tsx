@@ -578,6 +578,7 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
           onViewTrades={handleViewTrades}
           onAddSymbol={handleAddSymbol}
           onToggleSymbol={handleToggleSymbol}
+          onRefreshSymbols={() => fetchStrategySymbols(selectedStrategy.id)}
           preSelectedConfigId={preSelectedConfigId}
           onClearPreSelection={() => setPreSelectedConfigId(undefined)}
         />
