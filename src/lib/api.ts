@@ -279,6 +279,45 @@ export interface BalanceSummary {
   utilized: number;
 }
 
+export interface DashboardSummary {
+  total_balance: {
+    amount: number;
+    change: number;
+    change_percentage: number;
+    is_positive: boolean;
+  };
+  todays_pnl: {
+    amount: number;
+    change_percentage: number;
+    is_positive: boolean;
+  };
+  active_strategies: {
+    count: number;
+    profit_count: number;
+    loss_count: number;
+  };
+  last_updated: string;
+}
+
+export interface BrokerBalanceDetail {
+  broker_name: string;
+  total_balance: number;
+  available: number;
+  utilized: number;
+  last_updated: string;
+}
+
+export interface BrokerBalancesSummary {
+  brokers: BrokerBalanceDetail[];
+  summary: {
+    total_balance: number;
+    total_available: number;
+    total_utilized: number;
+    broker_count: number;
+  };
+  last_updated: string;
+}
+
 export interface BrokerBalanceSummary {
   broker_id: number;
   broker_name: string;
@@ -896,6 +935,15 @@ class ApiClient {
 
   async getSymbolTrades(symbolId: number, limit: number = 100): Promise<SymbolTradesResponse> {
     return this.request(`/strategies/symbols/${symbolId}/trades?limit=${limit}`);
+  }
+
+  // Dashboard APIs
+  async getDashboardSummary(): Promise<DashboardSummary> {
+    return this.request('/dashboard/summary');
+  }
+
+  async getBrokerBalancesSummary(): Promise<BrokerBalancesSummary> {
+    return this.request('/dashboard/broker-balances');
   }
 }
 

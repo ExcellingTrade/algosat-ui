@@ -14,6 +14,7 @@ import {
   HealthStatus,
   VmDetails,
   BrokerBalanceSummary,
+  DashboardSummary,
   apiClient 
 } from "@/lib/api";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -112,6 +113,9 @@ export default function Dashboard() {
     totalPositions: 0,
     totalPnL: 0
   });
+
+  // Dashboard summary from API
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
   
   // Market status state
   const [isMarketOpen, setIsMarketOpen] = useState<boolean>(true); // Default to true during market hours
@@ -359,9 +363,10 @@ export default function Dashboard() {
       let tradesData: Trade[] = [];
       let systemStatusData: SystemStatus | null = null;
       let healthStatusData: HealthStatus | null = null;
+      let dashboardSummaryData: DashboardSummary | null = null;
 
       // Load data concurrently for better performance
-      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, systemStatusResult, healthResult] = 
+      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, systemStatusResult, healthResult, dashboardSummaryResult] = 
         await Promise.allSettled([
           apiClient.getStrategies(),
           apiClient.getBrokers(),
@@ -369,7 +374,8 @@ export default function Dashboard() {
           apiClient.getPositions(),
           apiClient.getTrades(),
           apiClient.getSystemStatus(),
-          apiClient.healthCheck()
+          apiClient.healthCheck(),
+          apiClient.getDashboardSummary()
         ]);
 
       // Handle strategies
@@ -473,6 +479,14 @@ export default function Dashboard() {
       } else {
         console.error('Dashboard: Failed to load health status:', healthResult.reason);
         setApiHealthy(false);
+      }
+
+      // Handle dashboard summary
+      if (dashboardSummaryResult.status === 'fulfilled') {
+        dashboardSummaryData = dashboardSummaryResult.value;
+        setDashboardSummary(dashboardSummaryData);
+      } else {
+        console.error('Dashboard: Failed to load dashboard summary:', dashboardSummaryResult.reason);
       }
 
       // Calculate stats
@@ -882,36 +896,53 @@ export default function Dashboard() {
             {activeTab === "overview" && (
               <div className="space-y-6">
                 {/* Enhanced Professional Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {/* Total Balance Card */}
                   <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-[var(--accent)]/50 rounded-2xl p-6 shadow-2xl shadow-[var(--accent)]/25 ring-1 ring-[var(--accent)]/20 hover:shadow-3xl hover:shadow-[var(--accent)]/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
-                      <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">₹2,57,84,225</p>
-                      <p className="text-green-400 text-xs lg:text-sm">↗ +12.5% vs prev. month</p>
+                      <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">
+                        {dashboardSummary ? `₹${dashboardSummary.total_balance.amount.toLocaleString('en-IN')}` : '₹0'}
+                      </p>
+                      <p className={`text-xs lg:text-sm ${dashboardSummary?.total_balance.is_positive ? 'text-green-400' : 'text-red-400'}`}>
+                        {dashboardSummary ? (
+                          `${dashboardSummary.total_balance.is_positive ? '↗' : '↘'} ${dashboardSummary.total_balance.change_percentage > 0 ? '+' : ''}${dashboardSummary.total_balance.change_percentage}% vs yesterday`
+                        ) : (
+                          '-- vs yesterday'
+                        )}
+                      </p>
                     </div>
                   </div>
 
+                  {/* Today's P/L Card */}
                   <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-green-500/50 rounded-2xl p-6 shadow-2xl shadow-green-500/25 ring-1 ring-green-500/20 hover:shadow-3xl hover:shadow-green-500/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Today's P/L</p>
-                      <p className="text-xl lg:text-2xl font-bold text-green-400 break-words">+₹1,84,225</p>
-                      <p className="text-green-400 text-xs lg:text-sm">↗ +3.2% daily growth</p>
+                      <p className={`text-xl lg:text-2xl font-bold break-words ${dashboardSummary?.todays_pnl.is_positive ? 'text-green-400' : 'text-red-400'}`}>
+                        {dashboardSummary ? (
+                          `${dashboardSummary.todays_pnl.amount >= 0 ? '+' : ''}₹${Math.abs(dashboardSummary.todays_pnl.amount).toLocaleString('en-IN')}`
+                        ) : (
+                          '₹0'
+                        )}
+                      </p>
+                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">Placeholder for now</p>
                     </div>
                   </div>
 
+                  {/* Active Strategies Card */}
                   <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-blue-500/50 rounded-2xl p-6 shadow-2xl shadow-blue-500/25 ring-1 ring-blue-500/20 hover:shadow-3xl hover:shadow-blue-500/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Active Strategies</p>
-                      <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)]">{stats.activeStrategies}</p>
-                      <p className="text-blue-400 text-xs lg:text-sm">{stats.activeStrategies} profit • {stats.totalStrategies - stats.activeStrategies} loss</p>
-                    </div>
-                  </div>
-
-                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-purple-500/40 rounded-2xl p-6 shadow-2xl shadow-purple-500/15 hover:shadow-3xl hover:shadow-purple-500/25 transition-all duration-300 hover:scale-[1.02]">
-                    <div>
-                      <p className="text-[var(--muted-foreground)] text-sm">Trading Volume</p>
-                      <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">₹89,42,700</p>
-                      <p className="text-red-400 text-xs lg:text-sm">↘ -8.2% vs prev. month</p>
+                      <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)]">
+                        {dashboardSummary ? dashboardSummary.active_strategies.count : stats.activeStrategies}
+                      </p>
+                      <p className="text-blue-400 text-xs lg:text-sm">
+                        {dashboardSummary ? (
+                          `${dashboardSummary.active_strategies.profit_count} profit • ${dashboardSummary.active_strategies.loss_count} loss`
+                        ) : (
+                          `${stats.activeStrategies} profit • ${stats.totalStrategies - stats.activeStrategies} loss`
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>
