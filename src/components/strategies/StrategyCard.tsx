@@ -13,7 +13,6 @@ import {
   Activity,
   MoreVertical,
   Edit3,
-  Trash2,
   BarChart3,
   Info,
   Clock,
@@ -247,10 +246,6 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
                     >
                       <Edit3 className="w-3 h-3" />
                       <span>Edit</span>
-                    </button>
-                    <button className="w-full px-3 py-2 text-xs text-left hover:bg-red-500/10 text-red-400 transition-colors flex items-center space-x-2">
-                      <Trash2 className="w-3 h-3" />
-                      <span>Delete</span>
                     </button>
                   </div>
                 </>

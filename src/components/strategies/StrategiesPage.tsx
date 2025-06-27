@@ -171,84 +171,22 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
     try {
       if (showLoading) setIsLoading(true);
       setError(null);
-      
+
       console.log('Fetching strategies from API...');
       const apiStrategies = await apiClient.getStrategies();
       console.log('API strategies received:', apiStrategies);
-      
-      // Immediately set strategies with basic info and placeholders for fast loading
-      const basicStrategies = apiStrategies.map(strategy => ({
-        ...strategy,
-        description: strategy.name?.includes('Option') ? 
-          'High-frequency option trading strategy with advanced risk management' :
-          'Algorithmic trading strategy optimized for market conditions',
-        livePnL: 0,
-        overallPnL: 0,
-        symbolCount: 0,
-        tradeCount: 0,
-        winRate: 0
-      })) as Strategy[];
-      
-      setStrategies(basicStrategies);
+
+      // Use API data directly, do not inject fallback/mocked fields
+      setStrategies(apiStrategies as Strategy[]);
       setIsLoading(false);
-      
+
       // Load stats in background (non-blocking)
-      fetchStrategiesStats(basicStrategies);
-      
+      fetchStrategiesStats(apiStrategies as Strategy[]);
+
     } catch (err) {
       console.error('Failed to fetch strategies:', err);
       setError(err instanceof Error ? err.message : 'Failed to load strategies');
-      setIsLoading(false);
-      
-      // Fallback to mock data if API fails
-      const fallbackStrategies: Strategy[] = [
-        {
-          id: 1,
-          key: "OptionBuy",
-          name: "Option Buy Strategy",
-          description: "High-frequency option buying strategy targeting small, quick profits",
-          enabled: true,
-          livePnL: 12500.75,
-          overallPnL: 78420.25,
-          symbolCount: 3,
-          tradeCount: 127,
-          winRate: 72,
-          created_at: "2024-01-15T09:30:00Z",
-          order_type: "MARKET",
-          product_type: "INTRADAY"
-        },
-        {
-          id: 2,
-          key: "OptionSell",
-          name: "Option Sell Strategy",
-          description: "Advanced option selling strategy with momentum analysis",
-          enabled: true,
-          livePnL: -2340.50,
-          overallPnL: 45680.90,
-          symbolCount: 2,
-          tradeCount: 89,
-          winRate: 68,
-          created_at: "2024-02-01T09:30:00Z",
-          order_type: "LIMIT",
-          product_type: "INTRADAY"
-        },
-        {
-          id: 3,
-          key: "SwingHighLowBuy",
-          name: "Swing High Low Buy",
-          description: "Swing trading strategy based on support and resistance levels",
-          enabled: false,
-          livePnL: 0,
-          overallPnL: 23450.75,
-          symbolCount: 4,
-          tradeCount: 156,
-          winRate: 65,
-          created_at: "2024-01-20T09:30:00Z",
-          order_type: "MARKET",
-          product_type: "DELIVERY"
-        }
-      ];
-      setStrategies(fallbackStrategies);
+      setStrategies([]); // Set empty array instead of fallback mock data
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -263,15 +201,19 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
       const apiSymbols = await apiClient.getStrategySymbols(strategyId);
       console.log('API symbols received:', apiSymbols);
       
-      // Enhance symbols with UI data (P&L and trades - config info now comes from API)
+      // Set symbols with basic API data, stats will be fetched in background
       const enhancedSymbols = apiSymbols.map(symbol => ({
         ...symbol,
-        currentPnL: Math.random() * 10000 - 5000, // Mock data
-        tradeCount: Math.floor(Math.random() * 100),
+        currentPnL: 0, // Will be updated when stats are fetched
+        tradeCount: 0, // Will be updated when stats are fetched
         enabled: symbol.status === 'active'
       }));
       
       setSymbols(enhancedSymbols);
+      
+      // Fetch stats for symbols in background (non-blocking)
+      fetchSymbolsStats(enhancedSymbols);
+      
     } catch (err) {
       console.error('Failed to fetch strategy symbols:', err);
       setError(err instanceof Error ? err.message : 'Failed to load symbols');
@@ -297,6 +239,34 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
       setConfigs([]);
       return [];
     }
+  };
+
+  // Background stats fetching for symbols (non-blocking)
+  const fetchSymbolsStats = async (symbols: StrategySymbol[]) => {
+    console.log('Starting background symbol stats fetching...');
+    
+    for (const symbol of symbols) {
+      try {
+        const symbolStats = await apiClient.getSymbolStats(symbol.id);
+        
+        // Update the specific symbol with real stats
+        setSymbols(prev => prev.map(s => 
+          s.id === symbol.id ? {
+            ...s,
+            currentPnL: symbolStats.live_pnl || 0,
+            tradeCount: symbolStats.total_trades || 0
+          } : s
+        ));
+        
+        // Small delay to prevent API rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        console.warn(`Failed to fetch stats for symbol ${symbol.id}:`, error);
+      }
+    }
+    
+    console.log('Background symbol stats fetching completed');
   };
 
   // Initial load
@@ -478,9 +448,9 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
                   <div className="space-y-2">
                     <h3 className="text-red-400 font-semibold text-lg">Connection Issue</h3>
                     <p className="text-red-400/80">{error}</p>
-                    <p className="text-red-400/60 text-sm">
+                    {/* <p className="text-red-400/60 text-sm">
                       Don't worry - we're showing demo data so you can explore the interface
-                    </p>
+                    </p> */}
                   </div>
                 </div>
               </div>

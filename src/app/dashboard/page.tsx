@@ -659,18 +659,18 @@ export default function Dashboard() {
   };
 
   // Helper: Responsive MarketTicker wrapper for mobile
-  function ResponsiveMarketTicker({ symbols }) {
+  function ResponsiveMarketTicker({ symbols }: { symbols?: string[] }) {
     // Show up to 3 stocks in a row, scroll if more
     if (!symbols || symbols.length <= 3) {
       return (
         <div className="flex flex-row flex-wrap gap-2 w-full">
-          <MarketTicker symbols={symbols} className="flex-1 min-w-0 text-xs rounded-lg shadow bg-[var(--card-background)]/80 border border-[var(--border)]" />
+          <MarketTicker className="flex-1 min-w-0 text-xs rounded-lg shadow bg-[var(--card-background)]/80 border border-[var(--border)]" />
         </div>
       );
     } else {
       return (
         <div className="flex flex-nowrap gap-2 overflow-x-auto w-full pb-1">
-          <MarketTicker symbols={symbols} className="flex-shrink-0 min-w-[90vw] max-w-[400px] text-xs rounded-lg shadow bg-[var(--card-background)]/80 border border-[var(--border)]" />
+          <MarketTicker className="flex-shrink-0 min-w-[90vw] max-w-[400px] text-xs rounded-lg shadow bg-[var(--card-background)]/80 border border-[var(--border)]" />
         </div>
       );
     }
