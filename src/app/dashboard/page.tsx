@@ -93,6 +93,7 @@ export default function Dashboard() {
   const [balanceSummaries, setBalanceSummaries] = useState<BrokerBalanceSummary[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [vmDetails, setVmDetails] = useState<VmDetails | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics>({
@@ -132,6 +133,176 @@ export default function Dashboard() {
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Order filters state
+  const [symbolFilter, setSymbolFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [pnlFilter, setPnlFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sideFilter, setSideFilter] = useState("");
+  
+  // Sorting state
+  const [sortField, setSortField] = useState<string>("signal_time");
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  // Function to parse strike symbol with intelligent parsing for different formats
+  const parseStrikeSymbol = (strikeSymbol: string) => {
+    if (!strikeSymbol) {
+      return { exchange: 'N/A', underlying: 'N/A', strike: 'N/A', type: 'N/A', expiry: 'N/A' };
+    }
+
+    // Remove exchange prefix if present (e.g., "NSE:")
+    const symbolPart = strikeSymbol.includes(':') ? strikeSymbol.split(':')[1] : strikeSymbol;
+    
+    // Extract type (CE or PE) from the end
+    const typeMatch = symbolPart.match(/(CE|PE)$/);
+    const type = typeMatch ? typeMatch[1] : 'N/A';
+    
+    if (!typeMatch) {
+      return { exchange: 'N/A', underlying: symbolPart, strike: 'N/A', type: 'N/A', expiry: 'N/A' };
+    }
+
+    // Remove type from symbol to get the rest
+    const withoutType = symbolPart.slice(0, -2);
+    const exchange = strikeSymbol.includes(':') ? strikeSymbol.split(':')[0] : 'NSE';
+    
+    // Intelligent parsing based on different patterns
+    let underlying = 'N/A';
+    let strike = 'N/A';
+    let expiry = 'N/A';
+
+    // Pattern 1: BANKNIFTY25JUL32000CE -> BANKNIFTY, 25JUL, 32000
+    if (withoutType.match(/^BANKNIFTY\d{2}[A-Z]{3}\d+$/)) {
+      const match = withoutType.match(/^(BANKNIFTY)(\d{2}[A-Z]{3})(\d+)$/);
+      if (match) {
+        underlying = match[1];
+        expiry = match[2];
+        strike = match[3];
+      }
+    }
+    // Pattern 2: NIFTY2570325600CE -> NIFTY, complex expiry/strike pattern
+    else if (withoutType.match(/^NIFTY\d+$/)) {
+      const match = withoutType.match(/^(NIFTY)(\d+)$/);
+      if (match) {
+        underlying = match[1];
+        const numbers = match[2];
+        // For NIFTY, assume last 5 digits are strike, rest is expiry
+        if (numbers.length >= 5) {
+          strike = numbers.slice(-5);
+          expiry = numbers.slice(0, -5);
+        } else {
+          strike = numbers;
+          expiry = 'N/A';
+        }
+      }
+    }
+    // Pattern 3: SBIN25JUL520CE -> SBIN, 25JUL, 520 (Equity with monthly expiry)
+    else if (withoutType.match(/^[A-Z]+\d{2}[A-Z]{3}\d+$/)) {
+      const match = withoutType.match(/^([A-Z]+)(\d{2}[A-Z]{3})(\d+)$/);
+      if (match) {
+        underlying = match[1];
+        expiry = match[2];
+        strike = match[3];
+      }
+    }
+    // Pattern 4: Generic fallback - try to extract last digits as strike
+    else {
+      const strikeMatch = withoutType.match(/(\d+)$/);
+      if (strikeMatch) {
+        strike = strikeMatch[1];
+        const remainingPart = withoutType.slice(0, -strikeMatch[1].length);
+        
+        // Try to extract expiry (digits + letters pattern)
+        const expiryMatch = remainingPart.match(/(\d{2}[A-Z]{3})$/);
+        if (expiryMatch) {
+          expiry = expiryMatch[1];
+          underlying = remainingPart.slice(0, -expiryMatch[1].length);
+        } else {
+          underlying = remainingPart;
+        }
+      } else {
+        underlying = withoutType;
+      }
+    }
+    
+    return {
+      exchange,
+      underlying: underlying || 'N/A',
+      strike: strike || 'N/A',
+      type,
+      expiry: expiry || 'N/A'
+    };
+  };
+
+  // Sort handler
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Filter orders based on selected filters
+  const filteredOrders = orders.filter((order: any) => {
+    const parsed = parseStrikeSymbol(order.strike_symbol || '');
+    
+    // Symbol filter
+    if (symbolFilter && parsed.underlying !== symbolFilter) return false;
+    
+    // Type filter  
+    if (typeFilter && parsed.type !== typeFilter) return false;
+    
+    // P&L filter
+    if (pnlFilter) {
+      const pnl = Number(order.pnl || 0);
+      if (pnlFilter === 'profit' && pnl <= 0) return false;
+      if (pnlFilter === 'loss' && pnl >= 0) return false;
+      if (pnlFilter === 'breakeven' && pnl !== 0) return false;
+    }
+    
+    // Status filter
+    if (statusFilter && order.status !== statusFilter) return false;
+    
+    // Side filter
+    if (sideFilter && order.side !== sideFilter) return false;
+    
+    return true;
+  });
+
+  // Sort the filtered orders
+  const sortedOrders = [...filteredOrders].sort((a: any, b: any) => {
+    let aValue = a[sortField];
+    let bValue = b[sortField];
+    
+    // Handle special cases for parsing
+    if (sortField === 'underlying') {
+      aValue = parseStrikeSymbol(a.strike_symbol || '').underlying;
+      bValue = parseStrikeSymbol(b.strike_symbol || '').underlying;
+    } else if (sortField === 'type') {
+      aValue = parseStrikeSymbol(a.strike_symbol || '').type;
+      bValue = parseStrikeSymbol(b.strike_symbol || '').type;
+    } else if (sortField === 'strike') {
+      aValue = Number(parseStrikeSymbol(a.strike_symbol || '').strike) || 0;
+      bValue = Number(parseStrikeSymbol(b.strike_symbol || '').strike) || 0;
+    } else if (sortField === 'pnl') {
+      aValue = Number(a.pnl || 0);
+      bValue = Number(b.pnl || 0);
+    } else if (sortField === 'entry_price' || sortField === 'exit_price') {
+      aValue = Number(a[sortField] || 0);
+      bValue = Number(b[sortField] || 0);
+    } else if (sortField === 'signal_time' || sortField === 'entry_time') {
+      aValue = new Date(a[sortField] || 0).getTime();
+      bValue = new Date(b[sortField] || 0).getTime();
+    }
+    
+    if (sortDirection === 'asc') {
+      return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+    } else {
+      return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+    }
+  });
 
   // Helper function to get balance summary for a specific broker
   const getBrokerBalance = (brokerName: string) => {
@@ -361,18 +532,20 @@ export default function Dashboard() {
       let balanceSummariesData: BrokerBalanceSummary[] = [];
       let positionsData: Position[] = [];
       let tradesData: Trade[] = [];
+      let ordersData: any[] = [];
       let systemStatusData: SystemStatus | null = null;
       let healthStatusData: HealthStatus | null = null;
       let dashboardSummaryData: DashboardSummary | null = null;
 
       // Load data concurrently for better performance
-      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, systemStatusResult, healthResult, dashboardSummaryResult] = 
+      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, ordersResult, systemStatusResult, healthResult, dashboardSummaryResult] = 
         await Promise.allSettled([
           apiClient.getStrategies(),
           apiClient.getBrokers(),
           apiClient.getBalanceSummaries(),
           apiClient.getPositions(),
           apiClient.getTrades(),
+          apiClient.getOrders(),
           apiClient.getSystemStatus(),
           apiClient.healthCheck(),
           apiClient.getDashboardSummary()
@@ -417,6 +590,14 @@ export default function Dashboard() {
         console.error('Dashboard: Failed to load trades:', tradesResult.reason);
       }
       setTrades(tradesData);
+
+      // Handle orders
+      if (ordersResult.status === 'fulfilled') {
+        ordersData = ordersResult.value;
+      } else {
+        console.error('Dashboard: Failed to load orders:', ordersResult.reason);
+      }
+      setOrders(ordersData);
 
       // Handle system status
       if (systemStatusResult.status === 'fulfilled') {
@@ -857,7 +1038,6 @@ export default function Dashboard() {
                 { id: "overview", label: "Dashboard", icon: Home },
                 { id: "strategies", label: "Strategies", icon: Zap },
                 { id: "brokers", label: "Brokers", icon: Link },
-                { id: "positions", label: "Positions", icon: BarChart3 },
                 { id: "orders", label: "Orders", icon: TrendingUp },
                 { id: "logs", label: "Logs", icon: Database },
                 { id: "health", label: "System Health", icon: Activity },
@@ -1298,195 +1478,319 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Positions Tab */}
-            {activeTab === "positions" && (
+            {/* Orders Tab */}
+            {activeTab === "orders" && (
               <div className="space-y-6">
                 {/* Header */}
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                   <div>
                     <h2 className="text-2xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-2">
                       <div className="flex items-center space-x-2">
-                        <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
-                        <span>Open Positions</span>
+                        <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
+                        <span>Orders</span>
                       </div>
                     </h2>
-                    <p className="text-[var(--muted-foreground)]">Monitor your active trading positions and P&L in real-time</p>
+                    <p className="text-[var(--muted-foreground)]">Monitor all your orders with Symbol, strike, P&L and status</p>
                   </div>
                   
-                  {/* Position Stats */}
-                  <div className="grid grid-cols-3 gap-4 text-center">
+                  {/* Order Stats */}
+                  <div className="grid grid-cols-4 gap-4 text-center">
                     <div className="backdrop-blur-xl bg-green-500/10 border border-green-500/30 rounded-2xl p-3 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300">
-                      <p className="text-xl font-bold text-green-400">{positions.length}</p>
-                      <p className="text-xs text-green-300">Total</p>
+                      <p className="text-xl font-bold text-green-400">{sortedOrders.length}</p>
+                      <p className="text-xs text-green-300">Showing</p>
                     </div>
                     <div className="backdrop-blur-xl bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300">
-                      <p className="text-xl font-bold text-blue-400">{positions.filter(p => p.pnl > 0).length}</p>
-                      <p className="text-xs text-blue-300">Profit</p>
+                      <p className="text-xl font-bold text-blue-400">{sortedOrders.filter(o => o.status === 'OPEN').length}</p>
+                      <p className="text-xs text-blue-300">Open</p>
                     </div>
-                    <div className="backdrop-blur-xl bg-red-500/10 border border-red-500/30 rounded-2xl p-3 shadow-lg shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-300">
-                      <p className="text-xl font-bold text-red-400">{positions.filter(p => p.pnl < 0).length}</p>
-                      <p className="text-xs text-red-300">Loss</p>
+                    <div className="backdrop-blur-xl bg-purple-500/10 border border-purple-500/30 rounded-2xl p-3 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300">
+                      <p className="text-xl font-bold text-purple-400">{sortedOrders.filter(o => o.status === 'CLOSED').length}</p>
+                      <p className="text-xs text-purple-300">Closed</p>
+                    </div>
+                    <div className="backdrop-blur-xl bg-orange-500/10 border border-orange-500/30 rounded-2xl p-3 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300">
+                      <p className="text-xl font-bold text-orange-400">{sortedOrders.filter(o => o.status === 'AWAITING_ENTRY').length}</p>
+                      <p className="text-xs text-orange-300">Pending</p>
                     </div>
                   </div>
                 </div>
 
-                {positions.length === 0 ? (
-                  /* Cyber-themed Empty State for Positions */
+                {/* Filters */}
+                <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Symbol</label>
+                      <select 
+                        value={symbolFilter}
+                        onChange={(e) => setSymbolFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">All Symbols</option>
+                        {Array.from(new Set(orders.map(o => parseStrikeSymbol(o.strike_symbol || '').underlying))).filter(Boolean).map(symbol => (
+                          <option key={symbol} value={symbol}>{symbol}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Type</label>
+                      <select 
+                        value={typeFilter}
+                        onChange={(e) => setTypeFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">All Types</option>
+                        <option value="CE">Call (CE)</option>
+                        <option value="PE">Put (PE)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Side</label>
+                      <select 
+                        value={sideFilter}
+                        onChange={(e) => setSideFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">All Sides</option>
+                        <option value="BUY">Buy</option>
+                        <option value="SELL">Sell</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--foreground)] mb-2">P&L Filter</label>
+                      <select 
+                        value={pnlFilter}
+                        onChange={(e) => setPnlFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">All P&L</option>
+                        <option value="profit">Profit Only</option>
+                        <option value="loss">Loss Only</option>
+                        <option value="breakeven">Break Even</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Status</label>
+                      <select 
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">All Status</option>
+                        <option value="OPEN">Open</option>
+                        <option value="CLOSED">Closed</option>
+                        <option value="AWAITING_ENTRY">Pending</option>
+                        <option value="CANCELLED">Cancelled</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {sortedOrders.length === 0 ? (
+                  /* Empty State for Orders */
                   <div className="relative backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-12 text-center shadow-2xl shadow-[var(--accent)]/20 overflow-hidden">
-                    {/* Animated Background */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-[var(--accent)]/10 via-[var(--background)] to-blue-900/10"></div>
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[var(--accent)]/5 to-transparent"></div>
-                    
-                    {/* Floating Orbs */}
-                    <div className="absolute top-8 left-8 w-4 h-4 bg-[var(--accent)]/30 rounded-full animate-pulse"></div>
-                    <div className="absolute top-16 right-12 w-3 h-3 bg-blue-400/20 rounded-full animate-ping"></div>
-                    <div className="absolute bottom-12 left-16 w-2 h-2 bg-purple-400/40 rounded-full animate-bounce"></div>
-                    
                     <div className="relative z-10">
-                      {/* Main Image */}
-                      <div className="mb-8 relative">
-                        <div className="w-48 h-48 mx-auto relative">
-                          <img 
-                            src="/brokers/no-positions.png" 
-                            alt="No Positions" 
-                            className="w-full h-full object-contain filter drop-shadow-2xl"
-                          />
-                          {/* Glow Effect */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent)]/20 to-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
-                        </div>
+                      <div className="w-16 h-16 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <TrendingUp className="w-8 h-8 text-[var(--accent)]" />
                       </div>
-
-                      {/* Title with Gradient */}
                       <h3 className="text-3xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-4">
-                        No Active Positions
+                        {orders.length === 0 ? 'No Orders Found' : 'No Orders Match Filters'}
                       </h3>
-                      
-                      {/* Description */}
                       <p className="text-[var(--muted-foreground)] text-lg mb-8 max-w-md mx-auto leading-relaxed">
-                        Your portfolio is clean and ready for action. Deploy your strategies to start building positions.
+                        {orders.length === 0 ? 'Start trading with your strategies to see orders here.' : 'Try adjusting your filters to see more orders.'}
                       </p>
-
-                      {/* Professional Action Buttons */}
-                      {/* <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <button className="bg-gradient-to-r from-[var(--accent)] to-blue-500 hover:from-[var(--accent)]/80 hover:to-blue-400 text-black font-bold px-8 py-3 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-[var(--accent)]/25 hover:shadow-[var(--accent)]/40">
-                          <span className="flex items-center space-x-2">
-                            <span>⚡</span>
-                            <span>View Strategies</span>
-                          </span>
-                        </button>
-                        <button className="bg-[var(--background)]/50 hover:bg-[var(--background)]/70 text-[var(--accent)] border border-[var(--accent)]/50 hover:border-[var(--accent)] font-medium px-8 py-3 rounded-lg transition-all duration-300 backdrop-blur-sm">
-                          <span className="flex items-center space-x-2">
-                            <span>📊</span>
-                            <span>Market Overview</span>
-                          </span>
-                        </button>
-                      </div> */}
-
-                      {/* Professional Stats Dashboard */}
-                      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-                        <div className="backdrop-blur-sm bg-gradient-to-br from-purple-500/10 to-[var(--background)]/40 border border-purple-500/30 rounded-xl p-6 relative overflow-hidden group">
-                          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                          <div className="relative">
-                            <div className="flex items-center space-x-4 mb-3">
-                              <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                                <span className="text-2xl">⚡</span>
-                              </div>
-                              <div>
-                                <p className="text-purple-400 font-bold text-lg">Lightning Fast</p>
-                                <p className="text-[var(--muted-foreground)] text-sm">Ultra-low latency execution</p>
-                              </div>
-                            </div>
-                            <div className="bg-[var(--background)]/40 rounded-lg p-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-[var(--muted-foreground)]">Response Time</span>
-                                <span className="text-purple-400 font-mono">&lt; 50ms</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="backdrop-blur-sm bg-gradient-to-br from-[var(--accent)]/10 to-[var(--background)]/40 border border-[var(--accent)]/30 rounded-xl p-6 relative overflow-hidden group">
-                          <div className="absolute inset-0 bg-gradient-to-br from-[var(--accent)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                          <div className="relative">
-                            <div className="flex items-center space-x-4 mb-3">
-                              <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-xl flex items-center justify-center">
-                                <span className="text-2xl">🔒</span>
-                              </div>
-                              <div>
-                                <p className="text-[var(--accent)] font-bold text-lg">Secure Trading</p>
-                                <p className="text-[var(--muted-foreground)] text-sm">Bank-grade encryption</p>
-                              </div>
-                            </div>
-                            <div className="bg-[var(--background)]/40 rounded-lg p-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-[var(--muted-foreground)]">Security Level</span>
-                                <span className="text-[var(--accent)] font-mono">256-bit</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="backdrop-blur-sm bg-gradient-to-br from-blue-500/10 to-[var(--background)]/40 border border-blue-500/30 rounded-xl p-6 relative overflow-hidden group">
-                          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                          <div className="relative">
-                            <div className="flex items-center space-x-4 mb-3">
-                              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                                <span className="text-2xl">🌐</span>
-                              </div>
-                              <div>
-                                <p className="text-blue-400 font-bold text-lg">Multi-Broker</p>
-                                <p className="text-[var(--muted-foreground)] text-sm">Unified execution</p>
-                              </div>
-                            </div>
-                            <div className="bg-[var(--background)]/40 rounded-lg p-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-[var(--muted-foreground)]">Brokers Ready</span>
-                                <span className="text-blue-400 font-mono">All Active</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div> */}
                     </div>
                   </div>
                 ) : (
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-purple-500/30 rounded-lg overflow-hidden shadow-lg shadow-purple-500/10">
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg overflow-hidden shadow-lg">
                     <table className="w-full">
-                      <thead className="bg-[var(--background)]/50 border-b border-purple-500/30">
+                      <thead className="bg-[var(--background)]/50 border-b border-[var(--border)]">
                         <tr>
-                          <th className="px-4 py-3 text-left text-purple-400">Broker</th>
-                          <th className="px-4 py-3 text-left text-purple-400">Symbol</th>
-                          <th className="px-4 py-3 text-left text-purple-400">Side</th>
-                          <th className="px-4 py-3 text-left text-purple-400">Quantity</th>
-                          <th className="px-4 py-3 text-left text-purple-400">Price</th>
-                          <th className="px-4 py-3 text-left text-purple-400">Order Type</th>
-                          <th className="px-4 py-3 text-left text-purple-400">Status</th>
-                          <th className="px-4 py-3 text-left text-purple-400">Executed At</th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('underlying')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Symbol</span>
+                              {sortField === 'underlying' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('strike')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Strike</span>
+                              {sortField === 'strike' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('type')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Type</span>
+                              {sortField === 'type' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('pnl')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>P&L</span>
+                              {sortField === 'pnl' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('status')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Status</span>
+                              {sortField === 'status' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('side')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Side</span>
+                              {sortField === 'side' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('qty')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Qty</span>
+                              {sortField === 'qty' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('entry_price')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Entry Price</span>
+                              {sortField === 'entry_price' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('exit_price')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Exit Price</span>
+                              {sortField === 'exit_price' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('entry_time')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Entry Time</span>
+                              {sortField === 'entry_time' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {trades.slice(0, 50).map((trade) => (
-                          <tr key={trade.id} className="border-t border-purple-500/20 hover:bg-purple-500/5 transition duration-200">
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">{trade.broker_name}</td>
-                            <td className="px-4 py-3 font-medium text-[var(--foreground)]">{trade.symbol}</td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-1 rounded text-xs ${
-                                trade.side === 'BUY' 
-                                  ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                                  : 'bg-red-500/20 text-red-400 border border-red-500/50'
-                              }`}>
-                                {trade.side}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">{trade.quantity}</td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">₹{trade.price.toFixed(2)}</td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">{trade.order_type}</td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">{trade.status}</td>
-                            <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                              {new Date(trade.executed_at).toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
+                        {sortedOrders.map((order) => {
+                          const parsed = parseStrikeSymbol(order.strike_symbol || '');
+                          return (
+                            <tr key={order.id} className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
+                              <td className="px-4 py-3 font-medium text-[var(--foreground)]">
+                                {parsed.underlying || 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
+                                {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  parsed.type === 'CE' 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                    : parsed.type === 'PE'
+                                      ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                      : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                }`}>
+                                  {parsed.type || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`font-bold ${
+                                  order.pnl > 0 
+                                    ? 'text-green-400' 
+                                    : order.pnl < 0 
+                                      ? 'text-red-400' 
+                                      : 'text-[var(--muted-foreground)]'
+                                }`}>
+                                  {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  order.status === 'OPEN' 
+                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                                    : order.status === 'CLOSED'
+                                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                                      : order.status === 'AWAITING_ENTRY'
+                                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                                        : order.status === 'CANCELLED'
+                                          ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                }`}>
+                                  {order.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  order.side === 'BUY' 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                    : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                }`}>
+                                  {order.side || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-[var(--muted-foreground)]">{order.qty || 0}</td>
+                              <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
+                                {order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                }) : 'N/A'}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

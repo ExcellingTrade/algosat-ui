@@ -126,9 +126,21 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
       
       setIsLoadingStats(true);
       try {
-        const statsPromises = symbols.map(symbol => 
-          apiClient.getSymbolStats(symbol.id).catch(error => {
-            console.error(`Failed to fetch stats for symbol ${symbol.id}:`, error);
+        // Get real P&L and trade statistics from orders table for each symbol
+        const statsPromises = symbols.map(async symbol => {
+          try {
+            const ordersSummary = await apiClient.getOrdersSummaryBySymbol(symbol.symbol);
+            return {
+              symbol_id: symbol.id,
+              live_trades: ordersSummary.open_trades || 0,
+              live_pnl: ordersSummary.live_pnl || 0.0,
+              total_trades: ordersSummary.total_trades || 0,
+              total_pnl: ordersSummary.total_pnl || 0.0,
+              all_trades: ordersSummary.total_trades || 0,
+              enabled: symbol.enabled || false
+            };
+          } catch (error) {
+            console.error(`Failed to fetch orders summary for symbol ${symbol.symbol}:`, error);
             return {
               symbol_id: symbol.id,
               live_trades: 0,
@@ -138,8 +150,8 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
               all_trades: 0,
               enabled: symbol.enabled || false
             };
-          })
-        );
+          }
+        });
         
         const allStats = await Promise.all(statsPromises);
         const statsMap = allStats.reduce((acc, stat) => {
@@ -581,8 +593,9 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                   <tr>
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Symbol</th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Config</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">P&L (Total)</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Live / Total</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Overall P&L</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Today</th>
+                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Trades</th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Status</th>
                   </tr>
                 </thead>
@@ -633,8 +646,13 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <span className={`font-bold ${getPnLColor(symbol.current_pnl || symbol.currentPnL || 0)}`}>
-                          {formatCurrency(symbol.current_pnl || symbol.currentPnL || 0)}
+                        <span className={`font-bold ${getPnLColor(symbol.total_pnl || symbol.currentPnL || 0)}`}>
+                          {formatCurrency(symbol.total_pnl || symbol.currentPnL || 0)}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className={`font-medium ${getPnLColor(symbol.live_pnl || 0)}`}>
+                          {formatCurrency(symbol.live_pnl || 0)}
                         </span>
                       </td>
                       <td className="py-4 px-6">
@@ -643,7 +661,7 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                           className="flex items-center space-x-2 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 text-sm border border-blue-500/30 hover:border-blue-500/50"
                         >
                           <Eye className="w-3 h-3" />
-                          <span className="font-medium">{symbol.trade_count || symbol.tradeCount || 0}</span>
+                          <span className="font-medium">{symbol.total_trades || symbol.tradeCount || 0}</span>
                         </button>
                       </td>
                       <td className="py-4 px-6">
@@ -691,15 +709,16 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
 
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="text-center">
-                      <p className="text-xs text-[var(--muted-foreground)]">Total P&L</p>
+                      <p className="text-xs text-[var(--muted-foreground)]">Overall P&L</p>
                       <p className={`font-bold text-sm ${getPnLColor(symbol.total_pnl || symbol.currentPnL || 0)}`}>
                         ₹{Math.round(Math.abs(symbol.total_pnl || symbol.currentPnL || 0) / 1000)}K
                       </p>
-                      {(symbol.live_pnl || 0) !== 0 && (
-                        <p className={`text-xs ${getPnLColor(symbol.live_pnl || 0)}`}>
-                          Live: ₹{Math.round(Math.abs(symbol.live_pnl || 0) / 1000)}K
-                        </p>
-                      )}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-[var(--muted-foreground)]">Today</p>
+                      <p className={`font-medium text-sm ${getPnLColor(symbol.live_pnl || 0)}`}>
+                        ₹{Math.round(Math.abs(symbol.live_pnl || 0) / 1000)}K
+                      </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-[var(--muted-foreground)]">Trades</p>
@@ -707,17 +726,8 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                         onClick={() => onViewTrades(symbol)}
                         className="font-medium text-sm text-blue-400 hover:text-blue-300 transition-colors underline-offset-2 hover:underline"
                       >
-                        {symbol.live_trades || 0}/{symbol.total_trades || 0}
+                        {symbol.total_trades || symbol.tradeCount || 0}
                       </button>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        Total: {symbol.all_trades || symbol.tradeCount || 0}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-[var(--muted-foreground)]">Config</p>
-                      <p className="font-medium text-xs text-[var(--foreground)] truncate">
-                        {symbol.config_name?.split(' ')[0] || `Config ${symbol.config_id}`}
-                      </p>
                     </div>
                   </div>
 

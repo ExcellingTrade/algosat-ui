@@ -81,8 +81,9 @@ export interface Trade {
   exitTime?: string;
   exitPrice?: number;
   pnl: number;
-  status: 'OPEN' | 'CLOSED';
+  status: 'AWAITING_ENTRY' | 'OPEN' | 'CLOSED' | 'CANCELLED' | 'FAILED';
   quantity: number;
+  traded_price?: number;  // New field for traded price
 }
 
 type ViewMode = 'strategies' | 'symbols' | 'trades' | 'configs';

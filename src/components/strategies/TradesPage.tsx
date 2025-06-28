@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Strategy, StrategySymbol, Trade } from "./StrategiesPage";
+import { useState, useEffect, useMemo } from "react";
+import { Strategy, StrategySymbol } from "./StrategiesPage";
+import { apiClient } from "../../lib/api";
 import { 
   Calendar,
   TrendingUp,
@@ -12,8 +13,27 @@ import {
   Filter,
   Download,
   BarChart3,
-  Zap
+  Zap,
+  ArrowUpDown
 } from "lucide-react";
+
+interface Order {
+  id: number;
+  strategy_symbol_id: number;
+  strike_symbol: string;
+  pnl: number;
+  entry_price: number;
+  exit_price?: number;
+  signal_time: string;
+  entry_time?: string;
+  exit_time?: string;
+  status: string;
+  quantity?: number;
+  traded_price?: number;
+  broker_name?: string;
+  order_type?: string;
+  side?: string;
+}
 
 interface TradesPageProps {
   symbol: StrategySymbol;
@@ -21,86 +41,291 @@ interface TradesPageProps {
 }
 
 export function TradesPage({ symbol, strategy }: TradesPageProps) {
-  const [selectedDate, setSelectedDate] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'closed'>('all');
-
-  // Sample trades data - replace with API call
-  const [trades] = useState<Trade[]>([
-    {
-      id: 1,
-      symbolId: symbol.id,
-      symbol: symbol.symbol,
-      strike: "21000CE",
-      type: 'CE',
-      entryTime: "2024-06-09T09:25:00Z",
-      entryPrice: 125.50,
-      exitTime: "2024-06-09T10:15:00Z",
-      exitPrice: 142.25,
-      pnl: 1675.00,
-      status: 'CLOSED',
-      quantity: 100
-    },
-    {
-      id: 2,
-      symbolId: symbol.id,
-      symbol: symbol.symbol,
-      strike: "20800PE",
-      type: 'PE',
-      entryTime: "2024-06-09T10:30:00Z",
-      entryPrice: 98.75,
-      exitTime: "2024-06-09T11:45:00Z",
-      exitPrice: 87.20,
-      pnl: -1155.00,
-      status: 'CLOSED',
-      quantity: 100
-    },
-    {
-      id: 3,
-      symbolId: symbol.id,
-      symbol: symbol.symbol,
-      strike: "21200CE",
-      type: 'CE',
-      entryTime: "2024-06-09T14:15:00Z",
-      entryPrice: 178.30,
-      pnl: -890.00,
-      status: 'OPEN',
-      quantity: 50
-    },
-    {
-      id: 4,
-      symbolId: symbol.id,
-      symbol: symbol.symbol,
-      strike: "20900PE",
-      type: 'PE',
-      entryTime: "2024-06-09T14:45:00Z",
-      entryPrice: 156.85,
-      pnl: 425.00,
-      status: 'OPEN',
-      quantity: 25
-    }
-  ]);
-
-  const filteredTrades = trades.filter(trade => {
-    if (filterStatus !== 'all' && trade.status.toLowerCase() !== filterStatus) {
-      return false;
-    }
-    if (selectedDate !== 'all') {
-      const tradeDate = new Date(trade.entryTime).toISOString().split('T')[0];
-      return tradeDate === selectedDate;
-    }
-    return true;
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    symbol: '',
+    type: 'all',
+    pnl: 'all',
+    status: 'all',
+    side: 'all',
+    date: 'all'
   });
+  
+  // Sort state
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: 'asc' | 'desc';
+  }>({
+    key: 'signal_time',
+    direction: 'desc'
+  });
+
+  // Function to parse strike symbol with intelligent parsing for different formats
+  const parseStrikeSymbol = (strikeSymbol: string) => {
+    if (!strikeSymbol) {
+      return { exchange: 'N/A', underlying: 'N/A', strike: 'N/A', type: 'N/A', expiry: 'N/A' };
+    }
+
+    // Remove exchange prefix if present (e.g., "NSE:")
+    const symbolPart = strikeSymbol.includes(':') ? strikeSymbol.split(':')[1] : strikeSymbol;
+    
+    // Extract type (CE or PE) from the end
+    const typeMatch = symbolPart.match(/(CE|PE)$/);
+    const type = typeMatch ? typeMatch[1] : 'N/A';
+    
+    if (!typeMatch) {
+      return { exchange: 'N/A', underlying: symbolPart, strike: 'N/A', type: 'N/A', expiry: 'N/A' };
+    }
+
+    // Remove type from symbol to get the rest
+    const withoutType = symbolPart.slice(0, -2);
+    const exchange = strikeSymbol.includes(':') ? strikeSymbol.split(':')[0] : 'NSE';
+    
+    // Intelligent parsing based on different patterns
+    let underlying = 'N/A';
+    let strike = 'N/A';
+    let expiry = 'N/A';
+
+    // Pattern 1: BANKNIFTY25JUL32000CE -> BANKNIFTY, 25JUL, 32000
+    if (withoutType.match(/^BANKNIFTY\d{2}[A-Z]{3}\d+$/)) {
+      const match = withoutType.match(/^(BANKNIFTY)(\d{2}[A-Z]{3})(\d+)$/);
+      if (match) {
+        underlying = match[1];
+        expiry = match[2];
+        strike = match[3];
+      }
+    }
+    // Pattern 2: NIFTY2570325600CE -> NIFTY, complex expiry/strike pattern
+    else if (withoutType.match(/^NIFTY\d+$/)) {
+      const match = withoutType.match(/^(NIFTY)(\d+)$/);
+      if (match) {
+        underlying = match[1];
+        const numbers = match[2];
+        // For NIFTY, assume last 5 digits are strike, rest is expiry
+        if (numbers.length >= 5) {
+          strike = numbers.slice(-5);
+          expiry = numbers.slice(0, -5);
+        } else {
+          strike = numbers;
+          expiry = 'N/A';
+        }
+      }
+    }
+    // Pattern 3: SBIN25JUL520CE -> SBIN, 25JUL, 520 (Equity with monthly expiry)
+    else if (withoutType.match(/^[A-Z]+\d{2}[A-Z]{3}\d+$/)) {
+      const match = withoutType.match(/^([A-Z]+)(\d{2}[A-Z]{3})(\d+)$/);
+      if (match) {
+        underlying = match[1];
+        expiry = match[2];
+        strike = match[3];
+      }
+    }
+    // Pattern 4: Generic fallback - try to extract last digits as strike
+    else {
+      const strikeMatch = withoutType.match(/(\d+)$/);
+      if (strikeMatch) {
+        strike = strikeMatch[1];
+        const remainingPart = withoutType.slice(0, -strikeMatch[1].length);
+        
+        // Try to extract expiry (digits + letters pattern)
+        const expiryMatch = remainingPart.match(/(\d{2}[A-Z]{3})$/);
+        if (expiryMatch) {
+          expiry = expiryMatch[1];
+          underlying = remainingPart.slice(0, -expiryMatch[1].length);
+        } else {
+          underlying = remainingPart;
+        }
+      } else {
+        underlying = withoutType;
+      }
+    }
+
+    return { exchange, underlying, strike, type, expiry };
+  };
+
+
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Apply filters and sorting using the same logic as Orders tab
+  const filteredAndSortedOrders = useMemo(() => {
+    let filtered = orders.filter((order: any) => {
+      const parsed = parseStrikeSymbol(order.strike_symbol || '');
+      
+      // Type filter  
+      if (filters.type !== 'all' && parsed.type !== filters.type) {
+        return false;
+      }
+      
+      // P&L filter
+      if (filters.pnl !== 'all') {
+        const pnl = Number(order.pnl || 0);
+        if (filters.pnl === 'profit' && pnl <= 0) return false;
+        if (filters.pnl === 'loss' && pnl >= 0) return false;
+        if (filters.pnl === 'breakeven' && pnl !== 0) return false;
+      }
+      
+      // Status filter
+      if (filters.status !== 'all' && order.status !== filters.status) {
+        return false;
+      }
+      
+      // Side filter
+      if (filters.side !== 'all' && order.side !== filters.side) {
+        return false;
+      }
+      
+      // Date filter
+      if (filters.date !== 'all') {
+        const orderDate = new Date(order.signal_time).toISOString().split('T')[0];
+        if (orderDate !== filters.date) return false;
+      }
+      
+      return true;
+    });
+
+    // Apply sorting
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        let aVal: any = a[sortConfig.key as keyof typeof a];
+        let bVal: any = b[sortConfig.key as keyof typeof b];
+        
+        // Handle special cases for parsing
+        if (sortConfig.key === 'underlying') {
+          aVal = parseStrikeSymbol(a.strike_symbol || '').underlying;
+          bVal = parseStrikeSymbol(b.strike_symbol || '').underlying;
+        } else if (sortConfig.key === 'type') {
+          aVal = parseStrikeSymbol(a.strike_symbol || '').type;
+          bVal = parseStrikeSymbol(b.strike_symbol || '').type;
+        } else if (sortConfig.key === 'strike') {
+          aVal = Number(parseStrikeSymbol(a.strike_symbol || '').strike) || 0;
+          bVal = Number(parseStrikeSymbol(b.strike_symbol || '').strike) || 0;
+        } else if (sortConfig.key === 'pnl') {
+          aVal = Number(a.pnl || 0);
+          bVal = Number(b.pnl || 0);
+        }
+        
+        // Handle undefined values
+        if (aVal === undefined && bVal === undefined) return 0;
+        if (aVal === undefined) return 1;
+        if (bVal === undefined) return -1;
+        
+        // Handle different data types
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+        
+        if (aVal < bVal) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aVal > bVal) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [orders, filters, sortConfig]);
+
+  const filteredTrades = filteredAndSortedOrders;
 
   const formatCurrency = (amount: number) => {
     const isPositive = amount >= 0;
     return `${isPositive ? '+' : ''}₹${Math.abs(amount).toLocaleString()}`;
   };
 
-  const getPnLColor = (amount: number) => {
-    return amount >= 0 ? 'text-green-400' : 'text-red-400';
+  // Color utility functions for enhanced visual display
+  const getPnLColor = (pnl: number) => {
+    if (pnl > 0) {
+      return 'text-emerald-400 font-bold';
+    } else if (pnl < 0) {
+      return 'text-red-400 font-bold';
+    } else {
+      return 'text-gray-400 font-medium';
+    }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status?.toUpperCase()) {
+      case 'OPEN':
+      case 'ACTIVE':
+      case 'PENDING':
+        return 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+      case 'CLOSED':
+      case 'COMPLETED':
+      case 'FILLED':
+        return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+      case 'CANCELLED':
+      case 'REJECTED':
+        return 'bg-red-500/20 text-red-400 border border-red-500/30';
+      case 'PARTIALLY_FILLED':
+        return 'bg-orange-500/20 text-orange-400 border border-orange-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+    }
+  };
+
+  const getSideColor = (side: string) => {
+    switch (side?.toUpperCase()) {
+      case 'BUY':
+        return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+      case 'SELL':
+        return 'bg-red-500/20 text-red-400 border border-red-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type?.toUpperCase()) {
+      case 'CE':
+        return 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+      case 'PE':
+        return 'bg-purple-500/20 text-purple-400 border border-purple-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+    }
+  };
+
+  // Fetch trades for this specific symbol using the symbol ID
+  useEffect(() => {
+    const fetchTrades = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        console.log('Fetching trades for symbol ID:', symbol.id);
+        
+        // Use the existing getSymbolTrades API that takes symbol_id directly
+        const response = await apiClient.getSymbolTrades(symbol.id, 1000);
+        console.log('Symbol trades response:', response);
+        
+        setOrders(response.trades || []);
+      } catch (err) {
+        console.error('Failed to fetch trades:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load trades');
+        setOrders([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (symbol.id) {
+      fetchTrades();
+    }
+  }, [symbol.id]);
+
   const formatTime = (dateString: string) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleTimeString('en-IN', {
       hour: '2-digit',
       minute: '2-digit',
@@ -109,6 +334,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-IN', {
       day: '2-digit',
       month: 'short',
@@ -116,20 +342,69 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     });
   };
 
-  const getStrikeTypeColor = (type: 'PE' | 'CE') => {
-    return type === 'CE' ? 'text-green-400 bg-green-500/20' : 'text-red-400 bg-red-500/20';
+  const getStrikeTypeColor = (type: string) => {
+    if (type === 'CE') return 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 shadow-sm';
+    if (type === 'PE') return 'text-rose-400 bg-rose-500/20 border border-rose-500/30 shadow-sm';
+    return 'text-indigo-400 bg-indigo-500/20 border border-indigo-500/30 shadow-sm';
   };
 
-  // Calculate summary stats
-  const totalPnL = filteredTrades.reduce((sum, trade) => sum + trade.pnl, 0);
-  const openTrades = filteredTrades.filter(t => t.status === 'OPEN').length;
-  const closedTrades = filteredTrades.filter(t => t.status === 'CLOSED').length;
-  const winningTrades = filteredTrades.filter(t => t.status === 'CLOSED' && t.pnl > 0).length;
-  const winRate = closedTrades > 0 ? Math.round((winningTrades / closedTrades) * 100) : 0;
+  // Calculate summary stats from filtered orders
+  const stats = useMemo(() => {
+    const totalPnL = filteredAndSortedOrders.reduce((sum, order) => sum + (order.pnl || 0), 0);
+    const totalOrders = filteredAndSortedOrders.length;
+    const openOrders = filteredAndSortedOrders.filter(o => o.status === 'OPEN').length;
+    const closedOrders = filteredAndSortedOrders.filter(o => o.status === 'CLOSED').length;
+    const winningOrders = filteredAndSortedOrders.filter(o => o.status === 'CLOSED' && (o.pnl || 0) > 0).length;
+    const winRate = closedOrders > 0 ? Math.round((winningOrders / closedOrders) * 100) : 0;
 
-  const availableDates = Array.from(new Set(
-    trades.map(trade => new Date(trade.entryTime).toISOString().split('T')[0])
-  )).sort().reverse();
+    return { totalPnL, totalOrders, openOrders, closedOrders, winRate };
+  }, [filteredAndSortedOrders]);
+
+  // Get available dates for filter
+  const availableDates = useMemo(() => {
+    const dates = orders
+      .map(order => order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '')
+      .filter(date => date !== '')
+      .filter((date, index, arr) => arr.indexOf(date) === index)
+      .sort()
+      .reverse();
+    return dates;
+  }, [orders]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-4 shadow-lg">
+          <div className="animate-pulse">
+            <div className="h-6 bg-[var(--muted)]/20 rounded w-1/3 mb-2"></div>
+            <div className="h-4 bg-[var(--muted)]/20 rounded w-1/2"></div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-5 gap-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-lg p-3">
+              <div className="animate-pulse">
+                <div className="h-3 bg-[var(--muted)]/20 rounded w-full mb-2"></div>
+                <div className="h-6 bg-[var(--muted)]/20 rounded w-2/3 mx-auto"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
+        <div className="text-center">
+          <h3 className="text-red-400 font-semibold text-lg mb-2">Error Loading Trades</h3>
+          <p className="text-red-400/80">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -147,7 +422,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
               <span className="text-sm text-[var(--muted-foreground)] truncate">from {strategy.name}</span>
             </div>
             <p className="text-[var(--muted-foreground)] text-sm">
-              Config: <span className="text-[var(--accent)]">{symbol.configName}</span>
+              Config: <span className="text-[var(--accent)]">{symbol.config_name || 'Default'}</span>
             </p>
           </div>
           <button className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 border border-blue-500/30 hover:border-blue-500/50 flex-shrink-0 w-full sm:w-auto">
@@ -159,43 +434,61 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
 
       {/* Trades Summary Stats */}
       <div className="grid grid-cols-5 gap-2 md:gap-3">
-        <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-lg p-2 md:p-3">
+        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-600/30 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
-            <p className="text-[var(--muted-foreground)] text-xs">Total</p>
-            <p className="text-sm md:text-xl font-bold text-[var(--foreground)]">{filteredTrades.length}</p>
+            <div className="flex items-center justify-center mb-2">
+              <BarChart3 className="w-4 h-4 text-slate-400" />
+            </div>
+            <p className="text-slate-300 text-xs font-medium">Total</p>
+            <p className="text-sm md:text-xl font-bold text-slate-100">{stats.totalOrders}</p>
           </div>
         </div>
 
-        <div className="bg-[var(--card-background)]/95 border border-green-500/30 rounded-lg p-2 md:p-3">
+        <div className="bg-gradient-to-br from-emerald-900/50 to-emerald-800/50 border border-emerald-500/40 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
-            <p className="text-green-300 text-xs">Open</p>
-            <p className="text-sm md:text-xl font-bold text-green-400">{openTrades}</p>
+            <div className="flex items-center justify-center mb-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-emerald-300 text-xs font-medium">Open</p>
+            <p className="text-sm md:text-xl font-bold text-emerald-400">{stats.openOrders}</p>
           </div>
         </div>
 
-        <div className="bg-[var(--card-background)]/95 border border-blue-500/30 rounded-lg p-2 md:p-3">
+        <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/50 border border-blue-500/40 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
-            <p className="text-blue-300 text-xs">Closed</p>
-            <p className="text-sm md:text-xl font-bold text-blue-400">{closedTrades}</p>
+            <div className="flex items-center justify-center mb-2">
+              <Clock className="w-4 h-4 text-blue-400" />
+            </div>
+            <p className="text-blue-300 text-xs font-medium">Closed</p>
+            <p className="text-sm md:text-xl font-bold text-blue-400">{stats.closedOrders}</p>
           </div>
         </div>
 
-        <div className="bg-[var(--card-background)]/95 border border-purple-500/30 rounded-lg p-2 md:p-3">
+        <div className="bg-gradient-to-br from-purple-900/50 to-purple-800/50 border border-purple-500/40 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
-            <p className="text-purple-300 text-xs">Win Rate</p>
-            <p className="text-sm md:text-xl font-bold text-purple-400">{winRate}%</p>
+            <div className="flex items-center justify-center mb-2">
+              <Target className="w-4 h-4 text-purple-400" />
+            </div>
+            <p className="text-purple-300 text-xs font-medium">Win Rate</p>
+            <p className="text-sm md:text-xl font-bold text-purple-400">{stats.winRate}%</p>
           </div>
         </div>
 
-        <div className="bg-[var(--card-background)]/95 border border-yellow-500/30 rounded-lg p-2 md:p-3">
+        <div className={`bg-gradient-to-br ${stats.totalPnL >= 0 ? 'from-emerald-900/50 to-emerald-800/50 border-emerald-500/40' : 'from-red-900/50 to-red-800/50 border-red-500/40'} border rounded-xl p-2 md:p-4 shadow-lg`}>
           <div className="text-center space-y-1">
-            <p className="text-yellow-300 text-xs">P&L</p>
-            <p className={`text-sm md:text-xl font-bold ${getPnLColor(totalPnL)}`}>
+            <div className="flex items-center justify-center mb-2">
+              {stats.totalPnL >= 0 ? 
+                <TrendingUp className="w-4 h-4 text-emerald-400" /> : 
+                <TrendingDown className="w-4 h-4 text-red-400" />
+              }
+            </div>
+            <p className={`text-xs font-medium ${stats.totalPnL >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>P&L</p>
+            <p className={`text-sm md:text-xl font-bold ${getPnLColor(stats.totalPnL)}`}>
               <span className="md:hidden">
-                {totalPnL >= 0 ? '+' : ''}₹{(Math.abs(totalPnL) / 1000).toFixed(0)}K
+                {stats.totalPnL >= 0 ? '+' : ''}₹{(Math.abs(stats.totalPnL) / 1000).toFixed(0)}K
               </span>
               <span className="hidden md:inline">
-                {formatCurrency(totalPnL)}
+                {formatCurrency(stats.totalPnL)}
               </span>
             </p>
           </div>
@@ -204,211 +497,365 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
 
       {/* Filters */}
       <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-3 md:p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4">
-          <div className="flex items-center space-x-2 flex-shrink-0">
-            <Filter className="w-4 h-4 text-[var(--muted-foreground)]" />
-            <span className="text-sm font-medium text-[var(--foreground)]">Filters:</span>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-1">
+        <div className="flex items-center space-x-2 mb-3">
+          <Filter className="w-4 h-4 text-[var(--accent)]" />
+          <h3 className="text-sm font-semibold text-[var(--foreground)]">Filters</h3>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
+          {/* Type Filter */}
+          <div>
+            <label className="block text-xs text-[var(--muted-foreground)] mb-1">Type</label>
             <select
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="flex-1 sm:flex-none px-3 py-2 bg-[var(--background)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+              value={filters.type}
+              onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
+              className="w-full px-2 py-1 bg-[var(--background)]/50 border border-[var(--border)] rounded text-xs focus:outline-none focus:border-[var(--accent)]"
+            >
+              <option value="all">All Types</option>
+              <option value="CE">Call (CE)</option>
+              <option value="PE">Put (PE)</option>
+            </select>
+          </div>
+
+          {/* P&L Filter */}
+          <div>
+            <label className="block text-xs text-[var(--muted-foreground)] mb-1">P&L</label>
+            <select
+              value={filters.pnl}
+              onChange={(e) => setFilters(prev => ({ ...prev, pnl: e.target.value }))}
+              className="w-full px-2 py-1 bg-[var(--background)]/50 border border-[var(--border)] rounded text-xs focus:outline-none focus:border-[var(--accent)]"
+            >
+              <option value="all">All P&L</option>
+              <option value="profit">Profit</option>
+              <option value="loss">Loss</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-xs text-[var(--muted-foreground)] mb-1">Status</label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+              className="w-full px-2 py-1 bg-[var(--background)]/50 border border-[var(--border)] rounded text-xs focus:outline-none focus:border-[var(--accent)]"
+            >
+              <option value="all">All Status</option>
+              <option value="AWAITING_ENTRY">Awaiting Entry</option>
+              <option value="OPEN">Open</option>
+              <option value="CLOSED">Closed</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="FAILED">Failed</option>
+            </select>
+          </div>
+
+          {/* Side Filter */}
+          <div>
+            <label className="block text-xs text-[var(--muted-foreground)] mb-1">Side</label>
+            <select
+              value={filters.side}
+              onChange={(e) => setFilters(prev => ({ ...prev, side: e.target.value }))}
+              className="w-full px-2 py-1 bg-[var(--background)]/50 border border-[var(--border)] rounded text-xs focus:outline-none focus:border-[var(--accent)]"
+            >
+              <option value="all">All Sides</option>
+              <option value="BUY">Buy</option>
+              <option value="SELL">Sell</option>
+            </select>
+          </div>
+
+          {/* Date Filter */}
+          <div>
+            <label className="block text-xs text-[var(--muted-foreground)] mb-1">Date</label>
+            <select
+              value={filters.date}
+              onChange={(e) => setFilters(prev => ({ ...prev, date: e.target.value }))}
+              className="w-full px-2 py-1 bg-[var(--background)]/50 border border-[var(--border)] rounded text-xs focus:outline-none focus:border-[var(--accent)]"
             >
               <option value="all">All Dates</option>
               {availableDates.map(date => (
-                <option key={date} value={date}>
-                  {formatDate(date + 'T00:00:00Z')}
-                </option>
+                <option key={date} value={date}>{formatDate(date)}</option>
               ))}
             </select>
+          </div>
+        </div>
 
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'open' | 'closed')}
-              className="flex-1 sm:flex-none px-3 py-2 bg-[var(--background)]/50 border border-[var(--border)] rounded-lg text-[var(--foreground)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50"
+        {/* Filter Summary */}
+        <div className="mt-3 pt-3 border-t border-[var(--border)]/30">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[var(--muted-foreground)]">
+              Showing {filteredAndSortedOrders.length} of {orders.length} trades
+            </span>
+            <button
+              onClick={() => setFilters({
+                symbol: '',
+                type: 'all',
+                pnl: 'all',
+                status: 'all',
+                side: 'all',
+                date: 'all'
+              })}
+              className="text-[var(--accent)] hover:text-blue-300 transition-colors"
             >
-              <option value="all">All Status</option>
-              <option value="open">Open Trades</option>
-              <option value="closed">Closed Trades</option>
-            </select>
-
-            {(selectedDate !== 'all' || filterStatus !== 'all') && (
-              <button
-                onClick={() => {
-                  setSelectedDate('all');
-                  setFilterStatus('all');
-                }}
-                className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all duration-200 text-sm border border-red-500/30 hover:border-red-500/50 flex-shrink-0"
-              >
-                Clear Filters
-              </button>
-            )}
+              Clear All Filters
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Trades Table */}
-      <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl overflow-hidden">
-        <div className="p-3 md:p-4 border-b border-[var(--border)]/50">
-          <h3 className="text-lg font-semibold text-[var(--foreground)]">Trade History</h3>
+      {/* Orders Table */}
+      <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl shadow-lg overflow-hidden">
+        <div className="p-4 border-b border-[var(--border)]/50 bg-gradient-to-r from-[var(--card-background)]/50 to-[var(--accent)]/5">
+          <h3 className="text-lg font-semibold text-[var(--foreground)]">Symbol Trades</h3>
           <p className="text-sm text-[var(--muted-foreground)] mt-1">
-            {filteredTrades.length} trades shown
+            All trades/orders for {symbol.symbol} from strategy {strategy.name}
           </p>
         </div>
 
-        {filteredTrades.length === 0 ? (
-          <div className="p-6 md:p-12 text-center">
-            <div className="w-12 md:w-16 h-12 md:h-16 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BarChart3 className="w-6 md:w-8 h-6 md:h-8 text-[var(--accent)]" />
+        {filteredAndSortedOrders.length === 0 ? (
+          <div className="p-6 md:p-8 text-center">
+            <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <BarChart3 className="w-6 h-6 text-[var(--accent)]" />
             </div>
-            <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Trades Found</h3>
-            <p className="text-[var(--muted-foreground)] text-sm md:text-base">
-              {selectedDate !== 'all' || filterStatus !== 'all'
-                ? 'Try adjusting your filters to see more trades'
-                : 'No trades have been executed yet for this symbol'
-              }
-            </p>
+            {orders.length === 0 ? (
+              <>
+                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Trades Found</h3>
+                <p className="text-[var(--muted-foreground)]">
+                  No trades have been executed for {symbol.symbol} yet
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Matches</h3>
+                <p className="text-[var(--muted-foreground)] mb-4">
+                  No trades match the current filter criteria
+                </p>
+                <button
+                  onClick={() => setFilters({
+                    symbol: '',
+                    type: 'all',
+                    pnl: 'all',
+                    status: 'all',
+                    side: 'all',
+                    date: 'all'
+                  })}
+                  className="px-4 py-2 bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] rounded-lg transition-all duration-200 border border-[var(--accent)]/30"
+                >
+                  Clear All Filters
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <>
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] shadow-lg">
               <table className="w-full">
-                <thead className="bg-[var(--background)]/50">
+                <thead className="bg-gradient-to-r from-slate-800/50 to-slate-900/50 border-b border-[var(--border)]">
                   <tr>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Strike</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Entry Time</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Entry Price</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Exit Time</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Exit Price</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Quantity</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">P&L</th>
-                    <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Status</th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('strike_symbol')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Strike</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('type')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Type</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('pnl')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>P&L</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('status')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Status</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('side')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Side</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('entry_price')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Entry Price</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('exit_price')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Exit Price</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('signal_time')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Entry Time</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]/30">
-                  {filteredTrades.map((trade) => (
+                  {filteredAndSortedOrders.map((order, index) => {
+                    const parsed = parseStrikeSymbol(order.strike_symbol || '');
+                    return (
                     <tr 
-                      key={trade.id} 
-                      className="hover:bg-[var(--background)]/30 transition-colors"
+                      key={order.id} 
+                      className={`${
+                        index % 2 === 0 ? 'bg-[var(--background)]/20' : 'bg-[var(--card-background)]/20'
+                      } hover:bg-[var(--accent)]/10 transition-all duration-200`}
                     >
                       <td className="py-4 px-6">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-semibold text-[var(--foreground)]">
-                            {trade.strike.replace(/[CE|PE]/g, '')}
+                        <span className="font-semibold text-[var(--foreground)]">
+                          {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        {parsed.type && (parsed.type === 'CE' || parsed.type === 'PE') && (
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStrikeTypeColor(parsed.type)}`}>
+                            {parsed.type}
                           </span>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStrikeTypeColor(trade.type)}`}>
-                            {trade.type}
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className={`inline-flex items-center px-3 py-2 rounded-lg font-bold text-sm shadow-sm ${getPnLColor(order.pnl || 0).includes('emerald') ? 'bg-emerald-500/10' : order.pnl && order.pnl < 0 ? 'bg-red-500/10' : 'bg-gray-500/10'}`}>
+                          {order.pnl && order.pnl > 0 && <TrendingUp className="w-4 h-4 mr-1" />}
+                          {order.pnl && order.pnl < 0 && <TrendingDown className="w-4 h-4 mr-1" />}
+                          <span className={getPnLColor(order.pnl || 0)}>
+                            {formatCurrency(order.pnl || 0)}
                           </span>
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="text-[var(--foreground)]">
-                          <div className="font-medium">{formatDate(trade.entryTime)}</div>
-                          <div className="text-sm text-[var(--muted-foreground)]">{formatTime(trade.entryTime)}</div>
-                        </div>
+                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusColor(order.status)}`}>
+                          {order.status}
+                        </span>
                       </td>
                       <td className="py-4 px-6">
-                        <span className="font-medium text-[var(--foreground)]">₹{trade.entryPrice}</span>
+                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getSideColor(order.side || 'N/A')}`}>
+                          {order.side || 'N/A'}
+                        </span>
                       </td>
                       <td className="py-4 px-6">
-                        {trade.exitTime ? (
+                        <span className="text-[var(--foreground)]">
+                          {order.entry_price ? `₹${order.entry_price.toLocaleString()}` : 'N/A'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className="text-[var(--foreground)]">
+                          {order.exit_price ? `₹${order.exit_price.toLocaleString()}` : 'N/A'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="text-sm">
                           <div className="text-[var(--foreground)]">
-                            <div className="font-medium">{formatDate(trade.exitTime)}</div>
-                            <div className="text-sm text-[var(--muted-foreground)]">{formatTime(trade.exitTime)}</div>
+                            {formatDate(order.signal_time)}
                           </div>
-                        ) : (
-                          <span className="text-[var(--muted-foreground)] text-sm">-</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-6">
-                        {trade.exitPrice ? (
-                          <span className="font-medium text-[var(--foreground)]">₹{trade.exitPrice}</span>
-                        ) : (
-                          <span className="text-[var(--muted-foreground)] text-sm">-</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="text-[var(--foreground)] font-medium">{trade.quantity}</span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`font-bold ${getPnLColor(trade.pnl)}`}>
-                          {formatCurrency(trade.pnl)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          trade.status === 'OPEN' 
-                            ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-                            : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                        }`}>
-                          {trade.status}
-                        </span>
+                          <div className="text-[var(--muted-foreground)]">
+                            {formatTime(order.signal_time)}
+                          </div>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Card View */}
-            <div className="md:hidden space-y-2 p-3">
-              {filteredTrades.map((trade) => (
-                <div 
-                  key={trade.id}
-                  className="bg-[var(--background)]/50 border border-[var(--border)] rounded-lg p-3 space-y-2"
+            <div className="md:hidden p-3 space-y-3">
+              {filteredAndSortedOrders.map((order) => {
+                const parsed = parseStrikeSymbol(order.strike_symbol || '');
+                return (
+                <div
+                  key={order.id}
+                  className="bg-gradient-to-br from-[var(--card-background)]/70 to-[var(--background)]/50 border border-[var(--border)] rounded-xl p-4 hover:border-[var(--accent)]/50 hover:shadow-lg transition-all duration-300 shadow-sm"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2">
-                      <span className="font-semibold text-[var(--foreground)] text-sm">
-                        {trade.strike.replace(/[CE|PE]/g, '')}
+                      <span className="font-semibold text-[var(--foreground)]">
+                        {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
                       </span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getStrikeTypeColor(trade.type)}`}>
-                        {trade.type}
-                      </span>
+                      {parsed.type && (parsed.type === 'CE' || parsed.type === 'PE') && (
+                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getStrikeTypeColor(parsed.type)}`}>
+                          {parsed.type}
+                        </span>
+                      )}
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      trade.status === 'OPEN' 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-blue-500/20 text-blue-400'
-                    }`}>
-                      {trade.status}
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusColor(order.status)}`}>
+                      {order.status}
                     </span>
                   </div>
-
-                  <div className="text-center py-1">
-                    <span className={`text-lg font-bold ${getPnLColor(trade.pnl)}`}>
-                      {trade.pnl >= 0 ? '+' : ''}₹{(Math.abs(trade.pnl) / 1000).toFixed(1)}K
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-[var(--muted-foreground)]">Entry</p>
-                      <p className="font-medium text-[var(--foreground)]">₹{trade.entryPrice}</p>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {formatTime(trade.entryTime)}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="text-center">
+                      <p className="text-xs text-[var(--muted-foreground)] mb-1">P&L</p>
+                      <div className={`inline-flex items-center px-2 py-1 rounded-lg shadow-sm ${getPnLColor(order.pnl || 0).includes('emerald') ? 'bg-emerald-500/10' : order.pnl && order.pnl < 0 ? 'bg-red-500/10' : 'bg-gray-500/10'}`}>
+                        {order.pnl && order.pnl > 0 && <TrendingUp className="w-3 h-3 mr-1" />}
+                        {order.pnl && order.pnl < 0 && <TrendingDown className="w-3 h-3 mr-1" />}
+                        <span className={`font-bold text-sm ${getPnLColor(order.pnl || 0)}`}>
+                          ₹{Math.round(Math.abs(order.pnl || 0) / 1000)}K
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-[var(--muted-foreground)] mb-1">Side</p>
+                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getSideColor(order.side || 'N/A')}`}>
+                        {order.side || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-[var(--muted-foreground)]">Entry</p>
+                      <p className="font-medium text-xs text-[var(--foreground)]">
+                        {order.entry_price ? `₹${order.entry_price.toFixed(2)}` : 'N/A'}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-[var(--muted-foreground)]">Exit</p>
-                      <p className="font-medium text-[var(--foreground)]">
-                        {trade.exitPrice ? `₹${trade.exitPrice}` : '-'}
-                      </p>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {trade.exitTime ? formatTime(trade.exitTime) : '-'}
-                      </p>
-                    </div>
                   </div>
-
-                  <div className="text-center pt-1 border-t border-[var(--border)]">
-                    <span className="text-xs text-[var(--muted-foreground)]">Qty: </span>
-                    <span className="font-medium text-[var(--foreground)] text-xs">{trade.quantity}</span>
+                  <div className="pt-2 border-t border-[var(--border)]/30">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[var(--muted-foreground)]">
+                        {formatDate(order.signal_time)} • {formatTime(order.signal_time)}
+                      </span>
+                      {order.exit_price && (
+                        <span className="text-[var(--foreground)]">
+                          Exit: ₹{order.exit_price.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

@@ -784,6 +784,14 @@ class ApiClient {
     return this.request('/orders/');
   }
 
+  async getOrdersBySymbol(symbol: string): Promise<any[]> {
+    return this.request(`/orders/by-symbol/${encodeURIComponent(symbol)}`);
+  }
+
+  async getOrdersSummaryBySymbol(symbol: string): Promise<any> {
+    return this.request(`/orders/summary/${encodeURIComponent(symbol)}`);
+  }
+
   // System Status
   async getSystemStatus(): Promise<any> {
     return this.request('/system/status');
