@@ -244,56 +244,51 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     return `${isPositive ? '+' : ''}₹${Math.abs(amount).toLocaleString()}`;
   };
 
-  // Color utility functions for enhanced visual display
+  // Color utility functions matching Orders page exactly
   const getPnLColor = (pnl: number) => {
     if (pnl > 0) {
-      return 'text-emerald-400 font-bold';
+      return 'text-green-400';
     } else if (pnl < 0) {
-      return 'text-red-400 font-bold';
+      return 'text-red-400';
     } else {
-      return 'text-gray-400 font-medium';
+      return 'text-[var(--muted-foreground)]';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status?.toUpperCase()) {
       case 'OPEN':
-      case 'ACTIVE':
-      case 'PENDING':
-        return 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+        return 'bg-blue-500/20 text-blue-400 border border-blue-500/50';
       case 'CLOSED':
-      case 'COMPLETED':
-      case 'FILLED':
-        return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        return 'bg-purple-500/20 text-purple-400 border border-purple-500/50';
+      case 'AWAITING_ENTRY':
+        return 'bg-orange-500/20 text-orange-400 border border-orange-500/50';
       case 'CANCELLED':
-      case 'REJECTED':
-        return 'bg-red-500/20 text-red-400 border border-red-500/30';
-      case 'PARTIALLY_FILLED':
-        return 'bg-orange-500/20 text-orange-400 border border-orange-500/30';
+        return 'bg-red-500/20 text-red-400 border border-red-500/50';
       default:
-        return 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/50';
     }
   };
 
   const getSideColor = (side: string) => {
     switch (side?.toUpperCase()) {
       case 'BUY':
-        return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+        return 'bg-green-500/20 text-green-400 border border-green-500/50';
       case 'SELL':
-        return 'bg-red-500/20 text-red-400 border border-red-500/30';
+        return 'bg-red-500/20 text-red-400 border border-red-500/50';
       default:
-        return 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/50';
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type?.toUpperCase()) {
       case 'CE':
-        return 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+        return 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50';
       case 'PE':
-        return 'bg-purple-500/20 text-purple-400 border border-purple-500/30';
+        return 'bg-purple-500/20 text-purple-400 border border-purple-500/50';
       default:
-        return 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/50';
     }
   };
 
@@ -343,9 +338,9 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
   };
 
   const getStrikeTypeColor = (type: string) => {
-    if (type === 'CE') return 'text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 shadow-sm';
-    if (type === 'PE') return 'text-rose-400 bg-rose-500/20 border border-rose-500/30 shadow-sm';
-    return 'text-indigo-400 bg-indigo-500/20 border border-indigo-500/30 shadow-sm';
+    if (type === 'CE') return 'text-cyan-400 bg-cyan-500/20 border border-cyan-500/30 shadow-sm';
+    if (type === 'PE') return 'text-purple-400 bg-purple-500/20 border border-purple-500/30 shadow-sm';
+    return 'text-gray-400 bg-gray-500/20 border border-gray-500/30 shadow-sm';
   };
 
   // Calculate summary stats from filtered orders
@@ -425,7 +420,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
               Config: <span className="text-[var(--accent)]">{symbol.config_name || 'Default'}</span>
             </p>
           </div>
-          <button className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 border border-blue-500/30 hover:border-blue-500/50 flex-shrink-0 w-full sm:w-auto">
+          <button className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 border border-blue-500/50 hover:border-blue-500/60 flex-shrink-0 w-full sm:w-auto">
             <Download className="w-4 h-4" />
             <span className="font-medium">Export</span>
           </button>
@@ -434,55 +429,55 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
 
       {/* Trades Summary Stats */}
       <div className="grid grid-cols-5 gap-2 md:gap-3">
-        <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-600/30 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="bg-gray-500/20 border border-gray-500/50 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
-              <BarChart3 className="w-4 h-4 text-slate-400" />
+              <BarChart3 className="w-4 h-4 text-gray-400" />
             </div>
-            <p className="text-slate-300 text-xs font-medium">Total</p>
-            <p className="text-sm md:text-xl font-bold text-slate-100">{stats.totalOrders}</p>
+            <p className="text-gray-400 text-xs font-medium">Total</p>
+            <p className="text-sm md:text-xl font-bold text-[var(--foreground)]">{stats.totalOrders}</p>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-900/50 to-emerald-800/50 border border-emerald-500/40 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="bg-blue-500/20 border border-blue-500/50 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
-              <Activity className="w-4 h-4 text-emerald-400" />
+              <Activity className="w-4 h-4 text-blue-400" />
             </div>
-            <p className="text-emerald-300 text-xs font-medium">Open</p>
-            <p className="text-sm md:text-xl font-bold text-emerald-400">{stats.openOrders}</p>
+            <p className="text-blue-400 text-xs font-medium">Open</p>
+            <p className="text-sm md:text-xl font-bold text-blue-400">{stats.openOrders}</p>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/50 border border-blue-500/40 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="bg-purple-500/20 border border-purple-500/50 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
-              <Clock className="w-4 h-4 text-blue-400" />
+              <Clock className="w-4 h-4 text-purple-400" />
             </div>
-            <p className="text-blue-300 text-xs font-medium">Closed</p>
-            <p className="text-sm md:text-xl font-bold text-blue-400">{stats.closedOrders}</p>
+            <p className="text-purple-400 text-xs font-medium">Closed</p>
+            <p className="text-sm md:text-xl font-bold text-purple-400">{stats.closedOrders}</p>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-900/50 to-purple-800/50 border border-purple-500/40 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="bg-orange-500/20 border border-orange-500/50 rounded-xl p-2 md:p-4 shadow-lg">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
-              <Target className="w-4 h-4 text-purple-400" />
+              <Target className="w-4 h-4 text-orange-400" />
             </div>
-            <p className="text-purple-300 text-xs font-medium">Win Rate</p>
-            <p className="text-sm md:text-xl font-bold text-purple-400">{stats.winRate}%</p>
+            <p className="text-orange-400 text-xs font-medium">Win Rate</p>
+            <p className="text-sm md:text-xl font-bold text-orange-400">{stats.winRate}%</p>
           </div>
         </div>
 
-        <div className={`bg-gradient-to-br ${stats.totalPnL >= 0 ? 'from-emerald-900/50 to-emerald-800/50 border-emerald-500/40' : 'from-red-900/50 to-red-800/50 border-red-500/40'} border rounded-xl p-2 md:p-4 shadow-lg`}>
+        <div className={`${stats.totalPnL >= 0 ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'} border rounded-xl p-2 md:p-4 shadow-lg`}>
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
               {stats.totalPnL >= 0 ? 
-                <TrendingUp className="w-4 h-4 text-emerald-400" /> : 
+                <TrendingUp className="w-4 h-4 text-green-400" /> : 
                 <TrendingDown className="w-4 h-4 text-red-400" />
               }
             </div>
-            <p className={`text-xs font-medium ${stats.totalPnL >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>P&L</p>
+            <p className={`text-xs font-medium ${stats.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>P&L</p>
             <p className={`text-sm md:text-xl font-bold ${getPnLColor(stats.totalPnL)}`}>
               <span className="md:hidden">
                 {stats.totalPnL >= 0 ? '+' : ''}₹{(Math.abs(stats.totalPnL) / 1000).toFixed(0)}K
@@ -649,12 +644,12 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] shadow-lg">
               <table className="w-full">
-                <thead className="bg-gradient-to-r from-slate-800/50 to-slate-900/50 border-b border-[var(--border)]">
+                <thead className="bg-[var(--muted)]/10 border-b border-[var(--border)]">
                   <tr>
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('strike_symbol')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>Strike</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -663,7 +658,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('type')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>Type</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -672,7 +667,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('pnl')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>P&L</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -681,7 +676,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('status')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>Status</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -690,7 +685,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('side')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>Side</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -699,7 +694,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('entry_price')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>Entry Price</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -708,7 +703,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('exit_price')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>Exit Price</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -717,7 +712,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     <th className="text-left py-4 px-6">
                       <button
                         onClick={() => handleSort('signal_time')}
-                        className="flex items-center space-x-1 text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                       >
                         <span>Entry Time</span>
                         <ArrowUpDown className="w-3 h-3" />
@@ -748,7 +743,13 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         )}
                       </td>
                       <td className="py-4 px-6">
-                        <div className={`inline-flex items-center px-3 py-2 rounded-lg font-bold text-sm shadow-sm ${getPnLColor(order.pnl || 0).includes('emerald') ? 'bg-emerald-500/10' : order.pnl && order.pnl < 0 ? 'bg-red-500/10' : 'bg-gray-500/10'}`}>
+                        <div className={`inline-flex items-center px-3 py-2 rounded-lg font-bold text-sm shadow-sm ${
+                          order.pnl && order.pnl > 0 
+                            ? 'bg-green-500/10' 
+                            : order.pnl && order.pnl < 0 
+                              ? 'bg-red-500/10' 
+                              : 'bg-gray-500/10'
+                        }`}>
                           {order.pnl && order.pnl > 0 && <TrendingUp className="w-4 h-4 mr-1" />}
                           {order.pnl && order.pnl < 0 && <TrendingDown className="w-4 h-4 mr-1" />}
                           <span className={getPnLColor(order.pnl || 0)}>
@@ -820,7 +821,13 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="text-center">
                       <p className="text-xs text-[var(--muted-foreground)] mb-1">P&L</p>
-                      <div className={`inline-flex items-center px-2 py-1 rounded-lg shadow-sm ${getPnLColor(order.pnl || 0).includes('emerald') ? 'bg-emerald-500/10' : order.pnl && order.pnl < 0 ? 'bg-red-500/10' : 'bg-gray-500/10'}`}>
+                      <div className={`inline-flex items-center px-2 py-1 rounded-lg shadow-sm ${
+                        order.pnl && order.pnl > 0 
+                          ? 'bg-green-500/10' 
+                          : order.pnl && order.pnl < 0 
+                            ? 'bg-red-500/10' 
+                            : 'bg-gray-500/10'
+                      }`}>
                         {order.pnl && order.pnl > 0 && <TrendingUp className="w-3 h-3 mr-1" />}
                         {order.pnl && order.pnl < 0 && <TrendingDown className="w-3 h-3 mr-1" />}
                         <span className={`font-bold text-sm ${getPnLColor(order.pnl || 0)}`}>
