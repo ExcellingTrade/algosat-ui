@@ -23,6 +23,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogsManagement } from "@/components/LogsManagement";
 import { StrategiesPage } from "@/components/strategies/StrategiesPage";
 import { ActivityTracker } from "@/components/ActivityTracker";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Home,
   Zap,
@@ -234,6 +235,70 @@ export default function Dashboard() {
     };
   };
 
+  // Export functionality for Orders
+  const handleExportOrders = () => {
+    if (sortedOrders.length === 0) {
+      alert('No orders to export');
+      return;
+    }
+
+    const headers = [
+      'Symbol',
+      'Strike',
+      'Type',
+      'P&L',
+      'Status',
+      'Side',
+      'Quantity',
+      'Entry Price',
+      'Exit Price',
+      'Entry Time',
+      'Entry Date'
+    ];
+
+    const csvData = sortedOrders.map(order => {
+      const parsed = parseStrikeSymbol(order.strike_symbol || '');
+      return [
+        parsed.underlying || 'N/A',
+        parsed.strike || 'N/A',
+        parsed.type || 'N/A',
+        order.pnl || 0,
+        order.status || 'N/A',
+        order.side || 'N/A',
+        order.qty || order.quantity || 0,
+        order.entry_price || 'N/A',
+        order.exit_price || 'N/A',
+        order.entry_time ? new Date(order.entry_time).toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        }) : 'N/A',
+        order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }) : 'N/A'
+      ];
+    });
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `orders-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   // Sort handler
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -303,6 +368,43 @@ export default function Dashboard() {
       return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
     }
   });
+
+  // P&L Graph Data Processing
+  const getPnlGraphData = () => {
+    const dailyPnl = new Map();
+    
+    sortedOrders.forEach(order => {
+      if (order.entry_time) {
+        const date = new Date(order.entry_time).toISOString().split('T')[0];
+        const currentPnl = dailyPnl.get(date) || 0;
+        dailyPnl.set(date, currentPnl + (order.pnl || 0));
+      }
+    });
+    
+    // Convert to array and sort by date
+    const sortedData = Array.from(dailyPnl.entries())
+      .map(([date, pnl]) => ({
+        date,
+        pnl: Number(pnl.toFixed(2)),
+        formattedDate: new Date(date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short'
+        }),
+        cumulativePnl: 0 // Will be calculated below
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Calculate cumulative P&L
+    let cumulative = 0;
+    sortedData.forEach(item => {
+      cumulative += item.pnl;
+      item.cumulativePnl = Number(cumulative.toFixed(2));
+    });
+    
+    return sortedData;
+  };
+
+  const pnlGraphData = getPnlGraphData();
 
   // Helper function to get balance summary for a specific broker
   const getBrokerBalance = (brokerName: string) => {
@@ -1483,14 +1585,25 @@ export default function Dashboard() {
               <div className="space-y-6">
                 {/* Header */}
                 <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                  <div>
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-2">
-                      <div className="flex items-center space-x-2">
-                        <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
-                        <span>Orders</span>
+                  <div className="flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <h2 className="text-2xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-2">
+                          <div className="flex items-center space-x-2">
+                            <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
+                            <span>Orders</span>
+                          </div>
+                        </h2>
+                        <p className="text-[var(--muted-foreground)]">Monitor all your orders with Symbol, strike, P&L and status</p>
                       </div>
-                    </h2>
-                    <p className="text-[var(--muted-foreground)]">Monitor all your orders with Symbol, strike, P&L and status</p>
+                      <button 
+                        onClick={handleExportOrders}
+                        className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 border border-blue-500/50 hover:border-blue-500/60 flex-shrink-0 w-full sm:w-auto"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span className="font-medium">Export Orders</span>
+                      </button>
+                    </div>
                   </div>
                   
                   {/* Order Stats */}
@@ -1513,6 +1626,79 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* P&L Graph */}
+                {pnlGraphData.length > 0 && (
+                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg p-4">
+                    <div className="flex items-center space-x-2 mb-4">
+                      <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
+                      <h3 className="text-lg font-semibold text-[var(--foreground)]">Daily P&L Trend</h3>
+                      <span className="text-sm text-[var(--muted-foreground)]">
+                        ({pnlGraphData.length} trading days)
+                      </span>
+                    </div>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={pnlGraphData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis 
+                            dataKey="formattedDate" 
+                            stroke="var(--muted-foreground)"
+                            fontSize={12}
+                          />
+                          <YAxis 
+                            stroke="var(--muted-foreground)"
+                            fontSize={12}
+                            tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(1) + 'K' : value}`}
+                          />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'var(--card-background)', 
+                              border: '1px solid var(--border)',
+                              borderRadius: '8px',
+                              color: 'var(--foreground)'
+                            }}
+                            formatter={(value, name, props) => {
+                              const dataKey = props.dataKey;
+                              const label = dataKey === 'pnl' ? 'Daily P&L' : 'Cumulative P&L';
+                              return [`₹${Number(value).toLocaleString()}`, label];
+                            }}
+                            labelFormatter={(label) => `Date: ${label}`}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="pnl" 
+                            stroke="#3b82f6" 
+                            strokeWidth={2}
+                            dot={{ fill: '#3b82f6', strokeWidth: 0, r: 4 }}
+                            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+                            name="Daily P&L"
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="cumulativePnl" 
+                            stroke="#10b981" 
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={{ fill: '#10b981', strokeWidth: 0, r: 3 }}
+                            activeDot={{ r: 5, stroke: '#10b981', strokeWidth: 2 }}
+                            name="Cumulative P&L"
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex justify-center space-x-6 mt-4 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-0.5 bg-blue-500"></div>
+                        <span className="text-[var(--muted-foreground)]">Daily P&L</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-0.5 bg-green-500 border-dashed border-t"></div>
+                        <span className="text-[var(--muted-foreground)]">Cumulative P&L</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Filters */}
                 <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg p-4">
@@ -1956,7 +2142,7 @@ export default function Dashboard() {
                         </div>
                         <div className="w-full bg-[var(--border)] rounded-full h-3 overflow-hidden">
                           <div 
-                            className="bg-gradient-to-r from-orange-500 to-amber-400 h-3 rounded-full shadow-sm shadow-orange-500/60 transition-all duration-700 ease-out relative" 
+                            className="bg-gradient-to-r from-orange-500 to-red-500 h-3 rounded-full transition-all duration-700" 
                             style={{ width: `${Math.min(Math.max(((systemMetrics.diskUsage || 0) / getTotalDiskBytes()) * 100, 0), 100)}%` }}
                           >
                             <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>

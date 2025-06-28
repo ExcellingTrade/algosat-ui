@@ -941,8 +941,17 @@ class ApiClient {
     return this.request(`/strategies/symbols/${symbolId}/stats`);
   }
 
-  async getSymbolTrades(symbolId: number, limit: number = 100): Promise<SymbolTradesResponse> {
-    return this.request(`/strategies/symbols/${symbolId}/trades?limit=${limit}`);
+  async getSymbolTrades(symbolId: number, limit: number = 100, offset: number = 0, dateFilter: string | null = null): Promise<SymbolTradesResponse> {
+    const queryParams = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString()
+    });
+    
+    if (dateFilter) {
+      queryParams.append('date', dateFilter);
+    }
+    
+    return this.request(`/strategies/symbols/${symbolId}/trades?${queryParams.toString()}`);
   }
 
   // Dashboard APIs

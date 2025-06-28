@@ -16,6 +16,7 @@ import {
   Zap,
   ArrowUpDown
 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Order {
   id: number;
@@ -43,7 +44,11 @@ interface TradesPageProps {
 export function TradesPage({ symbol, strategy }: TradesPageProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalTrades, setTotalTrades] = useState(0);
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -244,7 +249,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     return `${isPositive ? '+' : ''}₹${Math.abs(amount).toLocaleString()}`;
   };
 
-  // Color utility functions matching Orders page exactly
+  // Color utility functions matching Orders page
   const getPnLColor = (pnl: number) => {
     if (pnl > 0) {
       return 'text-green-400';
@@ -292,32 +297,80 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     }
   };
 
+  // Fetch trades with pagination and server-side filtering
+  const fetchTrades = async (page = 1, resetData = true, dateFilter = null) => {
+    try {
+      if (resetData) {
+        setIsLoading(true);
+        setCurrentPage(1);
+      } else {
+        setIsLoadingMore(true);
+      }
+      setError(null);
+      
+      const limit = 100;
+      const offset = (page - 1) * limit;
+      
+      console.log('Fetching trades for symbol ID:', symbol.id, 'page:', page, 'dateFilter:', dateFilter);
+      
+      // Build query parameters for server-side filtering
+      const queryParams = new URLSearchParams({
+        limit: limit.toString(),
+        offset: offset.toString()
+      });
+      
+      if (dateFilter && dateFilter !== 'all') {
+        queryParams.append('date', dateFilter);
+      }
+      
+      // Use the existing API but with query parameters
+      const response = await apiClient.getSymbolTrades(symbol.id, limit, offset, dateFilter);
+      console.log('Symbol trades response:', response);
+      
+      const newTrades = response.trades || [];
+      setTotalTrades(response.total_trades || newTrades.length);
+      
+      if (resetData || page === 1) {
+        setOrders(newTrades);
+      } else {
+        setOrders(prev => [...prev, ...newTrades]);
+      }
+      
+      setHasMore(newTrades.length === limit && (resetData ? newTrades.length : orders.length + newTrades.length) < (response.total_trades || newTrades.length));
+      setCurrentPage(page);
+      
+    } catch (err) {
+      console.error('Failed to fetch trades:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load trades');
+      if (resetData) setOrders([]);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Load more trades (pagination)
+  const loadMoreTrades = () => {
+    if (!isLoadingMore && hasMore) {
+      const dateFilter = filters.date !== 'all' ? filters.date : null;
+      fetchTrades(currentPage + 1, false, dateFilter);
+    }
+  };
+
   // Fetch trades for this specific symbol using the symbol ID
   useEffect(() => {
-    const fetchTrades = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        console.log('Fetching trades for symbol ID:', symbol.id);
-        
-        // Use the existing getSymbolTrades API that takes symbol_id directly
-        const response = await apiClient.getSymbolTrades(symbol.id, 1000);
-        console.log('Symbol trades response:', response);
-        
-        setOrders(response.trades || []);
-      } catch (err) {
-        console.error('Failed to fetch trades:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load trades');
-        setOrders([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (symbol.id) {
-      fetchTrades();
+      fetchTrades(1, true);
     }
   }, [symbol.id]);
+
+  // Refetch when date filter changes (server-side filtering)
+  useEffect(() => {
+    if (symbol.id) {
+      const dateFilter = filters.date !== 'all' ? filters.date : null;
+      fetchTrades(1, true, dateFilter);
+    }
+  }, [filters.date]);
 
   const formatTime = (dateString: string) => {
     if (!dateString) return 'N/A';
@@ -365,6 +418,92 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
       .reverse();
     return dates;
   }, [orders]);
+
+  // Export functionality
+  const handleExportTrades = () => {
+    if (filteredAndSortedOrders.length === 0) {
+      alert('No trades to export');
+      return;
+    }
+
+    const headers = [
+      'Strike',
+      'Type',
+      'P&L',
+      'Status',
+      'Side',
+      'Entry Price',
+      'Exit Price',
+      'Entry Time',
+      'Entry Date'
+    ];
+
+    const csvData = filteredAndSortedOrders.map(order => {
+      const parsed = parseStrikeSymbol(order.strike_symbol || '');
+      return [
+        parsed.strike || 'N/A',
+        parsed.type || 'N/A',
+        order.pnl || 0,
+        order.status || 'N/A',
+        order.side || 'N/A',
+        order.entry_price || 'N/A',
+        order.exit_price || 'N/A',
+        formatTime(order.signal_time),
+        formatDate(order.signal_time)
+      ];
+    });
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${symbol.symbol}_trades_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // P&L Graph Data Processing
+  const getPnlGraphData = () => {
+    const dailyPnl = new Map();
+    
+    filteredAndSortedOrders.forEach(order => {
+      if (order.signal_time) {
+        const date = new Date(order.signal_time).toISOString().split('T')[0];
+        const currentPnl = dailyPnl.get(date) || 0;
+        dailyPnl.set(date, currentPnl + (order.pnl || 0));
+      }
+    });
+    
+    // Convert to array and sort by date
+    const sortedData = Array.from(dailyPnl.entries())
+      .map(([date, pnl]) => ({
+        date,
+        pnl: Number(pnl.toFixed(2)),
+        formattedDate: new Date(date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short'
+        }),
+        cumulativePnl: 0 // Will be calculated below
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    // Calculate cumulative P&L
+    let cumulative = 0;
+    sortedData.forEach(item => {
+      cumulative += item.pnl;
+      item.cumulativePnl = Number(cumulative.toFixed(2));
+    });
+    
+    return sortedData;
+  };
+
+  const pnlGraphData = getPnlGraphData();
 
   if (isLoading) {
     return (
@@ -420,7 +559,10 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
               Config: <span className="text-[var(--accent)]">{symbol.config_name || 'Default'}</span>
             </p>
           </div>
-          <button className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 border border-blue-500/50 hover:border-blue-500/60 flex-shrink-0 w-full sm:w-auto">
+          <button 
+            onClick={handleExportTrades}
+            className="flex items-center justify-center space-x-2 px-3 md:px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-all duration-200 border border-blue-500/50 hover:border-blue-500/60 flex-shrink-0 w-full sm:w-auto"
+          >
             <Download className="w-4 h-4" />
             <span className="font-medium">Export</span>
           </button>
@@ -489,6 +631,79 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
           </div>
         </div>
       </div>
+
+      {/* P&L Graph */}
+      {pnlGraphData.length > 0 && (
+        <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-4 shadow-lg">
+          <div className="flex items-center space-x-2 mb-4">
+            <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
+            <h3 className="text-lg font-semibold text-[var(--foreground)]">Daily P&L Trend</h3>
+            <span className="text-sm text-[var(--muted-foreground)]">
+              ({pnlGraphData.length} trading days)
+            </span>
+          </div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={pnlGraphData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis 
+                  dataKey="formattedDate" 
+                  stroke="var(--muted-foreground)"
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="var(--muted-foreground)"
+                  fontSize={12}
+                  tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(1) + 'K' : value}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--card-background)', 
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    color: 'var(--foreground)'
+                  }}
+                  formatter={(value, name, props) => {
+                    const dataKey = props.dataKey;
+                    const label = dataKey === 'pnl' ? 'Daily P&L' : 'Cumulative P&L';
+                    return [`₹${Number(value).toLocaleString()}`, label];
+                  }}
+                  labelFormatter={(label) => `Date: ${label}`}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="pnl" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6', strokeWidth: 0, r: 4 }}
+                  activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+                  name="Daily P&L"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="cumulativePnl" 
+                  stroke="#10b981" 
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={{ fill: '#10b981', strokeWidth: 0, r: 3 }}
+                  activeDot={{ r: 5, stroke: '#10b981', strokeWidth: 2 }}
+                  name="Cumulative P&L"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex justify-center space-x-6 mt-4 text-sm">
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-0.5 bg-blue-500"></div>
+              <span className="text-[var(--muted-foreground)]">Daily P&L</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-4 h-0.5 bg-green-500 border-dashed border-t"></div>
+              <span className="text-[var(--muted-foreground)]">Cumulative P&L</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-3 md:p-4">
@@ -864,8 +1079,152 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                 );
               })}
             </div>
+
+            {/* Load More Button and Pagination Info */}
+            {filteredAndSortedOrders.length > 0 && (
+              <div className="p-4 border-t border-[var(--border)]/30 bg-[var(--card-background)]/30">
+                <div className="flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0">
+                  <div className="text-sm text-[var(--muted-foreground)]">
+                    Showing {orders.length} of {totalTrades} trades
+                    {filters.date !== 'all' && (
+                      <span className="ml-2 px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded text-xs">
+                        Filtered by: {formatDate(filters.date)}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {hasMore && (
+                    <button
+                      onClick={loadMoreTrades}
+                      disabled={isLoadingMore}
+                      className="flex items-center space-x-2 px-4 py-2 bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] rounded-lg transition-all duration-200 border border-[var(--accent)]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-[var(--accent)]/30 border-t-[var(--accent)] rounded-full animate-spin"></div>
+                          <span>Loading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Load More</span>
+                          <span className="text-xs opacity-70">({totalTrades - orders.length} remaining)</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
+      </div>
+
+      {/* Filter Summary for Better UX */}
+      <div className="bg-[var(--card-background)]/50 border border-[var(--border)] rounded-lg p-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-[var(--muted-foreground)]">Active filters:</span>
+          
+          {filters.type !== 'all' && (
+            <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30">
+              Type: {filters.type}
+            </span>
+          )}
+          
+          {filters.pnl !== 'all' && (
+            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30">
+              P&L: {filters.pnl}
+            </span>
+          )}
+          
+          {filters.status !== 'all' && (
+            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
+              Status: {filters.status}
+            </span>
+          )}
+          
+          {filters.side !== 'all' && (
+            <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded border border-green-500/30">
+              Side: {filters.side}
+            </span>
+          )}
+          
+          {filters.date !== 'all' && (
+            <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded border border-orange-500/30">
+              Date: {formatDate(filters.date)}
+            </span>
+          )}
+          
+          {(filters.type !== 'all' || filters.pnl !== 'all' || filters.status !== 'all' || filters.side !== 'all' || filters.date !== 'all') && (
+            <button
+              onClick={() => {
+                setFilters({
+                  symbol: '',
+                  type: 'all',
+                  pnl: 'all',
+                  status: 'all',
+                  side: 'all',
+                  date: 'all'
+                });
+              }}
+              className="px-2 py-1 bg-red-500/20 text-red-400 rounded border border-red-500/30 hover:bg-red-500/30 transition-colors"
+            >
+              Clear All
+            </button>
+          )}
+          
+          {filters.type === 'all' && filters.pnl === 'all' && filters.status === 'all' && filters.side === 'all' && filters.date === 'all' && (
+            <span className="text-[var(--muted-foreground)] italic">None</span>
+          )}
+        </div>
+      </div>
+
+      {/* P&L Graph */}
+      <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-4 shadow-lg">
+        <h3 className="text-lg font-semibold text-[var(--foreground)] mb-4">P&L Over Time</h3>
+        
+        <div className="h-48">
+          <ResponsiveContainer>
+            <LineChart data={pnlGraphData}>
+              <defs>
+                <linearGradient id="pnlGradient" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="url(#pnlColor1)" />
+                  <stop offset="100%" stopColor="url(#pnlColor2)" />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" className="text-[var(--border)]" />
+              <XAxis dataKey="formattedDate" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+              <YAxis tickFormatter={(value) => `₹${value}`} tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+              <Tooltip 
+                formatter={(value) => [`₹${value}`, 'P&L']}
+                contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', borderRadius: 8 }}
+                labelStyle={{ display: 'none' }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="cumulativePnl" 
+                stroke="url(#pnlGradient)" 
+                strokeWidth={2.5} 
+                dot={false} 
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="text-center">
+            <p className="text-xs text-[var(--muted-foreground)] mb-1">Total P&L</p>
+            <p className="text-lg font-bold text-[var(--foreground)]">
+              {formatCurrency(stats.totalPnL)}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-[var(--muted-foreground)] mb-1">Average Daily P&L</p>
+            <p className="text-lg font-bold text-[var(--foreground)]">
+              {pnlGraphData.length > 0 ? formatCurrency(pnlGraphData[pnlGraphData.length - 1].cumulativePnl) : '₹0'}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
