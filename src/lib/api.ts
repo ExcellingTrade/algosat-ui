@@ -282,6 +282,20 @@ export interface StrategyStats {
   total_strategies: number;
 }
 
+export interface PerStrategyStatsData {
+  strategy_id: number;
+  strategy_name: string;
+  live_pnl: number;
+  overall_pnl: number;
+  trade_count: number;
+  win_rate: number;
+}
+
+export interface PerStrategyStatsResponse {
+  strategies: PerStrategyStatsData[];
+  total_strategies: number;
+}
+
 export interface SymbolTradesResponse {
   symbol_id: number;
   trades: any[];
@@ -840,6 +854,11 @@ class ApiClient {
   // Strategy Statistics
   async getStrategyStats(): Promise<StrategyStats> {
     return this.request('/orders/strategy-stats');
+  }
+
+  // Per-Strategy Statistics
+  async getPerStrategyStats(): Promise<PerStrategyStatsResponse> {
+    return this.request('/orders/per-strategy-stats');
   }
 
   // System Status

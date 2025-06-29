@@ -6,7 +6,7 @@ import { SymbolsPage } from "./SymbolsPage";
 import { TradesPage } from "./TradesPage";
 import { ConfigsPage } from "./ConfigsPage";
 import { AddSymbolModal } from "./AddSymbolModal";
-import { apiClient } from "../../lib/api";
+import { apiClient, PerStrategyStatsResponse, PerStrategyStatsData } from "../../lib/api";
 import { 
   ArrowLeft, 
   Zap, 
@@ -90,9 +90,10 @@ type ViewMode = 'strategies' | 'symbols' | 'trades' | 'configs';
 
 interface StrategiesPageProps {
   className?: string;
+  perStrategyStats?: PerStrategyStatsResponse | null;
 }
 
-export function StrategiesPage({ className = "" }: StrategiesPageProps) {
+export function StrategiesPage({ className = "", perStrategyStats }: StrategiesPageProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('strategies');
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<StrategySymbol | null>(null);
@@ -520,20 +521,35 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 backdrop-blur-xl border border-blue-500/30 rounded-lg p-2 transition-all duration-200 hover:from-blue-500/15 hover:to-blue-600/10">
-                    <div className="text-center space-y-0.5">
-                      <p className="text-blue-300 text-xs font-medium">P&L</p>
-                      <p className="text-lg font-bold text-blue-400">
-                        ₹{Math.round(strategies.reduce((sum, s) => sum + (s.overallPnL || 0), 0) / 1000)}K
-                      </p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const totalPnL = perStrategyStats?.strategies.reduce((sum, stats) => sum + (stats.overall_pnl || 0), 0) || 0;
+                    const isPositive = totalPnL >= 0;
+                    
+                    return (
+                      <div className={`bg-gradient-to-br ${isPositive ? 'from-green-500/10 to-green-600/5 border-green-500/30' : 'from-red-500/10 to-red-600/5 border-red-500/30'} backdrop-blur-xl border rounded-lg p-2 transition-all duration-200 ${isPositive ? 'hover:from-green-500/15 hover:to-green-600/10' : 'hover:from-red-500/15 hover:to-red-600/10'}`}>
+                        <div className="text-center space-y-0.5">
+                          <p className={`${isPositive ? 'text-green-300' : 'text-red-300'} text-xs font-medium`}>P&L</p>
+                          <p className={`text-lg font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                            {(() => {
+                              const absValue = Math.abs(totalPnL);
+                              const sign = totalPnL >= 0 ? '+' : '-';
+                              if (absValue >= 1000) {
+                                return `${sign}₹${(absValue / 1000).toFixed(1)}K`;
+                              } else {
+                                return `${sign}₹${Math.round(absValue)}`;
+                              }
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 backdrop-blur-xl border border-purple-500/30 rounded-lg p-2 transition-all duration-200 hover:from-purple-500/15 hover:to-purple-600/10">
                     <div className="text-center space-y-0.5">
                       <p className="text-purple-300 text-xs font-medium">Trades</p>
                       <p className="text-lg font-bold text-purple-400">
-                        {strategies.reduce((sum, s) => sum + (s.tradeCount || 0), 0)}
+                        {perStrategyStats?.strategies.reduce((sum, stats) => sum + (stats.trade_count || 0), 0) || 0}
                       </p>
                     </div>
                   </div>
@@ -541,15 +557,23 @@ export function StrategiesPage({ className = "" }: StrategiesPageProps) {
                 
                 {/* Strategies Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 md:gap-4">
-                  {strategies.map((strategy) => (
-                    <StrategyCard
-                      key={strategy.id}
-                      strategy={strategy}
-                      onViewSymbols={handleViewSymbols}
-                      onViewConfigs={handleViewConfigs}
-                      onStrategyUpdated={handleStrategyUpdated}
-                    />
-                  ))}
+                  {strategies.map((strategy) => {
+                    // Find the stats for this strategy from the per-strategy stats
+                    const strategyStats = perStrategyStats?.strategies.find(
+                      stats => stats.strategy_id === strategy.id
+                    );
+                    
+                    return (
+                      <StrategyCard
+                        key={strategy.id}
+                        strategy={strategy}
+                        strategyStats={strategyStats}
+                        onViewSymbols={handleViewSymbols}
+                        onViewConfigs={handleViewConfigs}
+                        onStrategyUpdated={handleStrategyUpdated}
+                      />
+                    );
+                  })}
                 </div>
 
                 {/* Empty State */}

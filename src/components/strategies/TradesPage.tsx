@@ -16,7 +16,7 @@ import {
   Zap,
   ArrowUpDown
 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Order {
   id: number;
@@ -245,6 +245,9 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
   const filteredTrades = filteredAndSortedOrders;
 
   const formatCurrency = (amount: number) => {
+    if (amount === 0) {
+      return '₹0';
+    }
     const isPositive = amount >= 0;
     return `${isPositive ? '+' : ''}₹${Math.abs(amount).toLocaleString()}`;
   };
@@ -571,47 +574,47 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
 
       {/* Trades Summary Stats */}
       <div className="grid grid-cols-5 gap-2 md:gap-3">
-        <div className="bg-gray-500/20 border border-gray-500/50 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="backdrop-blur-xl bg-gray-500/10 border border-gray-500/30 rounded-2xl p-3 shadow-lg shadow-gray-500/20 hover:shadow-xl hover:shadow-gray-500/30 transition-all duration-300">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
               <BarChart3 className="w-4 h-4 text-gray-400" />
             </div>
-            <p className="text-gray-400 text-xs font-medium">Total</p>
-            <p className="text-sm md:text-xl font-bold text-[var(--foreground)]">{stats.totalOrders}</p>
+            <p className="text-gray-300 text-xs font-medium">Total</p>
+            <p className="text-sm md:text-xl font-bold text-gray-200">{stats.totalOrders}</p>
           </div>
         </div>
 
-        <div className="bg-blue-500/20 border border-blue-500/50 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="backdrop-blur-xl bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
               <Activity className="w-4 h-4 text-blue-400" />
             </div>
-            <p className="text-blue-400 text-xs font-medium">Open</p>
+            <p className="text-blue-300 text-xs font-medium">Open</p>
             <p className="text-sm md:text-xl font-bold text-blue-400">{stats.openOrders}</p>
           </div>
         </div>
 
-        <div className="bg-purple-500/20 border border-purple-500/50 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="backdrop-blur-xl bg-purple-500/10 border border-purple-500/30 rounded-2xl p-3 shadow-lg shadow-purple-500/20 hover:shadow-xl hover:shadow-purple-500/30 transition-all duration-300">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
               <Clock className="w-4 h-4 text-purple-400" />
             </div>
-            <p className="text-purple-400 text-xs font-medium">Closed</p>
+            <p className="text-purple-300 text-xs font-medium">Closed</p>
             <p className="text-sm md:text-xl font-bold text-purple-400">{stats.closedOrders}</p>
           </div>
         </div>
 
-        <div className="bg-orange-500/20 border border-orange-500/50 rounded-xl p-2 md:p-4 shadow-lg">
+        <div className="backdrop-blur-xl bg-orange-500/10 border border-orange-500/30 rounded-2xl p-3 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300">
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
               <Target className="w-4 h-4 text-orange-400" />
             </div>
-            <p className="text-orange-400 text-xs font-medium">Win Rate</p>
+            <p className="text-orange-300 text-xs font-medium">Win Rate</p>
             <p className="text-sm md:text-xl font-bold text-orange-400">{stats.winRate}%</p>
           </div>
         </div>
 
-        <div className={`${stats.totalPnL >= 0 ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50'} border rounded-xl p-2 md:p-4 shadow-lg`}>
+        <div className={`backdrop-blur-xl ${stats.totalPnL >= 0 ? 'bg-green-500/10 border-green-500/30 shadow-green-500/20 hover:shadow-green-500/30' : 'bg-red-500/10 border-red-500/30 shadow-red-500/20 hover:shadow-red-500/30'} border rounded-2xl p-3 shadow-lg hover:shadow-xl transition-all duration-300`}>
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center mb-2">
               {stats.totalPnL >= 0 ? 
@@ -619,7 +622,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                 <TrendingDown className="w-4 h-4 text-red-400" />
               }
             </div>
-            <p className={`text-xs font-medium ${stats.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>P&L</p>
+            <p className={`text-xs font-medium ${stats.totalPnL >= 0 ? 'text-green-300' : 'text-red-300'}`}>P&L</p>
             <p className={`text-sm md:text-xl font-bold ${getPnLColor(stats.totalPnL)}`}>
               <span className="md:hidden">
                 {stats.totalPnL >= 0 ? '+' : ''}₹{(Math.abs(stats.totalPnL) / 1000).toFixed(0)}K
@@ -634,82 +637,141 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
 
       {/* P&L Graph */}
       {pnlGraphData.length > 0 && (
-        <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-4 shadow-lg">
-          <div className="flex items-center space-x-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
-            <h3 className="text-lg font-semibold text-[var(--foreground)]">Daily P&L Trend</h3>
-            <span className="text-sm text-[var(--muted-foreground)]">
-              ({pnlGraphData.length} trading days)
-            </span>
+        <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/15">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-[var(--accent)] to-blue-500 rounded-xl flex items-center justify-center">
+                <BarChart3 className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
+                  Daily P&L Performance
+                </h3>
+                <p className="text-[var(--muted-foreground)] text-sm">
+                  {pnlGraphData.length} trading days • Trade performance
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-[var(--muted-foreground)]">Total P&L</p>
+              <p className={`text-lg font-bold ${
+                pnlGraphData.reduce((sum, day) => sum + day.cumulativePnl, 0) >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                ₹{Math.abs(pnlGraphData[pnlGraphData.length - 1]?.cumulativePnl || 0).toLocaleString()}
+              </p>
+            </div>
           </div>
-          <div className="h-64">
+          
+          <div className="h-80 relative">
+            {/* Gradient background for chart area */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--accent)]/5 to-transparent rounded-2xl"></div>
+            
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={pnlGraphData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <AreaChart 
+                data={pnlGraphData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+              >
+                <defs>
+                  <linearGradient id="tradesDailyPnlGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="50%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="tradesCumulativePnlGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.8}/>
+                    <stop offset="50%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
                 <XAxis 
                   dataKey="formattedDate" 
                   stroke="var(--muted-foreground)"
                   fontSize={12}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--muted-foreground)' }}
                 />
                 <YAxis 
                   stroke="var(--muted-foreground)"
                   fontSize={12}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: 'var(--muted-foreground)' }}
                   tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(1) + 'K' : value}`}
                 />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: 'var(--card-background)', 
                     border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    color: 'var(--foreground)'
+                    borderRadius: '12px',
+                    color: 'var(--foreground)',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                    backdropFilter: 'blur(10px)'
                   }}
                   formatter={(value, name, props) => {
-                    const dataKey = props.dataKey;
-                    const label = dataKey === 'pnl' ? 'Daily P&L' : 'Cumulative P&L';
+                    // Check the dataKey to determine the correct label
+                    const label = props.dataKey === 'pnl' ? 'Daily P&L' : 'Cumulative P&L';
                     return [`₹${Number(value).toLocaleString()}`, label];
                   }}
                   labelFormatter={(label) => `Date: ${label}`}
                 />
-                <Line 
+                <Area 
                   type="monotone" 
                   dataKey="pnl" 
                   stroke="#3b82f6" 
                   strokeWidth={2}
-                  dot={{ fill: '#3b82f6', strokeWidth: 0, r: 4 }}
-                  activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+                  fill="url(#tradesDailyPnlGradient)"
+                  dot={false}
+                  activeDot={{ 
+                    r: 5, 
+                    stroke: '#3b82f6', 
+                    strokeWidth: 2,
+                    fill: 'var(--card-background)'
+                  }}
                   name="Daily P&L"
                 />
-                <Line 
+                <Area 
                   type="monotone" 
                   dataKey="cumulativePnl" 
                   stroke="#10b981" 
                   strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={{ fill: '#10b981', strokeWidth: 0, r: 3 }}
-                  activeDot={{ r: 5, stroke: '#10b981', strokeWidth: 2 }}
+                  strokeDasharray="8 4"
+                  fill="url(#tradesCumulativePnlGradient)"
+                  fillOpacity={0.3}
+                  dot={false}
+                  activeDot={{ 
+                    r: 4, 
+                    stroke: '#10b981', 
+                    strokeWidth: 2,
+                    fill: 'var(--card-background)'
+                  }}
                   name="Cumulative P&L"
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex justify-center space-x-6 mt-4 text-sm">
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-0.5 bg-blue-500"></div>
-              <span className="text-[var(--muted-foreground)]">Daily P&L</span>
+          
+          {/* Simple Legend */}
+          <div className="flex justify-center items-center space-x-8 mt-6 pt-4 border-t border-[var(--border)]/30">
+            <div className="flex items-center space-x-3">
+              <div className="w-4 h-2 bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"></div>
+              <span className="text-sm text-[var(--muted-foreground)]">Daily P&L</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-0.5 bg-green-500 border-dashed border-t"></div>
-              <span className="text-[var(--muted-foreground)]">Cumulative P&L</span>
+            <div className="flex items-center space-x-3">
+              <div className="w-4 h-2 bg-gradient-to-r from-green-500 to-green-400 rounded-full opacity-70" style={{backgroundImage: 'repeating-linear-gradient(90deg, #10b981 0px, #10b981 4px, transparent 4px, transparent 8px)'}}></div>
+              <span className="text-sm text-[var(--muted-foreground)]">Cumulative P&L</span>
             </div>
           </div>
         </div>
       )}
 
       {/* Filters */}
-      <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-3 md:p-4">
-        <div className="flex items-center space-x-2 mb-3">
-          <Filter className="w-4 h-4 text-[var(--accent)]" />
-          <h3 className="text-sm font-semibold text-[var(--foreground)]">Filters</h3>
+      <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-4 shadow-xl shadow-[var(--accent)]/10">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-8 h-8 bg-gradient-to-br from-[var(--accent)] to-blue-500 rounded-lg flex items-center justify-center">
+            <Filter className="w-4 h-4 text-white" />
+          </div>
+          <h3 className="text-lg font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">Filters</h3>
         </div>
         
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
@@ -1105,7 +1167,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         {order.pnl && order.pnl > 0 && <TrendingUp className="w-3 h-3 mr-1" />}
                         {order.pnl && order.pnl < 0 && <TrendingDown className="w-3 h-3 mr-1" />}
                         <span className={`font-bold text-sm ${getPnLColor(order.pnl || 0)}`}>
-                          ₹{Math.round(Math.abs(order.pnl || 0) / 1000)}K
+                          {(order.pnl || 0) === 0 ? '₹0' : `₹${Math.round(Math.abs(order.pnl || 0) / 1000)}K`}
                         </span>
                       </div>
                     </div>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Strategy } from "./StrategiesPage";
-import { apiClient } from "../../lib/api";
+import { apiClient, PerStrategyStatsData } from "../../lib/api";
 import { 
   Play, 
   Pause, 
@@ -21,12 +21,13 @@ import {
 
 interface StrategyCardProps {
   strategy: Strategy;
+  strategyStats?: PerStrategyStatsData;
   onViewSymbols: (strategy: Strategy) => void;
   onViewConfigs: (strategy: Strategy) => void;
   onStrategyUpdated?: (updatedStrategy: Strategy) => void; // Callback for strategy updates
 }
 
-export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrategyUpdated }: StrategyCardProps) {
+export function StrategyCard({ strategy, strategyStats, onViewSymbols, onViewConfigs, onStrategyUpdated }: StrategyCardProps) {
   const [isToggling, setIsToggling] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -269,9 +270,9 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
               </div>
             </div>
             <div className="flex items-center justify-center space-x-1">
-              {getTrendIcon(strategy.livePnL || 0)}
-              <p className={`text-xs md:text-sm font-bold ${getPnLColor(strategy.livePnL || 0)} leading-none`}>
-                ₹{Math.round(Math.abs(strategy.livePnL || 0) / 1000)}K
+              {getTrendIcon(strategyStats?.live_pnl || 0)}
+              <p className={`text-xs md:text-sm font-bold ${getPnLColor(strategyStats?.live_pnl || 0)} leading-none`}>
+                ₹{Math.abs(strategyStats?.live_pnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -287,9 +288,9 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
               </div>
             </div>
             <div className="flex items-center justify-center space-x-1">
-              {getTrendIcon(strategy.overallPnL || 0)}
-              <p className={`text-xs md:text-sm font-bold ${getPnLColor(strategy.overallPnL || 0)} leading-none`}>
-                ₹{Math.round(Math.abs(strategy.overallPnL || 0) / 1000)}K
+              {getTrendIcon(strategyStats?.overall_pnl || 0)}
+              <p className={`text-xs md:text-sm font-bold ${getPnLColor(strategyStats?.overall_pnl || 0)} leading-none`}>
+                ₹{Math.abs(strategyStats?.overall_pnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -301,11 +302,11 @@ export function StrategyCard({ strategy, onViewSymbols, onViewConfigs, onStrateg
             <p className="text-xs text-[var(--muted-foreground)] mt-1">Symbols</p>
           </div>
           <div className="text-center p-2 md:p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">
-            <p className="text-xs md:text-sm font-bold text-green-400 leading-none">{strategy.tradeCount || 0}</p>
+            <p className="text-xs md:text-sm font-bold text-green-400 leading-none">{strategyStats?.trade_count || 0}</p>
             <p className="text-xs text-[var(--muted-foreground)] mt-1">Trades</p>
           </div>
           <div className="text-center p-2 md:p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">
-            <p className="text-xs md:text-sm font-bold text-purple-400 leading-none">{strategy.winRate || 0}%</p>
+            <p className="text-xs md:text-sm font-bold text-purple-400 leading-none">{strategyStats?.win_rate || 0}%</p>
             <p className="text-xs text-[var(--muted-foreground)] mt-1">Win Rate</p>
           </div>
         </div>

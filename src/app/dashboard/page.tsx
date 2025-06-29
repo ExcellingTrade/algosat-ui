@@ -17,6 +17,7 @@ import {
   DashboardSummary,
   OrdersPnlStats,
   StrategyStats,
+  PerStrategyStatsResponse,
   DailyPnlHistory,
   apiClient 
 } from "@/lib/api";
@@ -51,6 +52,7 @@ import {
   Plus,
   Download,
   RotateCcw,
+  RefreshCw,
   Lightbulb,
   Shield,
   Rocket,
@@ -125,6 +127,7 @@ export default function Dashboard() {
   // PNL and Strategy Statistics
   const [overallPnlStats, setOverallPnlStats] = useState<OrdersPnlStats | null>(null);
   const [strategyStats, setStrategyStats] = useState<StrategyStats | null>(null);
+  const [perStrategyStats, setPerStrategyStats] = useState<PerStrategyStatsResponse | null>(null);
   const [dailyPnlHistory, setDailyPnlHistory] = useState<DailyPnlHistory | null>(null);
   
   // Market status state
@@ -414,6 +417,117 @@ export default function Dashboard() {
 
   const pnlGraphData = getPnlGraphData();
 
+  // Calculate risk metrics
+  const calculateRiskMetrics = () => {
+    if (!dailyPnlHistory || dailyPnlHistory.history.length === 0) {
+      return {
+        sharpeRatio: 0,
+        maxDrawdown: 0,
+        avgDailyReturn: 0,
+        volatility: 0,
+        bestDay: 0,
+        worstDay: 0
+      };
+    }
+
+    const dailyReturns = dailyPnlHistory.history.map(day => day.daily_pnl);
+    const n = dailyReturns.length;
+    
+    // Average daily return
+    const avgDailyReturn = dailyReturns.reduce((sum, ret) => sum + ret, 0) / n;
+    
+    // For single day, volatility is 0, so Sharpe ratio is not meaningful
+    if (n === 1) {
+      return {
+        sharpeRatio: 0, // Could also show 'N/A' for insufficient data
+        maxDrawdown: 0,
+        avgDailyReturn: Math.round(avgDailyReturn * 100) / 100,
+        volatility: 0,
+        bestDay: Math.round(dailyReturns[0] * 100) / 100,
+        worstDay: Math.round(dailyReturns[0] * 100) / 100
+      };
+    }
+    
+    // Volatility (standard deviation)
+    const variance = dailyReturns.reduce((sum, ret) => sum + Math.pow(ret - avgDailyReturn, 2), 0) / n;
+    const volatility = Math.sqrt(variance);
+    
+    // Sharpe ratio (assuming risk-free rate of 0 for simplicity)
+    const sharpeRatio = volatility > 0 ? (avgDailyReturn / volatility) : 0;
+    
+    // Max drawdown calculation
+    let maxDrawdown = 0;
+    let peak = dailyPnlHistory.history[0]?.cumulative_pnl || 0;
+    
+    for (const day of dailyPnlHistory.history) {
+      if (day.cumulative_pnl > peak) {
+        peak = day.cumulative_pnl;
+      }
+      const drawdown = peak > 0 ? ((peak - day.cumulative_pnl) / Math.abs(peak)) * 100 : 0;
+      if (drawdown > maxDrawdown) {
+        maxDrawdown = drawdown;
+      }
+    }
+    
+    // Best and worst days
+    const bestDay = Math.max(...dailyReturns);
+    const worstDay = Math.min(...dailyReturns);
+    
+    return {
+      sharpeRatio: Math.round(sharpeRatio * 100) / 100,
+      maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+      avgDailyReturn: Math.round(avgDailyReturn * 100) / 100,
+      volatility: Math.round(volatility * 100) / 100,
+      bestDay: Math.round(bestDay * 100) / 100,
+      worstDay: Math.round(worstDay * 100) / 100
+    };
+  };
+
+  const riskMetrics = calculateRiskMetrics();
+
+  // Emergency actions
+  const handleEmergencyStopAll = async () => {
+    if (!confirm('⚠️ EMERGENCY STOP: This will disable ALL active strategies immediately. Are you sure?')) {
+      return;
+    }
+    
+    try {
+      console.log('Emergency stop: Disabling all strategies...');
+      const activeStrategiesList = strategies.filter(s => s.enabled);
+      
+      // Disable all active strategies
+      const disablePromises = activeStrategiesList.map(strategy => 
+        apiClient.disableStrategy(strategy.id)
+      );
+      
+      await Promise.all(disablePromises);
+      
+      // Refresh data
+      await loadDashboardData(true);
+      
+      alert(`✅ Emergency stop completed. ${activeStrategiesList.length} strategies disabled.`);
+    } catch (err) {
+      console.error('Emergency stop failed:', err);
+      alert('❌ Emergency stop failed. Please check manually.');
+    }
+  };
+
+  const handleExitAllPositions = async () => {
+    if (!confirm('⚠️ EXIT ALL POSITIONS: This will attempt to exit all open positions. Are you sure?')) {
+      return;
+    }
+    
+    try {
+      console.log('Attempting to exit all positions...');
+      // This would need a specific API endpoint for mass position exit
+      // For now, just show a message
+      alert('⚠️ This feature requires implementation of mass exit API endpoint.');
+    } catch (err) {
+      console.error('Exit all positions failed:', err);
+      alert('❌ Failed to exit all positions.');
+    }
+  };
+
   // Helper function to get balance summary for a specific broker
   const getBrokerBalance = (brokerName: string) => {
     const balanceSummary = balanceSummaries.find(
@@ -648,7 +762,7 @@ export default function Dashboard() {
       let dashboardSummaryData: DashboardSummary | null = null;
 
       // Load data concurrently for better performance
-      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, ordersResult, systemStatusResult, healthResult, dashboardSummaryResult, overallPnlResult, strategyStatsResult, dailyPnlResult] = 
+      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, ordersResult, systemStatusResult, healthResult, dashboardSummaryResult, overallPnlResult, strategyStatsResult, dailyPnlResult, perStrategyStatsResult] = 
         await Promise.allSettled([
           apiClient.getStrategies(),
           apiClient.getBrokers(),
@@ -661,7 +775,8 @@ export default function Dashboard() {
           apiClient.getDashboardSummary(),
           apiClient.getOrdersPnlStats(), // Get overall PNL stats
           apiClient.getStrategyStats(), // Get strategy profit/loss stats
-          apiClient.getDailyPnlHistory(30) // Get 30 days of daily P&L history
+          apiClient.getDailyPnlHistory(365), // Get 1 year of daily P&L history to match overall P&L scope
+          apiClient.getPerStrategyStats() // Get per-strategy statistics
         ]);
 
       // Handle strategies
@@ -799,6 +914,15 @@ export default function Dashboard() {
       } else {
         console.error('Dashboard: Failed to load strategy stats:', strategyStatsResult.reason);
         setStrategyStats(null);
+      }
+
+      // Handle per-strategy stats
+      if (perStrategyStatsResult.status === 'fulfilled') {
+        setPerStrategyStats(perStrategyStatsResult.value);
+        console.log('Dashboard: Per-strategy stats loaded:', perStrategyStatsResult.value);
+      } else {
+        console.error('Dashboard: Failed to load per-strategy stats:', perStrategyStatsResult.reason);
+        setPerStrategyStats(null);
       }
 
       // Handle daily P&L history
@@ -1216,16 +1340,16 @@ export default function Dashboard() {
             {activeTab === "overview" && (
               <div className="space-y-6">
                 {/* Enhanced Professional Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                  {/* Total Balance Card */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                  {/* Current Positions Card */}
                   <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-[var(--accent)]/50 rounded-2xl p-6 shadow-2xl shadow-[var(--accent)]/25 ring-1 ring-[var(--accent)]/20 hover:shadow-3xl hover:shadow-[var(--accent)]/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
-                      <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
+                      <p className="text-[var(--muted-foreground)] text-sm">Open Positions</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">
-                        {balanceSummaries.length > 0 ? `₹${balanceSummaries.reduce((sum, b) => sum + (b.summary?.total_balance || 0), 0).toLocaleString('en-IN')}` : '₹0'}
+                        {positions.length}
                       </p>
                       <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
-                        From {balanceSummaries.length} broker{balanceSummaries.length !== 1 ? 's' : ''}
+                        Active trades running
                       </p>
                     </div>
                   </div>
@@ -1264,19 +1388,28 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Active Strategies Card */}
+                  {/* Total Balance Card */}
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-amber-500/50 rounded-2xl p-6 shadow-2xl shadow-amber-500/25 ring-1 ring-amber-500/20 hover:shadow-3xl hover:shadow-amber-500/35 transition-all duration-300 hover:scale-[1.02]">
+                    <div>
+                      <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
+                      <p className="text-xl lg:text-2xl font-bold text-amber-400 break-words">
+                        ₹{balanceSummaries.reduce((total, summary) => total + (summary.summary?.total_balance || 0), 0).toLocaleString('en-IN')}
+                      </p>
+                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
+                        {balanceSummaries.length} {balanceSummaries.length === 1 ? 'broker' : 'brokers'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Strategies Card */}
                   <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-blue-500/50 rounded-2xl p-6 shadow-2xl shadow-blue-500/25 ring-1 ring-blue-500/20 hover:shadow-3xl hover:shadow-blue-500/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
-                      <p className="text-[var(--muted-foreground)] text-sm">Active Strategies</p>
-                      <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)]">
-                        {stats.activeStrategies}
+                      <p className="text-[var(--muted-foreground)] text-sm">Strategies</p>
+                      <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">
+                        {stats.activeStrategies}/{stats.totalStrategies}
                       </p>
-                      <p className="text-blue-400 text-xs lg:text-sm">
-                        {strategyStats ? (
-                          `${strategyStats.strategies_in_profit} profit • ${strategyStats.strategies_in_loss} loss`
-                        ) : (
-                          `${stats.activeStrategies} of ${stats.totalStrategies} enabled`
-                        )}
+                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
+                        Active strategies running
                       </p>
                     </div>
                   </div>
@@ -1298,28 +1431,6 @@ export default function Dashboard() {
                           <p className="text-[var(--muted-foreground)] text-sm">
                             {dailyPnlHistory ? `Last ${dailyPnlHistory.total_days} trading days` : 'Overall trading performance'}
                           </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          <p className="text-sm text-[var(--muted-foreground)]">Total Return</p>
-                          <p className={`text-xl font-bold ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {overallPnlStats ? 
-                              `${overallPnlStats.overall_pnl >= 0 ? '+' : ''}₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString()}` 
-                              : '₹0'
-                            }
-                          </p>
-                        </div>
-                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                          overallPnlStats && overallPnlStats.overall_pnl >= 0 
-                            ? 'bg-green-500/20 border-2 border-green-500/50' 
-                            : 'bg-red-500/20 border-2 border-red-500/50'
-                        }`}>
-                          {overallPnlStats && overallPnlStats.overall_pnl >= 0 ? (
-                            <TrendingUp className="w-8 h-8 text-green-400" />
-                          ) : (
-                            <TrendingDown className="w-8 h-8 text-red-400" />
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1363,7 +1474,12 @@ export default function Dashboard() {
                               axisLine={false}
                               tickLine={false}
                               tick={{ fill: 'var(--muted-foreground)' }}
-                              tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(1) + 'K' : value}`}
+                              tickFormatter={(value) => {
+                                if (Math.abs(value) >= 1000) {
+                                  return `₹${(value/1000).toFixed(1)}K`;
+                                }
+                                return `₹${value}`;
+                              }}
                             />
                             <Tooltip 
                               contentStyle={{ 
@@ -1375,7 +1491,11 @@ export default function Dashboard() {
                                 backdropFilter: 'blur(10px)'
                               }}
                               formatter={(value, name) => {
-                                return [`₹${Number(value).toLocaleString()}`, 'Portfolio Value'];
+                                const numValue = Number(value);
+                                const formattedValue = numValue >= 1000 ? 
+                                  `₹${(numValue/1000).toFixed(1)}K (₹${numValue.toLocaleString()})` : 
+                                  `₹${numValue.toLocaleString()}`;
+                                return [formattedValue, 'Cumulative P&L'];
                               }}
                               labelFormatter={(label) => `Date: ${label}`}
                             />
@@ -1392,7 +1512,7 @@ export default function Dashboard() {
                                 strokeWidth: 3,
                                 fill: 'var(--card-background)'
                               }}
-                              name="Portfolio Value"
+                              name="Cumulative P&L"
                             />
                           </AreaChart>
                         </ResponsiveContainer>
@@ -1416,75 +1536,86 @@ export default function Dashboard() {
                       </div>
                     )}
                     
-                    {/* Enhanced Stats Cards */}
-                    <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 p-6 hover:scale-105 transition-all duration-300">
-                        <div className="absolute top-2 right-2">
-                          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                            <DollarSign className="w-4 h-4 text-green-400" />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-green-400 text-xs font-medium uppercase tracking-wider">Overall P&L</p>
-                          <p className={`text-2xl font-bold ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {overallPnlStats ? 
-                              `₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString()}` 
-                              : '₹0'
-                            }
-                          </p>
-                          <p className="text-xs text-green-300/70">All time performance</p>
-                        </div>
+                    {/* Risk & Performance Metrics - Clean Text Display */}
+                    <div className="mt-6 flex flex-wrap items-center gap-4 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <TrendingUp className="w-4 h-4 text-green-400" />
+                        <span className="text-[var(--muted-foreground)]">Sharpe Ratio:</span>
+                        <span className="font-semibold text-green-400">{riskMetrics.sharpeRatio}</span>
                       </div>
-
-                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/20 p-6 hover:scale-105 transition-all duration-300">
-                        <div className="absolute top-2 right-2">
-                          <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                            <Target className="w-4 h-4 text-blue-400" />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-blue-400 text-xs font-medium uppercase tracking-wider">Win Rate</p>
-                          <p className="text-2xl font-bold text-blue-400">
-                            {overallPnlStats && overallPnlStats.overall_trade_count > 0 ? 
-                              `${Math.round((dailyPnlHistory?.history.filter(day => day.daily_pnl > 0).length || 0) / (dailyPnlHistory?.total_days || 1) * 100)}%`
-                              : '0%'
-                            }
-                          </p>
-                          <p className="text-xs text-blue-300/70">Profitable days</p>
-                        </div>
+                      
+                      <div className="w-px h-4 bg-[var(--border)]"></div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <TrendingDown className="w-4 h-4 text-red-400" />
+                        <span className="text-[var(--muted-foreground)]">Max Drawdown:</span>
+                        <span className="font-semibold text-red-400">{riskMetrics.maxDrawdown}%</span>
                       </div>
-
-                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/5 border border-purple-500/20 p-6 hover:scale-105 transition-all duration-300">
-                        <div className="absolute top-2 right-2">
-                          <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-                            <Activity className="w-4 h-4 text-purple-400" />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-purple-400 text-xs font-medium uppercase tracking-wider">Total Trades</p>
-                          <p className="text-2xl font-bold text-purple-400">
-                            {overallPnlStats ? overallPnlStats.overall_trade_count : 0}
-                          </p>
-                          <p className="text-xs text-purple-300/70">Executed orders</p>
-                        </div>
+                      
+                      <div className="w-px h-4 bg-[var(--border)]"></div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <BarChart3 className="w-4 h-4 text-blue-400" />
+                        <span className="text-[var(--muted-foreground)]">Avg Daily:</span>
+                        <span className="font-semibold text-blue-400">₹{Math.abs(riskMetrics.avgDailyReturn).toLocaleString('en-IN')}</span>
                       </div>
+                      
+                      <div className="w-px h-4 bg-[var(--border)]"></div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <Activity className="w-4 h-4 text-purple-400" />
+                        <span className="text-[var(--muted-foreground)]">Best Day:</span>
+                        <span className="font-semibold text-purple-400">₹{Math.abs(riskMetrics.bestDay).toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500/10 to-yellow-500/5 border border-orange-500/20 p-6 hover:scale-105 transition-all duration-300">
-                        <div className="absolute top-2 right-2">
-                          <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
-                            <BarChart3 className="w-4 h-4 text-orange-400" />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-orange-400 text-xs font-medium uppercase tracking-wider">Avg P&L per Trade</p>
-                          <p className="text-2xl font-bold text-orange-400">
-                            {overallPnlStats && overallPnlStats.overall_trade_count > 0 ? 
-                              `₹${Math.abs(overallPnlStats.overall_pnl / overallPnlStats.overall_trade_count).toFixed(0)}` 
-                              : '₹0'
-                            }
-                          </p>
-                          <p className="text-xs text-orange-300/70">Per execution</p>
-                        </div>
+                {/* Emergency Actions Panel - Compact Design */}
+                <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-red-500/20 rounded-xl p-4 shadow-lg shadow-red-500/10 transition-all duration-300">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
+                        <AlertTriangle className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-red-400">Emergency Controls</h3>
+                        <p className="text-[var(--muted-foreground)] text-xs">Quick risk management actions</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handleEmergencyStopAll}
+                        className="flex items-center space-x-2 px-3 py-2 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 hover:border-red-400/50 rounded-lg transition-all duration-200 hover:scale-[1.02] text-red-400 text-sm font-medium shadow-sm hover:shadow-md"
+                        title="Stop all active strategies immediately"
+                      >
+                        <PauseCircle className="w-4 h-4" />
+                        <span>Stop All</span>
+                      </button>
+                      
+                      <button
+                        onClick={handleExitAllPositions}
+                        className="flex items-center space-x-2 px-3 py-2 bg-orange-600/15 hover:bg-orange-600/25 border border-orange-500/30 hover:border-orange-400/50 rounded-lg transition-all duration-200 hover:scale-[1.02] text-orange-400 text-sm font-medium shadow-sm hover:shadow-md"
+                        title="Exit all open positions"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        <span>Exit All</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => loadDashboardData(false)}
+                        className="flex items-center space-x-2 px-3 py-2 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 hover:border-blue-400/50 rounded-lg transition-all duration-200 hover:scale-[1.02] text-blue-400 text-sm font-medium shadow-sm hover:shadow-md"
+                        title="Refresh all dashboard data"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Refresh</span>
+                      </button>
+                      
+                      <div className="flex items-center text-amber-400 text-xs">
+                        <AlertTriangle className="w-3 h-3 mr-1" />
+                        <span className="hidden sm:inline">Use with caution</span>
+                        <span className="sm:hidden">Caution</span>
                       </div>
                     </div>
                   </div>
@@ -1494,7 +1625,7 @@ export default function Dashboard() {
 
             {/* Strategies Tab */}
             {activeTab === "strategies" && (
-              <StrategiesPage />
+              <StrategiesPage perStrategyStats={perStrategyStats} />
             )}
 
             {/* Brokers Tab */}
@@ -1815,72 +1946,134 @@ export default function Dashboard() {
 
                 {/* P&L Graph */}
                 {pnlGraphData.length > 0 && (
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg p-4">
-                    <div className="flex items-center space-x-2 mb-4">
-                      <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
-                      <h3 className="text-lg font-semibold text-[var(--foreground)]">Daily P&L Trend</h3>
-                      <span className="text-sm text-[var(--muted-foreground)]">
-                        ({pnlGraphData.length} trading days)
-                      </span>
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/15">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-[var(--accent)] to-blue-500 rounded-xl flex items-center justify-center">
+                          <BarChart3 className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
+                            Daily P&L Trend
+                          </h3>
+                          <p className="text-[var(--muted-foreground)] text-sm">
+                            {pnlGraphData.length} trading days • Order performance
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-[var(--muted-foreground)]">Total Orders P&L</p>
+                        <p className={`text-lg font-bold ${
+                          pnlGraphData.reduce((sum, day) => sum + day.cumulativePnl, 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          ₹{Math.abs(pnlGraphData[pnlGraphData.length - 1]?.cumulativePnl || 0).toLocaleString()}
+                        </p>
+                      </div>
                     </div>
-                    <div className="h-64">
+                    
+                    <div className="h-80 relative">
+                      {/* Gradient background for chart area */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-[var(--accent)]/5 to-transparent rounded-2xl"></div>
+                      
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={pnlGraphData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <AreaChart 
+                          data={pnlGraphData}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                        >
+                          <defs>
+                            <linearGradient id="ordersDailyPnlGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                              <stop offset="50%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                            </linearGradient>
+                            <linearGradient id="ordersCumulativePnlGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#10b981" stopOpacity={0.8}/>
+                              <stop offset="50%" stopColor="#10b981" stopOpacity={0.3}/>
+                              <stop offset="100%" stopColor="#10b981" stopOpacity={0.1}/>
+                            </linearGradient>
+                          </defs>
                           <XAxis 
                             dataKey="formattedDate" 
                             stroke="var(--muted-foreground)"
                             fontSize={12}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: 'var(--muted-foreground)' }}
                           />
                           <YAxis 
                             stroke="var(--muted-foreground)"
                             fontSize={12}
-                            tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(1) + 'K' : value}`}
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: 'var(--muted-foreground)' }}
+                            tickFormatter={(value) => {
+                              if (Math.abs(value) >= 1000) {
+                                return `₹${(value/1000).toFixed(1)}K`;
+                              }
+                              return `₹${value}`;
+                            }}
                           />
                           <Tooltip 
                             contentStyle={{ 
                               backgroundColor: 'var(--card-background)', 
                               border: '1px solid var(--border)',
-                              borderRadius: '8px',
-                              color: 'var(--foreground)'
+                              borderRadius: '12px',
+                              color: 'var(--foreground)',
+                              boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                              backdropFilter: 'blur(10px)'
                             }}
                             formatter={(value, name, props) => {
-                              const dataKey = props.dataKey;
-                              const label = dataKey === 'pnl' ? 'Daily P&L' : 'Cumulative P&L';
+                              // Check the dataKey to determine the correct label
+                              const label = props.dataKey === 'pnl' ? 'Daily P&L' : 'Cumulative P&L';
                               return [`₹${Number(value).toLocaleString()}`, label];
                             }}
                             labelFormatter={(label) => `Date: ${label}`}
                           />
-                          <Line 
+                          <Area 
                             type="monotone" 
                             dataKey="pnl" 
                             stroke="#3b82f6" 
                             strokeWidth={2}
-                            dot={{ fill: '#3b82f6', strokeWidth: 0, r: 4 }}
-                            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+                            fill="url(#ordersDailyPnlGradient)"
+                            dot={false}
+                            activeDot={{ 
+                              r: 5, 
+                              stroke: '#3b82f6', 
+                              strokeWidth: 2,
+                              fill: 'var(--card-background)'
+                            }}
                             name="Daily P&L"
                           />
-                          <Line 
+                          <Area 
                             type="monotone" 
                             dataKey="cumulativePnl" 
                             stroke="#10b981" 
                             strokeWidth={2}
-                            strokeDasharray="5 5"
-                            dot={{ fill: '#10b981', strokeWidth: 0, r: 3 }}
-                            activeDot={{ r: 5, stroke: '#10b981', strokeWidth: 2 }}
+                            strokeDasharray="8 4"
+                            fill="url(#ordersCumulativePnlGradient)"
+                            fillOpacity={0.3}
+                            dot={false}
+                            activeDot={{ 
+                              r: 4, 
+                              stroke: '#10b981', 
+                              strokeWidth: 2,
+                              fill: 'var(--card-background)'
+                            }}
                             name="Cumulative P&L"
                           />
-                        </LineChart>
+                        </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="flex justify-center space-x-6 mt-4 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-0.5 bg-blue-500"></div>
-                        <span className="text-[var(--muted-foreground)]">Daily P&L</span>
+                    
+                    {/* Simple Legend */}
+                    <div className="flex justify-center items-center space-x-8 mt-6 pt-4 border-t border-[var(--border)]/30">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-4 h-2 bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"></div>
+                        <span className="text-sm text-[var(--muted-foreground)]">Daily P&L</span>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-0.5 bg-green-500 border-dashed border-t"></div>
-                        <span className="text-[var(--muted-foreground)]">Cumulative P&L</span>
+                      <div className="flex items-center space-x-3">
+                        <div className="w-4 h-2 bg-gradient-to-r from-green-500 to-green-400 rounded-full opacity-70" style={{backgroundImage: 'repeating-linear-gradient(90deg, #10b981 0px, #10b981 4px, transparent 4px, transparent 8px)'}}></div>
+                        <span className="text-sm text-[var(--muted-foreground)]">Cumulative P&L</span>
                       </div>
                     </div>
                   </div>
