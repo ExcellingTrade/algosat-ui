@@ -789,7 +789,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
         </div>
 
         {/* Filter Summary */}
-        <div className="mt-3 pt-3 border-t border-[var(--border)]/30">
+        {/* <div className="mt-3 pt-3 border-t border-[var(--border)]/30">
           <div className="flex items-center justify-between text-xs">
             <span className="text-[var(--muted-foreground)]">
               Showing {filteredAndSortedOrders.length} of {orders.length} trades
@@ -807,6 +807,65 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             >
               Clear All Filters
             </button>
+          </div>
+        </div> */}
+
+        {/* Active Filters Display */}
+        <div className="mt-3 pt-3 border-t border-[var(--border)]/30">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[var(--muted-foreground)]">Active filters:</span>
+            
+            {filters.type !== 'all' && (
+              <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30">
+                Type: {filters.type}
+              </span>
+            )}
+            
+            {filters.pnl !== 'all' && (
+              <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30">
+                P&L: {filters.pnl}
+              </span>
+            )}
+            
+            {filters.status !== 'all' && (
+              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
+                Status: {filters.status}
+              </span>
+            )}
+            
+            {filters.side !== 'all' && (
+              <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded border border-green-500/30">
+                Side: {filters.side}
+              </span>
+            )}
+            
+            {filters.date !== 'all' && (
+              <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded border border-orange-500/30">
+                Date: {formatDate(filters.date)}
+              </span>
+            )}
+            
+            {(filters.type !== 'all' || filters.pnl !== 'all' || filters.status !== 'all' || filters.side !== 'all' || filters.date !== 'all') && (
+              <button
+                onClick={() => {
+                  setFilters({
+                    symbol: '',
+                    type: 'all',
+                    pnl: 'all',
+                    status: 'all',
+                    side: 'all',
+                    date: 'all'
+                  });
+                }}
+                className="px-2 py-1 bg-red-500/20 text-red-400 rounded border border-red-500/30 hover:bg-red-500/30 transition-colors"
+              >
+                Clear All
+              </button>
+            )}
+            
+            {filters.type === 'all' && filters.pnl === 'all' && filters.status === 'all' && filters.side === 'all' && filters.date === 'all' && (
+              <span className="text-[var(--muted-foreground)] italic">None</span>
+            )}
           </div>
         </div>
       </div>
@@ -1117,114 +1176,6 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             )}
           </>
         )}
-      </div>
-
-      {/* Filter Summary for Better UX */}
-      <div className="bg-[var(--card-background)]/50 border border-[var(--border)] rounded-lg p-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-[var(--muted-foreground)]">Active filters:</span>
-          
-          {filters.type !== 'all' && (
-            <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30">
-              Type: {filters.type}
-            </span>
-          )}
-          
-          {filters.pnl !== 'all' && (
-            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30">
-              P&L: {filters.pnl}
-            </span>
-          )}
-          
-          {filters.status !== 'all' && (
-            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
-              Status: {filters.status}
-            </span>
-          )}
-          
-          {filters.side !== 'all' && (
-            <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded border border-green-500/30">
-              Side: {filters.side}
-            </span>
-          )}
-          
-          {filters.date !== 'all' && (
-            <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded border border-orange-500/30">
-              Date: {formatDate(filters.date)}
-            </span>
-          )}
-          
-          {(filters.type !== 'all' || filters.pnl !== 'all' || filters.status !== 'all' || filters.side !== 'all' || filters.date !== 'all') && (
-            <button
-              onClick={() => {
-                setFilters({
-                  symbol: '',
-                  type: 'all',
-                  pnl: 'all',
-                  status: 'all',
-                  side: 'all',
-                  date: 'all'
-                });
-              }}
-              className="px-2 py-1 bg-red-500/20 text-red-400 rounded border border-red-500/30 hover:bg-red-500/30 transition-colors"
-            >
-              Clear All
-            </button>
-          )}
-          
-          {filters.type === 'all' && filters.pnl === 'all' && filters.status === 'all' && filters.side === 'all' && filters.date === 'all' && (
-            <span className="text-[var(--muted-foreground)] italic">None</span>
-          )}
-        </div>
-      </div>
-
-      {/* P&L Graph */}
-      <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl p-4 shadow-lg">
-        <h3 className="text-lg font-semibold text-[var(--foreground)] mb-4">P&L Over Time</h3>
-        
-        <div className="h-48">
-          <ResponsiveContainer>
-            <LineChart data={pnlGraphData}>
-              <defs>
-                <linearGradient id="pnlGradient" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="url(#pnlColor1)" />
-                  <stop offset="100%" stopColor="url(#pnlColor2)" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" className="text-[var(--border)]" />
-              <XAxis dataKey="formattedDate" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
-              <YAxis tickFormatter={(value) => `₹${value}`} tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
-              <Tooltip 
-                formatter={(value) => [`₹${value}`, 'P&L']}
-                contentStyle={{ backgroundColor: 'rgba(0, 0, 0, 0.7)', borderRadius: 8 }}
-                labelStyle={{ display: 'none' }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="cumulativePnl" 
-                stroke="url(#pnlGradient)" 
-                strokeWidth={2.5} 
-                dot={false} 
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <div className="text-center">
-            <p className="text-xs text-[var(--muted-foreground)] mb-1">Total P&L</p>
-            <p className="text-lg font-bold text-[var(--foreground)]">
-              {formatCurrency(stats.totalPnL)}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-[var(--muted-foreground)] mb-1">Average Daily P&L</p>
-            <p className="text-lg font-bold text-[var(--foreground)]">
-              {pnlGraphData.length > 0 ? formatCurrency(pnlGraphData[pnlGraphData.length - 1].cumulativePnl) : '₹0'}
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );

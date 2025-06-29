@@ -15,6 +15,9 @@ import {
   VmDetails,
   BrokerBalanceSummary,
   DashboardSummary,
+  OrdersPnlStats,
+  StrategyStats,
+  DailyPnlHistory,
   apiClient 
 } from "@/lib/api";
 import { MarketTicker } from "@/components/MarketTicker";
@@ -118,6 +121,11 @@ export default function Dashboard() {
 
   // Dashboard summary from API
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
+  
+  // PNL and Strategy Statistics
+  const [overallPnlStats, setOverallPnlStats] = useState<OrdersPnlStats | null>(null);
+  const [strategyStats, setStrategyStats] = useState<StrategyStats | null>(null);
+  const [dailyPnlHistory, setDailyPnlHistory] = useState<DailyPnlHistory | null>(null);
   
   // Market status state
   const [isMarketOpen, setIsMarketOpen] = useState<boolean>(true); // Default to true during market hours
@@ -640,7 +648,7 @@ export default function Dashboard() {
       let dashboardSummaryData: DashboardSummary | null = null;
 
       // Load data concurrently for better performance
-      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, ordersResult, systemStatusResult, healthResult, dashboardSummaryResult] = 
+      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, ordersResult, systemStatusResult, healthResult, dashboardSummaryResult, overallPnlResult, strategyStatsResult, dailyPnlResult] = 
         await Promise.allSettled([
           apiClient.getStrategies(),
           apiClient.getBrokers(),
@@ -650,7 +658,10 @@ export default function Dashboard() {
           apiClient.getOrders(),
           apiClient.getSystemStatus(),
           apiClient.healthCheck(),
-          apiClient.getDashboardSummary()
+          apiClient.getDashboardSummary(),
+          apiClient.getOrdersPnlStats(), // Get overall PNL stats
+          apiClient.getStrategyStats(), // Get strategy profit/loss stats
+          apiClient.getDailyPnlHistory(30) // Get 30 days of daily P&L history
         ]);
 
       // Handle strategies
@@ -770,6 +781,33 @@ export default function Dashboard() {
         setDashboardSummary(dashboardSummaryData);
       } else {
         console.error('Dashboard: Failed to load dashboard summary:', dashboardSummaryResult.reason);
+      }
+
+      // Handle overall PNL stats
+      if (overallPnlResult.status === 'fulfilled') {
+        setOverallPnlStats(overallPnlResult.value);
+        console.log('Dashboard: Overall PNL stats loaded:', overallPnlResult.value);
+      } else {
+        console.error('Dashboard: Failed to load overall PNL stats:', overallPnlResult.reason);
+        setOverallPnlStats(null);
+      }
+
+      // Handle strategy stats
+      if (strategyStatsResult.status === 'fulfilled') {
+        setStrategyStats(strategyStatsResult.value);
+        console.log('Dashboard: Strategy stats loaded:', strategyStatsResult.value);
+      } else {
+        console.error('Dashboard: Failed to load strategy stats:', strategyStatsResult.reason);
+        setStrategyStats(null);
+      }
+
+      // Handle daily P&L history
+      if (dailyPnlResult.status === 'fulfilled') {
+        setDailyPnlHistory(dailyPnlResult.value);
+        console.log('Dashboard: Daily P&L history loaded:', dailyPnlResult.value);
+      } else {
+        console.error('Dashboard: Failed to load daily P&L history:', dailyPnlResult.reason);
+        setDailyPnlHistory(null);
       }
 
       // Calculate stats
@@ -1178,20 +1216,33 @@ export default function Dashboard() {
             {activeTab === "overview" && (
               <div className="space-y-6">
                 {/* Enhanced Professional Stats Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
                   {/* Total Balance Card */}
                   <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-[var(--accent)]/50 rounded-2xl p-6 shadow-2xl shadow-[var(--accent)]/25 ring-1 ring-[var(--accent)]/20 hover:shadow-3xl hover:shadow-[var(--accent)]/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">
-                        {dashboardSummary ? `₹${dashboardSummary.total_balance.amount.toLocaleString('en-IN')}` : '₹0'}
+                        {balanceSummaries.length > 0 ? `₹${balanceSummaries.reduce((sum, b) => sum + (b.summary?.total_balance || 0), 0).toLocaleString('en-IN')}` : '₹0'}
                       </p>
-                      <p className={`text-xs lg:text-sm ${dashboardSummary?.total_balance.is_positive ? 'text-green-400' : 'text-red-400'}`}>
-                        {dashboardSummary ? (
-                          `${dashboardSummary.total_balance.is_positive ? '↗' : '↘'} ${dashboardSummary.total_balance.change_percentage > 0 ? '+' : ''}${dashboardSummary.total_balance.change_percentage}% vs yesterday`
+                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
+                        From {balanceSummaries.length} broker{balanceSummaries.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Overall PNL Card */}
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-purple-500/50 rounded-2xl p-6 shadow-2xl shadow-purple-500/25 ring-1 ring-purple-500/20 hover:shadow-3xl hover:shadow-purple-500/35 transition-all duration-300 hover:scale-[1.02]">
+                    <div>
+                      <p className="text-[var(--muted-foreground)] text-sm">Overall P/L</p>
+                      <p className={`text-xl lg:text-2xl font-bold break-words ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {overallPnlStats ? (
+                          `${overallPnlStats.overall_pnl >= 0 ? '+' : ''}₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString('en-IN')}`
                         ) : (
-                          '-- vs yesterday'
+                          '₹0'
                         )}
+                      </p>
+                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
+                        {overallPnlStats ? `${overallPnlStats.overall_trade_count} total trades` : 'All time'}
                       </p>
                     </div>
                   </div>
@@ -1200,14 +1251,16 @@ export default function Dashboard() {
                   <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border-2 border-green-500/50 rounded-2xl p-6 shadow-2xl shadow-green-500/25 ring-1 ring-green-500/20 hover:shadow-3xl hover:shadow-green-500/35 transition-all duration-300 hover:scale-[1.02]">
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Today's P/L</p>
-                      <p className={`text-xl lg:text-2xl font-bold break-words ${dashboardSummary?.todays_pnl.is_positive ? 'text-green-400' : 'text-red-400'}`}>
-                        {dashboardSummary ? (
-                          `${dashboardSummary.todays_pnl.amount >= 0 ? '+' : ''}₹${Math.abs(dashboardSummary.todays_pnl.amount).toLocaleString('en-IN')}`
+                      <p className={`text-xl lg:text-2xl font-bold break-words ${overallPnlStats && overallPnlStats.today_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {overallPnlStats ? (
+                          `${overallPnlStats.today_pnl >= 0 ? '+' : ''}₹${Math.abs(overallPnlStats.today_pnl).toLocaleString('en-IN')}`
                         ) : (
                           '₹0'
                         )}
                       </p>
-                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">Placeholder for now</p>
+                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
+                        {overallPnlStats ? `${overallPnlStats.today_trade_count} trades today` : 'Real-time data'}
+                      </p>
                     </div>
                   </div>
 
@@ -1216,13 +1269,13 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Active Strategies</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)]">
-                        {dashboardSummary ? dashboardSummary.active_strategies.count : stats.activeStrategies}
+                        {stats.activeStrategies}
                       </p>
                       <p className="text-blue-400 text-xs lg:text-sm">
-                        {dashboardSummary ? (
-                          `${dashboardSummary.active_strategies.profit_count} profit • ${dashboardSummary.active_strategies.loss_count} loss`
+                        {strategyStats ? (
+                          `${strategyStats.strategies_in_profit} profit • ${strategyStats.strategies_in_loss} loss`
                         ) : (
-                          `${stats.activeStrategies} profit • ${stats.totalStrategies - stats.activeStrategies} loss`
+                          `${stats.activeStrategies} of ${stats.totalStrategies} enabled`
                         )}
                       </p>
                     </div>
@@ -1237,35 +1290,110 @@ export default function Dashboard() {
                       <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
                       <h2 className="text-xl font-semibold text-[var(--accent)]">Performance Overview</h2>
                     </div>
-                    <div className="h-64 flex items-end justify-center space-x-2">
-                      {/* Simple bar chart representation */}
-                      {[30, 45, 25, 60, 80, 45, 90, 75, 65, 85, 95, 70].map((height, index) => (
-                        <div key={index} className="relative group">
-                          <div 
-                            className={`w-6 bg-gradient-to-t from-[var(--accent)] to-blue-400 rounded-t transition-all duration-300 group-hover:from-[var(--accent)]/80 group-hover:to-blue-300 shadow-lg ${
-                              index === 11 ? 'shadow-[var(--accent)]/50' : 'shadow-[var(--accent)]/20'
-                            }`}
-                            style={{ height: `${height}%` }}
-                          ></div>
+                    
+                    {dailyPnlHistory && dailyPnlHistory.history.length > 0 ? (
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={dailyPnlHistory.history.map(day => ({
+                            date: day.date,
+                            formattedDate: new Date(day.date).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short'
+                            }),
+                            daily_pnl: day.daily_pnl,
+                            cumulative_pnl: day.cumulative_pnl,
+                            trade_count: day.trade_count
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                            <XAxis 
+                              dataKey="formattedDate" 
+                              stroke="var(--muted-foreground)"
+                              fontSize={12}
+                            />
+                            <YAxis 
+                              stroke="var(--muted-foreground)"
+                              fontSize={12}
+                              tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(1) + 'K' : value}`}
+                            />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'var(--card-background)', 
+                                border: '1px solid var(--border)',
+                                borderRadius: '8px',
+                                color: 'var(--foreground)'
+                              }}
+                              formatter={(value, name) => {
+                                const label = name === 'daily_pnl' ? 'Daily P&L' : 'Cumulative P&L';
+                                return [`₹${Number(value).toLocaleString()}`, label];
+                              }}
+                              labelFormatter={(label) => `Date: ${label}`}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="daily_pnl" 
+                              stroke="#3b82f6" 
+                              strokeWidth={2}
+                              dot={{ fill: '#3b82f6', strokeWidth: 0, r: 4 }}
+                              activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+                              name="Daily P&L"
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="cumulative_pnl" 
+                              stroke="#10b981" 
+                              strokeWidth={2}
+                              strokeDasharray="5 5"
+                              dot={{ fill: '#10b981', strokeWidth: 0, r: 3 }}
+                              activeDot={{ r: 5, stroke: '#10b981', strokeWidth: 2 }}
+                              name="Cumulative P&L"
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="h-64 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <BarChart3 className="w-6 h-6 text-[var(--accent)]" />
+                          </div>
+                          <p className="text-[var(--muted-foreground)]">
+                            {dailyPnlHistory === null ? 'Loading performance data...' : 'No trading data available'}
+                          </p>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
+                    
                     <div className="grid grid-cols-4 gap-4 mt-6">
                       <div className="text-center">
-                        <p className="text-green-400 text-lg font-bold">₹38,450.75</p>
-                        <p className="text-[var(--muted-foreground)] text-sm">Total P&L</p>
+                        <p className={`text-lg font-bold ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {overallPnlStats ? `₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString()}` : '₹0'}
+                        </p>
+                        <p className="text-[var(--muted-foreground)] text-sm">Overall P&L</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-[var(--accent)] text-lg font-bold">68.5%</p>
+                        <p className="text-[var(--accent)] text-lg font-bold">
+                          {overallPnlStats ? 
+                            `${overallPnlStats.overall_trade_count > 0 ? 
+                              Math.round((overallPnlStats.overall_pnl >= 0 ? 1 : 0) * 100) : 0}%` 
+                            : '0%'
+                          }
+                        </p>
                         <p className="text-[var(--muted-foreground)] text-sm">Win Rate</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-blue-400 text-lg font-bold">₹1,240.25</p>
-                        <p className="text-[var(--muted-foreground)] text-sm">Avg. Trade</p>
+                        <p className="text-blue-400 text-lg font-bold">
+                          {overallPnlStats && overallPnlStats.overall_trade_count > 0 ? 
+                            `₹${Math.abs(overallPnlStats.overall_pnl / overallPnlStats.overall_trade_count).toFixed(0)}` 
+                            : '₹0'
+                          }
+                        </p>
+                        <p className="text-[var(--muted-foreground)] text-sm">Avg. P&L</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-purple-400 text-lg font-bold">{stats.activeStrategies}</p>
-                        <p className="text-[var(--muted-foreground)] text-sm">Active Strategies</p>
+                        <p className="text-purple-400 text-lg font-bold">
+                          {strategyStats ? strategyStats.total_strategies : stats.totalStrategies}
+                        </p>
+                        <p className="text-[var(--muted-foreground)] text-sm">Total Strategies</p>
                       </div>
                     </div>
                   </div>

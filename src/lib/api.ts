@@ -263,8 +263,23 @@ export interface SymbolStats {
   live_pnl: number;
   total_trades: number;
   total_pnl: number;
+  today_pnl: number;
+  today_trade_count: number;
   all_trades: number;
   enabled: boolean;
+}
+
+export interface OrdersPnlStats {
+  overall_pnl: number;
+  overall_trade_count: number;
+  today_pnl: number;
+  today_trade_count: number;
+}
+
+export interface StrategyStats {
+  strategies_in_profit: number;
+  strategies_in_loss: number;
+  total_strategies: number;
 }
 
 export interface SymbolTradesResponse {
@@ -323,6 +338,18 @@ export interface BrokerBalanceSummary {
   broker_name: string;
   summary: BalanceSummary;
   fetched_at: string;
+}
+
+export interface DailyPnlData {
+  date: string;
+  daily_pnl: number;
+  trade_count: number;
+  cumulative_pnl: number;
+}
+
+export interface DailyPnlHistory {
+  history: DailyPnlData[];
+  total_days: number;
 }
 
 class ApiClient {
@@ -792,6 +819,29 @@ class ApiClient {
     return this.request(`/orders/summary/${encodeURIComponent(symbol)}`);
   }
 
+  // Orders PNL Statistics
+  async getOrdersPnlStats(symbol?: string, date?: string): Promise<OrdersPnlStats> {
+    const queryParams = new URLSearchParams();
+    if (symbol) queryParams.append('symbol', symbol);
+    if (date) queryParams.append('date', date);
+    
+    const query = queryParams.toString();
+    return this.request(`/orders/pnl-stats${query ? `?${query}` : ''}`);
+  }
+
+  async getOrdersPnlStatsBySymbolId(symbolId: number, date?: string): Promise<OrdersPnlStats> {
+    const queryParams = new URLSearchParams();
+    if (date) queryParams.append('date', date);
+    
+    const query = queryParams.toString();
+    return this.request(`/orders/pnl-stats/by-symbol-id/${symbolId}${query ? `?${query}` : ''}`);
+  }
+
+  // Strategy Statistics
+  async getStrategyStats(): Promise<StrategyStats> {
+    return this.request('/orders/strategy-stats');
+  }
+
   // System Status
   async getSystemStatus(): Promise<any> {
     return this.request('/system/status');
@@ -961,6 +1011,11 @@ class ApiClient {
 
   async getBrokerBalancesSummary(): Promise<BrokerBalancesSummary> {
     return this.request('/dashboard/broker-balances');
+  }
+
+  // Daily PNL History
+  async getDailyPnlHistory(days: number = 30): Promise<DailyPnlHistory> {
+    return this.request(`/orders/daily-pnl-history?days=${days}`);
   }
 }
 

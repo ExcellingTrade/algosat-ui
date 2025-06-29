@@ -126,30 +126,56 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
       
       setIsLoadingStats(true);
       try {
-        // Get real P&L and trade statistics from orders table for each symbol
+        // Get real P&L and trade statistics from orders table for each symbol using symbol ID
         const statsPromises = symbols.map(async symbol => {
           try {
+            // Use the new API that filters by strategy_symbol_id for accurate results
+            const pnlStats = await apiClient.getOrdersPnlStatsBySymbolId(symbol.id);
+            
+            // Also get the existing orders summary for additional stats
             const ordersSummary = await apiClient.getOrdersSummaryBySymbol(symbol.symbol);
+            
             return {
               symbol_id: symbol.id,
               live_trades: ordersSummary.open_trades || 0,
               live_pnl: ordersSummary.live_pnl || 0.0,
-              total_trades: ordersSummary.total_trades || 0,
-              total_pnl: ordersSummary.total_pnl || 0.0,
-              all_trades: ordersSummary.total_trades || 0,
+              total_trades: pnlStats.overall_trade_count || 0,
+              total_pnl: pnlStats.overall_pnl || 0.0,
+              today_pnl: pnlStats.today_pnl || 0.0,
+              today_trade_count: pnlStats.today_trade_count || 0,
+              all_trades: pnlStats.overall_trade_count || 0,
               enabled: symbol.enabled || false
             };
           } catch (error) {
-            console.error(`Failed to fetch orders summary for symbol ${symbol.symbol}:`, error);
-            return {
-              symbol_id: symbol.id,
-              live_trades: 0,
-              live_pnl: 0.0,
-              total_trades: 0,
-              total_pnl: 0.0,
-              all_trades: 0,
-              enabled: symbol.enabled || false
-            };
+            console.error(`Failed to fetch PNL stats for symbol ${symbol.symbol} (ID: ${symbol.id}):`, error);
+            // Fallback to old method if new one fails
+            try {
+              const ordersSummary = await apiClient.getOrdersSummaryBySymbol(symbol.symbol);
+              return {
+                symbol_id: symbol.id,
+                live_trades: ordersSummary.open_trades || 0,
+                live_pnl: ordersSummary.live_pnl || 0.0,
+                total_trades: ordersSummary.total_trades || 0,
+                total_pnl: ordersSummary.total_pnl || 0.0,
+                today_pnl: 0.0,
+                today_trade_count: 0,
+                all_trades: ordersSummary.total_trades || 0,
+                enabled: symbol.enabled || false
+              };
+            } catch (fallbackError) {
+              console.error(`Fallback also failed for symbol ${symbol.symbol}:`, fallbackError);
+              return {
+                symbol_id: symbol.id,
+                live_trades: 0,
+                live_pnl: 0.0,
+                total_trades: 0,
+                total_pnl: 0.0,
+                today_pnl: 0.0,
+                today_trade_count: 0,
+                all_trades: 0,
+                enabled: symbol.enabled || false
+              };
+            }
           }
         });
         
@@ -160,7 +186,7 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
         }, {} as Record<number, any>);
         
         setSymbolStats(statsMap);
-        console.log('SymbolsPage: Trade statistics fetched:', statsMap);
+        console.log('SymbolsPage: Trade statistics fetched with P&L stats:', statsMap);
       } catch (error) {
         console.error('SymbolsPage: Failed to fetch symbol statistics:', error);
       } finally {
@@ -181,6 +207,8 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
         live_pnl: 0.0,
         total_trades: 0, 
         total_pnl: 0.0,
+        today_pnl: 0.0,
+        today_trade_count: 0,
         all_trades: 0,
         enabled: symbol.status === 'active' 
       };
@@ -190,15 +218,17 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
         config_name: config?.name || `Config ${symbol.config_id}`,
         config_description: config?.description || undefined,
         // New detailed statistics
-        live_trades: stats.live_trades,
-        live_pnl: stats.live_pnl,
-        total_trades: stats.total_trades,
-        total_pnl: stats.total_pnl,
-        all_trades: stats.all_trades,
+        live_trades: stats.live_trades || 0,
+        live_pnl: stats.live_pnl || 0.0,
+        total_trades: stats.total_trades || 0,
+        total_pnl: stats.total_pnl || 0.0,
+        today_pnl: stats.today_pnl || 0.0,
+        today_trade_count: stats.today_trade_count || 0,
+        all_trades: stats.all_trades || 0,
         // Backward compatibility
-        tradeCount: stats.all_trades,
-        currentPnL: stats.total_pnl,
-        enabled: stats.enabled
+        tradeCount: stats.all_trades || 0,
+        currentPnL: stats.total_pnl || 0.0,
+        enabled: stats.enabled || false
       };
     });
   }, [symbols, configs, symbolStats]);
@@ -651,9 +681,14 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        <span className={`font-medium ${getPnLColor(symbol.live_pnl || 0)}`}>
-                          {formatCurrency(symbol.live_pnl || 0)}
-                        </span>
+                        <div>
+                          <span className={`font-medium ${getPnLColor(symbol.today_pnl || 0)}`}>
+                            {formatCurrency(symbol.today_pnl || 0)}
+                          </span>
+                          {/* <div className="text-xs text-[var(--muted-foreground)] mt-1">
+                            {symbol.today_trade_count || 0} trade{(symbol.today_trade_count || 0) !== 1 ? 's' : ''}
+                          </div> */}
+                        </div>
                       </td>
                       <td className="py-4 px-6">
                         <button
@@ -716,8 +751,11 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-[var(--muted-foreground)]">Today</p>
-                      <p className={`font-medium text-sm ${getPnLColor(symbol.live_pnl || 0)}`}>
-                        ₹{Math.round(Math.abs(symbol.live_pnl || 0) / 1000)}K
+                      <p className={`font-medium text-sm ${getPnLColor(symbol.today_pnl || 0)}`}>
+                        ₹{Math.round(Math.abs(symbol.today_pnl || 0) / 1000)}K
+                      </p>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        {symbol.today_trade_count || 0} trade{(symbol.today_trade_count || 0) !== 1 ? 's' : ''}
                       </p>
                     </div>
                     <div className="text-center">
