@@ -26,7 +26,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogsManagement } from "@/components/LogsManagement";
 import { StrategiesPage } from "@/components/strategies/StrategiesPage";
 import { ActivityTracker } from "@/components/ActivityTracker";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Home,
   Zap,
@@ -1283,152 +1283,210 @@ export default function Dashboard() {
                 </div>
 
                 {/* Performance Chart & Activity Log */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Performance Overview */}
-                  <div className="lg:col-span-2 backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/15 hover:shadow-2xl hover:shadow-[var(--accent)]/25 transition-all duration-300">
-                    <div className="flex items-center space-x-2 mb-4">
-                      <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
-                      <h2 className="text-xl font-semibold text-[var(--accent)]">Performance Overview</h2>
+                <div className="grid grid-cols-1 gap-6">
+                  {/* Performance Overview - Full Width */}
+                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-8 shadow-xl shadow-[var(--accent)]/15 hover:shadow-2xl hover:shadow-[var(--accent)]/25 transition-all duration-300">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-[var(--accent)] to-blue-500 rounded-xl flex items-center justify-center">
+                          <TrendingUp className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
+                            Performance Overview
+                          </h2>
+                          <p className="text-[var(--muted-foreground)] text-sm">
+                            {dailyPnlHistory ? `Last ${dailyPnlHistory.total_days} trading days` : 'Overall trading performance'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          <p className="text-sm text-[var(--muted-foreground)]">Total Return</p>
+                          <p className={`text-xl font-bold ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {overallPnlStats ? 
+                              `${overallPnlStats.overall_pnl >= 0 ? '+' : ''}₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString()}` 
+                              : '₹0'
+                            }
+                          </p>
+                        </div>
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
+                          overallPnlStats && overallPnlStats.overall_pnl >= 0 
+                            ? 'bg-green-500/20 border-2 border-green-500/50' 
+                            : 'bg-red-500/20 border-2 border-red-500/50'
+                        }`}>
+                          {overallPnlStats && overallPnlStats.overall_pnl >= 0 ? (
+                            <TrendingUp className="w-8 h-8 text-green-400" />
+                          ) : (
+                            <TrendingDown className="w-8 h-8 text-red-400" />
+                          )}
+                        </div>
+                      </div>
                     </div>
                     
                     {dailyPnlHistory && dailyPnlHistory.history.length > 0 ? (
-                      <div className="h-64">
+                      <div className="h-80 relative">
+                        {/* Gradient background for chart area */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[var(--accent)]/5 to-transparent rounded-2xl"></div>
+                        
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={dailyPnlHistory.history.map(day => ({
-                            date: day.date,
-                            formattedDate: new Date(day.date).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'short'
-                            }),
-                            daily_pnl: day.daily_pnl,
-                            cumulative_pnl: day.cumulative_pnl,
-                            trade_count: day.trade_count
-                          }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <AreaChart 
+                            data={dailyPnlHistory.history.map(day => ({
+                              date: day.date,
+                              formattedDate: new Date(day.date).toLocaleDateString('en-IN', {
+                                day: '2-digit',
+                                month: 'short'
+                              }),
+                              cumulative_pnl: day.cumulative_pnl,
+                              trade_count: day.trade_count
+                            }))}
+                            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                          >
+                            <defs>
+                              <linearGradient id="cumulativePnlGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#10b981" stopOpacity={0.8}/>
+                                <stop offset="50%" stopColor="#10b981" stopOpacity={0.3}/>
+                                <stop offset="100%" stopColor="#10b981" stopOpacity={0.1}/>
+                              </linearGradient>
+                            </defs>
                             <XAxis 
                               dataKey="formattedDate" 
                               stroke="var(--muted-foreground)"
                               fontSize={12}
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fill: 'var(--muted-foreground)' }}
                             />
                             <YAxis 
                               stroke="var(--muted-foreground)"
                               fontSize={12}
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fill: 'var(--muted-foreground)' }}
                               tickFormatter={(value) => `₹${value >= 1000 ? (value/1000).toFixed(1) + 'K' : value}`}
                             />
                             <Tooltip 
                               contentStyle={{ 
                                 backgroundColor: 'var(--card-background)', 
                                 border: '1px solid var(--border)',
-                                borderRadius: '8px',
-                                color: 'var(--foreground)'
+                                borderRadius: '12px',
+                                color: 'var(--foreground)',
+                                boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                                backdropFilter: 'blur(10px)'
                               }}
                               formatter={(value, name) => {
-                                const label = name === 'daily_pnl' ? 'Daily P&L' : 'Cumulative P&L';
-                                return [`₹${Number(value).toLocaleString()}`, label];
+                                return [`₹${Number(value).toLocaleString()}`, 'Portfolio Value'];
                               }}
                               labelFormatter={(label) => `Date: ${label}`}
                             />
-                            <Line 
-                              type="monotone" 
-                              dataKey="daily_pnl" 
-                              stroke="#3b82f6" 
-                              strokeWidth={2}
-                              dot={{ fill: '#3b82f6', strokeWidth: 0, r: 4 }}
-                              activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
-                              name="Daily P&L"
-                            />
-                            <Line 
+                            <Area 
                               type="monotone" 
                               dataKey="cumulative_pnl" 
                               stroke="#10b981" 
-                              strokeWidth={2}
-                              strokeDasharray="5 5"
-                              dot={{ fill: '#10b981', strokeWidth: 0, r: 3 }}
-                              activeDot={{ r: 5, stroke: '#10b981', strokeWidth: 2 }}
-                              name="Cumulative P&L"
+                              strokeWidth={3}
+                              fill="url(#cumulativePnlGradient)"
+                              dot={false}
+                              activeDot={{ 
+                                r: 6, 
+                                stroke: '#10b981', 
+                                strokeWidth: 3,
+                                fill: 'var(--card-background)'
+                              }}
+                              name="Portfolio Value"
                             />
-                          </LineChart>
+                          </AreaChart>
                         </ResponsiveContainer>
                       </div>
                     ) : (
-                      <div className="h-64 flex items-center justify-center">
+                      <div className="h-80 flex items-center justify-center">
                         <div className="text-center">
-                          <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <BarChart3 className="w-6 h-6 text-[var(--accent)]" />
+                          <div className="w-20 h-20 bg-gradient-to-br from-[var(--accent)]/20 to-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <BarChart3 className="w-10 h-10 text-[var(--accent)]" />
                           </div>
+                          <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
+                            {dailyPnlHistory === null ? 'Loading Performance Data' : 'No Trading History'}
+                          </h3>
                           <p className="text-[var(--muted-foreground)]">
-                            {dailyPnlHistory === null ? 'Loading performance data...' : 'No trading data available'}
+                            {dailyPnlHistory === null ? 
+                              'Fetching your trading performance...' : 
+                              'Start trading to see your performance metrics here'
+                            }
                           </p>
                         </div>
                       </div>
                     )}
                     
-                    <div className="grid grid-cols-4 gap-4 mt-6">
-                      <div className="text-center">
-                        <p className={`text-lg font-bold ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {overallPnlStats ? `₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString()}` : '₹0'}
-                        </p>
-                        <p className="text-[var(--muted-foreground)] text-sm">Overall P&L</p>
+                    {/* Enhanced Stats Cards */}
+                    <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-500/20 p-6 hover:scale-105 transition-all duration-300">
+                        <div className="absolute top-2 right-2">
+                          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                            <DollarSign className="w-4 h-4 text-green-400" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-green-400 text-xs font-medium uppercase tracking-wider">Overall P&L</p>
+                          <p className={`text-2xl font-bold ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {overallPnlStats ? 
+                              `₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString()}` 
+                              : '₹0'
+                            }
+                          </p>
+                          <p className="text-xs text-green-300/70">All time performance</p>
+                        </div>
                       </div>
-                      <div className="text-center">
-                        <p className="text-[var(--accent)] text-lg font-bold">
-                          {overallPnlStats ? 
-                            `${overallPnlStats.overall_trade_count > 0 ? 
-                              Math.round((overallPnlStats.overall_pnl >= 0 ? 1 : 0) * 100) : 0}%` 
-                            : '0%'
-                          }
-                        </p>
-                        <p className="text-[var(--muted-foreground)] text-sm">Win Rate</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-blue-400 text-lg font-bold">
-                          {overallPnlStats && overallPnlStats.overall_trade_count > 0 ? 
-                            `₹${Math.abs(overallPnlStats.overall_pnl / overallPnlStats.overall_trade_count).toFixed(0)}` 
-                            : '₹0'
-                          }
-                        </p>
-                        <p className="text-[var(--muted-foreground)] text-sm">Avg. P&L</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-purple-400 text-lg font-bold">
-                          {strategyStats ? strategyStats.total_strategies : stats.totalStrategies}
-                        </p>
-                        <p className="text-[var(--muted-foreground)] text-sm">Total Strategies</p>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Activity Log */}
-                  <div className="backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-6 shadow-xl shadow-[var(--accent)]/10">
-                    <div className="flex items-center space-x-2 mb-4">
-                      <Activity className="w-5 h-5 text-[var(--accent)]" />
-                      <h2 className="text-xl font-semibold text-[var(--accent)]">Activity Log</h2>
+                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/20 p-6 hover:scale-105 transition-all duration-300">
+                        <div className="absolute top-2 right-2">
+                          <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                            <Target className="w-4 h-4 text-blue-400" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-blue-400 text-xs font-medium uppercase tracking-wider">Win Rate</p>
+                          <p className="text-2xl font-bold text-blue-400">
+                            {overallPnlStats && overallPnlStats.overall_trade_count > 0 ? 
+                              `${Math.round((dailyPnlHistory?.history.filter(day => day.daily_pnl > 0).length || 0) / (dailyPnlHistory?.total_days || 1) * 100)}%`
+                              : '0%'
+                            }
+                          </p>
+                          <p className="text-xs text-blue-300/70">Profitable days</p>
+                        </div>
+                      </div>
+
+                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 to-pink-500/5 border border-purple-500/20 p-6 hover:scale-105 transition-all duration-300">
+                        <div className="absolute top-2 right-2">
+                          <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                            <Activity className="w-4 h-4 text-purple-400" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-purple-400 text-xs font-medium uppercase tracking-wider">Total Trades</p>
+                          <p className="text-2xl font-bold text-purple-400">
+                            {overallPnlStats ? overallPnlStats.overall_trade_count : 0}
+                          </p>
+                          <p className="text-xs text-purple-300/70">Executed orders</p>
+                        </div>
+                      </div>
+
+                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500/10 to-yellow-500/5 border border-orange-500/20 p-6 hover:scale-105 transition-all duration-300">
+                        <div className="absolute top-2 right-2">
+                          <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
+                            <BarChart3 className="w-4 h-4 text-orange-400" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-orange-400 text-xs font-medium uppercase tracking-wider">Avg P&L per Trade</p>
+                          <p className="text-2xl font-bold text-orange-400">
+                            {overallPnlStats && overallPnlStats.overall_trade_count > 0 ? 
+                              `₹${Math.abs(overallPnlStats.overall_pnl / overallPnlStats.overall_trade_count).toFixed(0)}` 
+                              : '₹0'
+                            }
+                          </p>
+                          <p className="text-xs text-orange-300/70">Per execution</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-3 text-sm">
-                      <div className="border-l-2 border-green-500 pl-3">
-                        <p className="text-[var(--foreground)]">SBIN Long position opened</p>
-                        <p className="text-[var(--muted-foreground)]">2 mins ago • 100 shares at ₹580.50</p>
-                      </div>
-                      <div className="border-l-2 border-red-500 pl-3">
-                        <p className="text-[var(--foreground)]">NIFTY Short position closed</p>
-                        <p className="text-[var(--muted-foreground)]">15 mins ago • 25 lots at ₹21,450.75</p>
-                      </div>
-                      <div className="border-l-2 border-blue-500 pl-3">
-                        <p className="text-[var(--foreground)]">BANKNIFTY Strategy activated</p>
-                        <p className="text-[var(--muted-foreground)]">42 mins ago • Algorithm #127</p>
-                      </div>
-                      <div className="border-l-2 border-[var(--accent)] pl-3">
-                        <p className="text-[var(--foreground)]">System maintenance completed</p>
-                        <p className="text-[var(--muted-foreground)]">1 hour ago • Duration: 5 minutes</p>
-                      </div>
-                      <div className="border-l-2 border-green-500 pl-3">
-                        <p className="text-[var(--foreground)]">SBIN Long position opened</p>
-                        <p className="text-[var(--muted-foreground)]">2 hours ago • 200 shares at ₹575.25</p>
-                      </div>
-                    </div>
-                    <button className="mt-4 text-cyan-400 hover:text-cyan-300 text-sm transition duration-200">
-                      View all activity →
-                    </button>
                   </div>
                 </div>
               </div>
