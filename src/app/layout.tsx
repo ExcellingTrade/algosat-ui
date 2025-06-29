@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RouteGuard } from "@/components/RouteGuard";
+import { ToastProvider } from "@/components/Toast";
 import { Inter, JetBrains_Mono } from 'next/font/google';
 
 const inter = Inter({
@@ -28,9 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="font-inter">
         <ThemeProvider>
           <AuthProvider>
-            <RouteGuard>
-              {children}
-            </RouteGuard>
+            <ToastProvider>
+              <RouteGuard>
+                {children}
+              </RouteGuard>
+            </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

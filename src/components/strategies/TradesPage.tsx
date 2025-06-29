@@ -301,7 +301,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
   };
 
   // Fetch trades with pagination and server-side filtering
-  const fetchTrades = async (page = 1, resetData = true, dateFilter = null) => {
+  const fetchTrades = async (page = 1, resetData = true, dateFilter: string | null = null) => {
     try {
       if (resetData) {
         setIsLoading(true);

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useRouter } from "next/navigation";
@@ -27,6 +27,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogsManagement } from "@/components/LogsManagement";
 import { StrategiesPage } from "@/components/strategies/StrategiesPage";
 import { ActivityTracker } from "@/components/ActivityTracker";
+import { BrokerConfigModal } from "@/components/BrokerConfigModal";
+import { ToastProvider, useToast } from "@/components/Toast";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Home,
@@ -67,7 +69,8 @@ import {
   Menu,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from "lucide-react";
 
 interface DashboardStats {
@@ -92,11 +95,15 @@ export default function Dashboard() {
   const { user, logout, isAuthenticated } = useAuth();
   const { isDark } = useTheme();
   const router = useRouter();
+  const { showToast } = useToast();
   
   const [activeTab, setActiveTab] = useState("overview");
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [brokers, setBrokers] = useState<Broker[]>([]);
+  const [showBrokerConfigModal, setShowBrokerConfigModal] = useState(false);
+  const [selectedBrokerForConfig, setSelectedBrokerForConfig] = useState<string | null>(null);
   const [balanceSummaries, setBalanceSummaries] = useState<BrokerBalanceSummary[]>([]);
+  const [buttonLoading, setButtonLoading] = useState<Record<string, boolean>>({});
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -152,6 +159,7 @@ export default function Dashboard() {
   const [pnlFilter, setPnlFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sideFilter, setSideFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   
   // Sorting state
   const [sortField, setSortField] = useState<string>("signal_time");
@@ -320,6 +328,27 @@ export default function Dashboard() {
     }
   };
 
+  // Date helper functions
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  // Get available dates for filter
+  const availableDates = useMemo(() => {
+    const dates = orders
+      .map(order => order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '')
+      .filter(date => date !== '')
+      .filter((date, index, arr) => arr.indexOf(date) === index)
+      .sort()
+      .reverse();
+    return dates;
+  }, [orders]);
+
   // Filter orders based on selected filters
   const filteredOrders = orders.filter((order: any) => {
     const parsed = parseStrikeSymbol(order.strike_symbol || '');
@@ -343,6 +372,12 @@ export default function Dashboard() {
     
     // Side filter
     if (sideFilter && order.side !== sideFilter) return false;
+    
+    // Date filter
+    if (dateFilter) {
+      const orderDate = order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '';
+      if (orderDate !== dateFilter) return false;
+    }
     
     return true;
   });
@@ -1012,25 +1047,177 @@ export default function Dashboard() {
   };
 
   const toggleBroker = async (brokerName: string, enabled: boolean) => {
+    const buttonKey = `broker-${brokerName}`;
+    setButtonLoading(prev => ({ ...prev, [buttonKey]: true }));
+    
     try {
+      console.log('toggleBroker called:', { brokerName, enabled });
       if (enabled) {
         await apiClient.enableBroker(brokerName);
+        // Immediately update the broker state
+        setBrokers(prev => prev.map(broker => 
+          broker.broker_name === brokerName 
+            ? { ...broker, is_enabled: true }
+            : broker
+        ));
+        showToast({
+          type: "success",
+          title: "Broker Enabled",
+          message: `${brokerName} has been enabled successfully`
+        });
       } else {
         await apiClient.disableBroker(brokerName);
+        // Immediately update the broker state
+        setBrokers(prev => prev.map(broker => 
+          broker.broker_name === brokerName 
+            ? { ...broker, is_enabled: false }
+            : broker
+        ));
+        showToast({
+          type: "success", 
+          title: "Broker Disabled",
+          message: `${brokerName} has been disabled successfully`
+        });
       }
-      await loadDashboardData(true); // Background refresh
+      
+      // Background refresh for any other data that might have changed
+      loadDashboardData(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update broker");
+      console.error('toggleBroker error:', err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to update broker";
+      setError(errorMessage);
+      showToast({
+        type: "error",
+        title: "Broker Update Failed",
+        message: errorMessage
+      });
+    } finally {
+      setButtonLoading(prev => ({ ...prev, [buttonKey]: false }));
+    }
+  };
+
+  const toggleDataProvider = async (brokerName: string, enabled: boolean) => {
+    const buttonKey = `data-provider-${brokerName}`;
+    setButtonLoading(prev => ({ ...prev, [buttonKey]: true }));
+    
+    try {
+      console.log('toggleDataProvider called:', { brokerName, enabled });
+      if (enabled) {
+        await apiClient.enableDataProvider(brokerName);
+        // Immediately update the broker state - disable others and enable this one
+        setBrokers(prev => prev.map(broker => ({
+          ...broker,
+          is_data_provider: broker.broker_name === brokerName
+        })));
+        showToast({
+          type: "success",
+          title: "Data Provider Enabled",
+          message: `${brokerName} is now the active data provider`
+        });
+        
+        // Background refresh for any other data that might have changed
+        loadDashboardData(true);
+      }
+      // Note: We don't handle disabling here as it's automatic when another broker is enabled
+    } catch (err) {
+      console.error('toggleDataProvider error:', err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to update data provider";
+      showToast({
+        type: "error",
+        title: "Data Provider Update Failed",
+        message: errorMessage
+      });
+    } finally {
+      setButtonLoading(prev => ({ ...prev, [buttonKey]: false }));
+    }
+  };
+
+  const toggleTradeExecution = async (brokerName: string, enabled: boolean) => {
+    const buttonKey = `trade-execution-${brokerName}`;
+    setButtonLoading(prev => ({ ...prev, [buttonKey]: true }));
+    
+    try {
+      if (enabled) {
+        await apiClient.enableTradeExecution(brokerName);
+        // Immediately update the broker state
+        setBrokers(prev => prev.map(broker => 
+          broker.broker_name === brokerName 
+            ? { ...broker, trade_execution_enabled: true }
+            : broker
+        ));
+        showToast({
+          type: "success",
+          title: "Trade Execution Enabled",
+          message: `${brokerName} trade execution has been enabled`
+        });
+      } else {
+        await apiClient.disableTradeExecution(brokerName);
+        // Immediately update the broker state
+        setBrokers(prev => prev.map(broker => 
+          broker.broker_name === brokerName 
+            ? { ...broker, trade_execution_enabled: false }
+            : broker
+        ));
+        showToast({
+          type: "success",
+          title: "Trade Execution Disabled",
+          message: `${brokerName} trade execution has been disabled`
+        });
+      }
+      
+      // Background refresh for any other data that might have changed
+      loadDashboardData(true);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update trade execution";
+      showToast({
+        type: "error",
+        title: "Trade Execution Update Failed",
+        message: errorMessage
+      });
+    } finally {
+      setButtonLoading(prev => ({ ...prev, [buttonKey]: false }));
     }
   };
 
   const reauthBroker = async (brokerName: string) => {
+    const buttonKey = `reauth-${brokerName}`;
+    setButtonLoading(prev => ({ ...prev, [buttonKey]: true }));
+    
     try {
       await apiClient.reauthBroker(brokerName);
-      alert(`Reauthentication started for ${brokerName}. Check logs for status.`);
+      showToast({
+        type: "info",
+        title: "Reauthentication Started",
+        message: `${brokerName} reauthentication is in progress. Check status in a few moments.`
+      });
+      
+      // Background refresh to check status after reauthentication
+      setTimeout(() => loadDashboardData(true), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reauth broker");
+      const errorMessage = err instanceof Error ? err.message : "Failed to reauth broker";
+      showToast({
+        type: "error",
+        title: "Reauthentication Failed",
+        message: errorMessage
+      });
+    } finally {
+      setButtonLoading(prev => ({ ...prev, [buttonKey]: false }));
     }
+  };
+
+  const openBrokerConfig = (brokerName: string) => {
+    console.log('openBrokerConfig called:', { brokerName });
+    setSelectedBrokerForConfig(brokerName);
+    setShowBrokerConfigModal(true);
+  };
+
+  const handleBrokerConfigSuccess = async () => {
+    showToast({
+      type: "success",
+      title: "Configuration Updated",
+      message: `${selectedBrokerForConfig} configuration has been updated successfully`
+    });
+    await loadDashboardData(true);
   };
 
   const toggleStrategy = async (strategyId: number, enabled: boolean) => {
@@ -1393,11 +1580,34 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Total Balance</p>
                       <p className="text-xl lg:text-2xl font-bold text-amber-400 break-words">
-                        ₹{balanceSummaries.reduce((total, summary) => total + (summary.summary?.total_balance || 0), 0).toLocaleString('en-IN')}
+                        ₹{dashboardSummary ? dashboardSummary.total_balance.amount.toLocaleString('en-IN') : balanceSummaries.reduce((total, summary) => total + (summary.summary?.total_balance || 0), 0).toLocaleString('en-IN')}
                       </p>
-                      <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
-                        {balanceSummaries.length} {balanceSummaries.length === 1 ? 'broker' : 'brokers'}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
+                          {balanceSummaries.length} {balanceSummaries.length === 1 ? 'broker' : 'brokers'}
+                        </p>
+                        {dashboardSummary && (
+                          <div className={`flex items-center space-x-1 text-xs ${
+                            dashboardSummary.total_balance.change > 0 ? 'text-green-400' : 
+                            dashboardSummary.total_balance.change < 0 ? 'text-red-400' : 
+                            'text-gray-400'
+                          }`}>
+                            {dashboardSummary.total_balance.change > 0 ? (
+                              <TrendingUp className="w-3 h-3" />
+                            ) : dashboardSummary.total_balance.change < 0 ? (
+                              <TrendingDown className="w-3 h-3" />
+                            ) : (
+                              <div className="w-3 h-3 rounded-full border border-current opacity-60"></div>
+                            )}
+                            <span>
+                              {dashboardSummary.total_balance.change > 0 ? '+' : dashboardSummary.total_balance.change < 0 ? '' : '±'}₹{Math.abs(dashboardSummary.total_balance.change).toLocaleString('en-IN')}
+                            </span>
+                            <span className="opacity-70">
+                              ({dashboardSummary.total_balance.change > 0 ? '+' : dashboardSummary.total_balance.change < 0 ? '' : '±'}{Math.abs(dashboardSummary.total_balance.change_percentage).toFixed(1)}%)
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1702,7 +1912,7 @@ export default function Dashboard() {
                           className={`relative backdrop-blur-sm bg-[var(--card-background)] border ${theme.border} rounded-xl p-6 shadow-xl ${theme.glow} hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] group overflow-hidden`}
                         >
                           {/* Background Gradient */}
-                          <div className={`absolute inset-0 bg-gradient-to-br ${theme.primary} opacity-5 group-hover:opacity-10 transition-opacity duration-300`}></div>
+                          <div className={`absolute inset-0 bg-gradient-to-br ${theme.primary} opacity-5 group-hover:opacity-10 transition-opacity duration-300 pointer-events-none`}></div>
                           
                           {/* Connection Status Indicator */}
                           <div className="absolute top-4 right-4">
@@ -1842,38 +2052,105 @@ export default function Dashboard() {
                             </span>
                           </div>
 
-                          {/* Action Buttons */}
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => toggleBroker(broker.broker_name, !broker.is_enabled)}
-                              className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                broker.is_enabled 
-                                  ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30 hover:shadow-lg hover:shadow-red-500/20' 
-                                  : 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 hover:shadow-lg hover:shadow-green-500/20'
-                              }`}
-                            >
-                              <div className="flex items-center space-x-2">
-                                {broker.is_enabled ? (
-                                  <>
-                                    <PauseCircle className="w-4 h-4" />
-                                    <span>Disconnect</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <PlayCircle className="w-4 h-4" />
-                                    <span>Connect</span>
-                                  </>
-                                )}
+                          {/* Management Controls */}
+                          <div className="relative z-10 space-y-4">
+                            {/* Data Provider & Trade Execution Controls */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-xs font-medium text-[var(--muted-foreground)]">Data Provider</label>
+                                <button
+                                  onClick={() => toggleDataProvider(broker.broker_name, true)}
+                                  disabled={broker.is_data_provider || buttonLoading[`data-provider-${broker.broker_name}`]}
+                                  className={`relative z-20 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                                    broker.is_data_provider
+                                      ? 'bg-blue-500/30 text-blue-300 border border-blue-500/50 cursor-not-allowed'
+                                      : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border border-blue-500/60 hover:from-blue-600 hover:to-blue-700 hover:border-blue-500/80 hover:shadow-lg hover:shadow-blue-500/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-center space-x-1">
+                                    {buttonLoading[`data-provider-${broker.broker_name}`] && (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    )}
+                                    <span>{broker.is_data_provider ? 'Active' : 'Enable'}</span>
+                                  </div>
+                                </button>
                               </div>
-                            </button>
-                            
+                              
+                              <div className="space-y-2">
+                                <label className="text-xs font-medium text-[var(--muted-foreground)]">Trade Execution</label>
+                                <button
+                                  onClick={() => toggleTradeExecution(broker.broker_name, !broker.trade_execution_enabled)}
+                                  disabled={buttonLoading[`trade-execution-${broker.broker_name}`]}
+                                  className={`relative z-20 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                                    broker.trade_execution_enabled
+                                      ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 hover:shadow-md hover:shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed'
+                                      : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border border-purple-500/60 hover:from-purple-600 hover:to-purple-700 hover:border-purple-500/80 hover:shadow-lg hover:shadow-purple-500/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-center space-x-1">
+                                    {buttonLoading[`trade-execution-${broker.broker_name}`] && (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    )}
+                                    <span>{broker.trade_execution_enabled ? 'Disable' : 'Enable'}</span>
+                                  </div>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Primary Action Buttons */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                onClick={() => toggleBroker(broker.broker_name, !broker.is_enabled)}
+                                disabled={buttonLoading[`broker-${broker.broker_name}`]}
+                                className={`relative z-20 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                  broker.is_enabled 
+                                    ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30 hover:shadow-lg hover:shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed' 
+                                    : 'bg-gradient-to-r from-green-500 to-green-600 text-white border border-green-500/60 hover:from-green-600 hover:to-green-700 hover:border-green-500/80 hover:shadow-lg hover:shadow-green-500/30 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+                                }`}
+                              >
+                                <div className="flex items-center justify-center space-x-2">
+                                  {buttonLoading[`broker-${broker.broker_name}`] ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : broker.is_enabled ? (
+                                    <PauseCircle className="w-4 h-4" />
+                                  ) : (
+                                    <PlayCircle className="w-4 h-4" />
+                                  )}
+                                  <span>
+                                    {buttonLoading[`broker-${broker.broker_name}`] 
+                                      ? 'Processing...' 
+                                      : broker.is_enabled 
+                                        ? 'Disconnect' 
+                                        : 'Connect'
+                                    }
+                                  </span>
+                                </div>
+                              </button>
+                              
+                              <button
+                                onClick={() => reauthBroker(broker.broker_name)}
+                                disabled={buttonLoading[`reauth-${broker.broker_name}`]}
+                                className="relative z-20 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white border border-blue-500/60 hover:from-blue-600 hover:to-blue-700 hover:border-blue-500/80 hover:shadow-lg hover:shadow-blue-500/30 active:scale-95 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <div className="flex items-center justify-center space-x-2">
+                                  {buttonLoading[`reauth-${broker.broker_name}`] ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="w-4 h-4" />
+                                  )}
+                                  <span>{buttonLoading[`reauth-${broker.broker_name}`] ? 'Authenticating...' : 'Reauth'}</span>
+                                </div>
+                              </button>
+                            </div>
+
+                            {/* Configuration Button */}
                             <button
-                              onClick={() => reauthBroker(broker.broker_name)}
-                              className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/30 hover:shadow-lg hover:shadow-blue-500/20 rounded-lg text-sm font-medium transition-all duration-200"
+                              onClick={() => openBrokerConfig(broker.broker_name)}
+                              className="relative z-20 w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white border border-amber-500/60 hover:from-amber-600 hover:to-amber-700 hover:border-amber-500/80 hover:shadow-lg hover:shadow-amber-500/30 active:scale-95 rounded-lg text-sm font-medium transition-all duration-200"
                             >
-                              <div className="flex items-center space-x-2">
-                                <RotateCcw className="w-4 h-4" />
-                                <span>Reauth</span>
+                              <div className="flex items-center justify-center space-x-2">
+                                <Settings className="w-4 h-4" />
+                                <span>Configure</span>
                               </div>
                             </button>
                           </div>
@@ -2081,7 +2358,7 @@ export default function Dashboard() {
 
                 {/* Filters */}
                 <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Symbol</label>
                       <select 
@@ -2144,6 +2421,19 @@ export default function Dashboard() {
                         <option value="CLOSED">Closed</option>
                         <option value="AWAITING_ENTRY">Pending</option>
                         <option value="CANCELLED">Cancelled</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Date</label>
+                      <select 
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">All Dates</option>
+                        {availableDates.map(date => (
+                          <option key={date} value={date}>{formatDate(date)}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -2760,6 +3050,19 @@ export default function Dashboard() {
           </main>
         </div>
       </div>
+
+      {/* Broker Configuration Modal */}
+      {showBrokerConfigModal && selectedBrokerForConfig && (
+        <BrokerConfigModal
+          isOpen={showBrokerConfigModal}
+          onClose={() => {
+            setShowBrokerConfigModal(false);
+            setSelectedBrokerForConfig(null);
+          }}
+          brokerName={selectedBrokerForConfig}
+          onSuccess={handleBrokerConfigSuccess}
+        />
+      )}
     </div>
   );
 }

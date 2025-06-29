@@ -795,15 +795,39 @@ class ApiClient {
   }
 
   async enableBroker(name: string): Promise<any> {
-    return this.request(`/brokers/${name}/enable/`, { method: 'PUT' });
+    return this.request(`/brokers/${name}/enable`, { method: 'PUT' });
   }
 
   async disableBroker(name: string): Promise<any> {
-    return this.request(`/brokers/${name}/disable/`, { method: 'PUT' });
+    return this.request(`/brokers/${name}/disable`, { method: 'PUT' });
   }
 
   async reauthBroker(name: string): Promise<any> {
-    return this.request(`/brokers/${name}/auth/`, { method: 'POST' });
+    return this.request(`/brokers/${name}/auth`, { method: 'POST' });
+  }
+
+  async enableDataProvider(name: string): Promise<any> {
+    return this.request(`/brokers/${name}/enable-data-provider`, { method: 'PUT' });
+  }
+
+  async disableDataProvider(name: string): Promise<any> {
+    return this.request(`/brokers/${name}/disable-data-provider`, { method: 'PUT' });
+  }
+
+  async enableTradeExecution(name: string): Promise<any> {
+    return this.request(`/brokers/${name}/enable-trade-execution`, { method: 'PUT' });
+  }
+
+  async disableTradeExecution(name: string): Promise<any> {
+    return this.request(`/brokers/${name}/disable-trade-execution`, { method: 'PUT' });
+  }
+
+  async updateBroker(name: string, updateData: any): Promise<any> {
+    return this.request(`/brokers/${name}`, { method: 'PUT', body: JSON.stringify(updateData) });
+  }
+
+  async getBrokerCredentials(brokerName: string): Promise<any> {
+    return this.request(`/brokers/${brokerName}/credentials`);
   }
 
   async getBalanceSummaries(): Promise<BrokerBalanceSummary[]> {
