@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useRouter } from "next/navigation";
@@ -148,6 +148,10 @@ export default function Dashboard() {
   // Rate limiting state
   const [lastApiCall, setLastApiCall] = useState<Date>(new Date());
   const MIN_API_INTERVAL = 60000; // Minimum 60 seconds between API calls
+
+  // Ref to prevent duplicate API calls during React development mode double-rendering
+  const isInitializingRef = useRef(false);
+  const holidaysInitializingRef = useRef(false);
 
   // Sidebar collapse state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -587,8 +591,8 @@ export default function Dashboard() {
     };
   };
 
-  // Check if market is open - simple function without useCallback to prevent dependency issues
-  const checkMarketStatus = () => {
+  // Check if market is open - memoized function to prevent unnecessary re-renders
+  const checkMarketStatus = useCallback(() => {
     const now = new Date();
     
     // Get IST time components directly using the reliable method
@@ -623,7 +627,7 @@ export default function Dashboard() {
     const isWithinMarketHours = currentTimeMinutes >= marketOpenMinutes && currentTimeMinutes <= marketCloseMinutes;
     
     setIsMarketOpen(isWithinMarketHours);
-  };
+  }, [holidays, holidaysLoaded]); // Dependencies: holidays data
 
   // Holiday caching constants
   const HOLIDAY_CACHE_KEY = 'nse_holidays_cache';
@@ -700,6 +704,14 @@ export default function Dashboard() {
       router.push("/login");
       return;
     }
+
+    // Prevent duplicate initialization during React development mode double-rendering
+    if (isInitializingRef.current) {
+      console.log('Dashboard: Skipping duplicate initialization');
+      return;
+    }
+    
+    isInitializingRef.current = true;
     
     // Force immediate market status check (before anything else)
     console.log('🚀 Dashboard mounted - checking market status immediately...');
@@ -721,12 +733,21 @@ export default function Dashboard() {
     return () => {
       clearInterval(refreshInterval);
       clearInterval(marketStatusInterval);
+      isInitializingRef.current = false; // Reset on cleanup
     };
-  }, [isAuthenticated, router]); // Stable dependencies only
+  }, [isAuthenticated, router]); // Only include primitive dependencies to avoid circular deps
 
   // Separate useEffect for holidays - only run once on mount
   useEffect(() => {
     if (!isAuthenticated) return;
+    
+    // Prevent duplicate holiday fetching
+    if (holidaysInitializingRef.current) {
+      console.log('Dashboard: Skipping duplicate holiday fetch');
+      return;
+    }
+    
+    holidaysInitializingRef.current = true;
     
     // Define functions inside useEffect to avoid dependency issues
     const fetchHolidaysOnMount = async () => {
@@ -763,9 +784,14 @@ export default function Dashboard() {
     
     // Initial fetch only
     fetchHolidaysOnMount();
+    
+    // Cleanup function to reset the ref
+    return () => {
+      holidaysInitializingRef.current = false;
+    };
   }, [isAuthenticated]); // Only depend on authentication
 
-  const loadDashboardData = async (isBackgroundRefresh = false) => {
+  const loadDashboardData = useCallback(async (isBackgroundRefresh = false) => {
     try {
       // Rate limiting check - prevent calls more frequent than 60 seconds
       const now = new Date();
@@ -989,7 +1015,7 @@ export default function Dashboard() {
       // Update last data refresh time
       setLastDataUpdate(new Date());
     }
-  };
+  }, []); // Empty dependency array since this function uses only state setters and API calls
 
   const loadBrokerData = async () => {
     try {
