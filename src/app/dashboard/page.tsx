@@ -104,6 +104,7 @@ export default function Dashboard() {
   const [selectedBrokerForConfig, setSelectedBrokerForConfig] = useState<string | null>(null);
   const [balanceSummaries, setBalanceSummaries] = useState<BrokerBalanceSummary[]>([]);
   const [buttonLoading, setButtonLoading] = useState<Record<string, boolean>>({});
+  const [brokersLoading, setBrokersLoading] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1058,6 +1059,28 @@ export default function Dashboard() {
     }
   };
 
+  // Handler to refresh brokers data
+  const handleRefreshBrokers = async () => {
+    setBrokersLoading(true);
+    setError(null);
+    try {
+      console.log('Dashboard: Refreshing broker data...');
+      const data = await apiClient.getBrokers();
+      setBrokers(data);
+      
+      // Also refresh balance summaries
+      const balanceData = await apiClient.getBalanceSummaries();
+      setBalanceSummaries(balanceData);
+      
+      console.log('Dashboard: Broker data refreshed successfully');
+    } catch (err) {
+      console.error('Dashboard: Failed to refresh brokers:', err);
+      setError("Failed to refresh brokers");
+    } finally {
+      setBrokersLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push("/login");
@@ -1728,7 +1751,7 @@ export default function Dashboard() {
                               }}
                               formatter={(value, name) => {
                                 const numValue = Number(value);
-                                const formattedValue = numValue >= 1000 ? 
+                                const formattedValue = numValue >= 1000 ?
                                   `₹${(numValue/1000).toFixed(1)}K (₹${numValue.toLocaleString()})` : 
                                   `₹${numValue.toLocaleString()}`;
                                 return [formattedValue, 'Cumulative P&L'];
@@ -1874,6 +1897,14 @@ export default function Dashboard() {
                       <div className="flex items-center space-x-2">
                         <Link className="w-5 h-5 text-[var(--accent)]" />
                         <span>Trading Brokers</span>
+                        <button
+                          onClick={handleRefreshBrokers}
+                          disabled={brokersLoading}
+                          className={`ml-2 p-2 rounded-full border border-[var(--border)] bg-[var(--card-background)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--muted-foreground)] hover:text-[var(--accent)] ${brokersLoading ? 'opacity-50' : ''}`}
+                          title="Refresh broker data"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${brokersLoading ? 'animate-spin' : ''}`} />
+                        </button>
                       </div>
                     </h2>
                     <p className="text-[var(--muted-foreground)]">Manage your broker connections and monitor account balances</p>
@@ -2039,6 +2070,33 @@ export default function Dashboard() {
                             </div>
                           )}
 
+                          {/* Connection Status */}
+                          <div className="mb-4">
+                            <div className={`backdrop-blur-sm bg-[var(--background)]/30 rounded-lg p-3 border ${
+                              broker.status === 'CONNECTED' ? 'border-green-500/30' :
+                              broker.status === 'AUTHENTICATING' ? 'border-yellow-500/30' :
+                              'border-red-500/30'
+                            }`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    broker.status === 'CONNECTED' ? 'bg-green-400' :
+                                    broker.status === 'AUTHENTICATING' ? 'bg-yellow-400 animate-pulse' :
+                                    'bg-red-400'
+                                  }`}></div>
+                                  <span className="text-xs text-[var(--muted-foreground)]">Connection Status</span>
+                                </div>
+                                <span className={`text-xs font-medium ${
+                                  broker.status === 'CONNECTED' ? 'text-green-400' :
+                                  broker.status === 'AUTHENTICATING' ? 'text-yellow-400' :
+                                  'text-red-400'
+                                }`}>
+                                  {broker.status || 'DISCONNECTED'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
                           {/* Features Grid */}
                           <div className="grid grid-cols-2 gap-3 mb-6">
                             <div className={`backdrop-blur-sm bg-[var(--background)]/30 rounded-lg p-3 border border-[var(--border)] ${
@@ -2074,7 +2132,16 @@ export default function Dashboard() {
                           <div className="text-xs text-[var(--muted-foreground)] mb-6">
                             <span>Last verified: </span>
                             <span className="text-[var(--muted-foreground)]">
-                              {broker.last_auth_check ? new Date(broker.last_auth_check).toLocaleDateString() : 'Never'}
+                              {broker.last_auth_check ? 
+                                new Date(broker.last_auth_check).toLocaleString('en-IN', {
+                                  timeZone: 'Asia/Kolkata',
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                }) : 'Never'
+                              }
                             </span>
                           </div>
 
@@ -2155,16 +2222,16 @@ export default function Dashboard() {
                               
                               <button
                                 onClick={() => reauthBroker(broker.broker_name)}
-                                disabled={buttonLoading[`reauth-${broker.broker_name}`]}
+                                disabled={buttonLoading[`reauth-${broker.broker_name}`] || broker.status === 'AUTHENTICATING'}
                                 className="relative z-20 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white border border-blue-500/60 hover:from-blue-600 hover:to-blue-700 hover:border-blue-500/80 hover:shadow-lg hover:shadow-blue-500/30 active:scale-95 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <div className="flex items-center justify-center space-x-2">
-                                  {buttonLoading[`reauth-${broker.broker_name}`] ? (
+                                  {(buttonLoading[`reauth-${broker.broker_name}`] || broker.status === 'AUTHENTICATING') ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
                                   ) : (
                                     <RotateCcw className="w-4 h-4" />
                                   )}
-                                  <span>{buttonLoading[`reauth-${broker.broker_name}`] ? 'Authenticating...' : 'Reauth'}</span>
+                                  <span>{(buttonLoading[`reauth-${broker.broker_name}`] || broker.status === 'AUTHENTICATING') ? 'Authenticating...' : 'Reauth'}</span>
                                 </div>
                               </button>
                             </div>

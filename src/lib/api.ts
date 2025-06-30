@@ -98,6 +98,7 @@ export interface Broker {
   is_enabled: boolean;
   is_data_provider: boolean;
   trade_execution_enabled: boolean;
+  status: string;
   notes?: string;
   credentials_status?: string;
   last_auth_check?: string;
