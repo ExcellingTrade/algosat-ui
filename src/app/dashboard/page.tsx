@@ -106,6 +106,7 @@ export default function Dashboard() {
   const [buttonLoading, setButtonLoading] = useState<Record<string, boolean>>({});
   const [brokersLoading, setBrokersLoading] = useState(false);
   const [overviewLoading, setOverviewLoading] = useState(false);
+  const [strategiesLoading, setStrategiesLoading] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1141,6 +1142,63 @@ export default function Dashboard() {
     }
   };
 
+  const handleRefreshStrategies = async () => {
+    setStrategiesLoading(true);
+    setError(null);
+    try {
+      console.log('Dashboard: Refreshing strategies data...');
+      
+      // Load strategies-specific data concurrently
+      const [strategiesResult, strategyStatsResult, perStrategyStatsResult] = await Promise.allSettled([
+        apiClient.getStrategies(),
+        apiClient.getStrategyStats(),
+        apiClient.getPerStrategyStats()
+      ]);
+      
+      // Handle strategies
+      if (strategiesResult.status === 'fulfilled') {
+        setStrategies(strategiesResult.value);
+        
+        // Also fetch symbols for each strategy in the background (non-blocking)
+        const symbolsPromises = strategiesResult.value.map(async (strategy: any) => {
+          try {
+            return await apiClient.getStrategySymbols(strategy.id);
+          } catch (error) {
+            console.warn(`Failed to refresh symbols for strategy ${strategy.id}:`, error);
+            return [];
+          }
+        });
+        
+        Promise.allSettled(symbolsPromises).then(() => {
+          console.log('Dashboard: Strategy symbols refreshed in background');
+        });
+      } else {
+        console.error('Dashboard: Failed to refresh strategies:', strategiesResult.reason);
+      }
+      
+      // Handle strategy stats
+      if (strategyStatsResult.status === 'fulfilled') {
+        setStrategyStats(strategyStatsResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh strategy stats:', strategyStatsResult.reason);
+      }
+      
+      // Handle per-strategy stats
+      if (perStrategyStatsResult.status === 'fulfilled') {
+        setPerStrategyStats(perStrategyStatsResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh per-strategy stats:', perStrategyStatsResult.reason);
+      }
+      
+      console.log('Dashboard: Strategies data refreshed successfully');
+    } catch (err) {
+      console.error('Dashboard: Failed to refresh strategies:', err);
+      setError("Failed to refresh strategies data");
+    } finally {
+      setStrategiesLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push("/login");
@@ -1965,7 +2023,31 @@ export default function Dashboard() {
 
             {/* Strategies Tab */}
             {activeTab === "strategies" && (
-              <StrategiesPage perStrategyStats={perStrategyStats} />
+              <div className="space-y-6">
+                {/* Header with Refresh Button */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-2">
+                      <div className="flex items-center space-x-2">
+                        <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
+                        <span>Trading Strategies</span>
+                        <button
+                          onClick={handleRefreshStrategies}
+                          disabled={strategiesLoading}
+                          className={`ml-2 p-2 rounded-full border border-[var(--border)] bg-[var(--card-background)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--muted-foreground)] hover:text-[var(--accent)] ${strategiesLoading ? 'opacity-50' : ''}`}
+                          title="Refresh strategies data"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${strategiesLoading ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+                    </h2>
+                    <p className="text-[var(--muted-foreground)]">Monitor your automated trading strategies and performance metrics</p>
+                  </div>
+                </div>
+                
+                {/* Strategies Content */}
+                <StrategiesPage perStrategyStats={perStrategyStats} />
+              </div>
             )}
 
             {/* Brokers Tab */}
