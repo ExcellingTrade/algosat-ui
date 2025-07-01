@@ -1102,7 +1102,6 @@ export default function Dashboard() {
         setPositions(positionsResult.value);
       } else {
         console.error('Dashboard: Failed to refresh positions:', positionsResult.reason);
-        throw new Error('Failed to load positions data');
       }
       
       // Handle dashboard summary
