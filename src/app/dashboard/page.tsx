@@ -105,6 +105,7 @@ export default function Dashboard() {
   const [balanceSummaries, setBalanceSummaries] = useState<BrokerBalanceSummary[]>([]);
   const [buttonLoading, setButtonLoading] = useState<Record<string, boolean>>({});
   const [brokersLoading, setBrokersLoading] = useState(false);
+  const [overviewLoading, setOverviewLoading] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1081,6 +1082,66 @@ export default function Dashboard() {
     }
   };
 
+  const handleRefreshOverview = async () => {
+    setOverviewLoading(true);
+    setError(null);
+    try {
+      console.log('Dashboard: Refreshing overview data...');
+      
+      // Load overview-specific data concurrently
+      const [positionsResult, dashboardSummaryResult, overallPnlResult, dailyPnlResult, balanceSummariesResult] = await Promise.allSettled([
+        apiClient.getPositions(),
+        apiClient.getDashboardSummary(),
+        apiClient.getOrdersPnlStats(),
+        apiClient.getDailyPnlHistory(365),
+        apiClient.getBalanceSummaries()
+      ]);
+      
+      // Handle positions
+      if (positionsResult.status === 'fulfilled') {
+        setPositions(positionsResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh positions:', positionsResult.reason);
+        throw new Error('Failed to load positions data');
+      }
+      
+      // Handle dashboard summary
+      if (dashboardSummaryResult.status === 'fulfilled') {
+        setDashboardSummary(dashboardSummaryResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh dashboard summary:', dashboardSummaryResult.reason);
+      }
+      
+      // Handle overall PNL stats
+      if (overallPnlResult.status === 'fulfilled') {
+        setOverallPnlStats(overallPnlResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh PNL stats:', overallPnlResult.reason);
+      }
+      
+      // Handle daily PNL history
+      if (dailyPnlResult.status === 'fulfilled') {
+        setDailyPnlHistory(dailyPnlResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh daily PNL history:', dailyPnlResult.reason);
+      }
+      
+      // Handle balance summaries
+      if (balanceSummariesResult.status === 'fulfilled') {
+        setBalanceSummaries(balanceSummariesResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh balance summaries:', balanceSummariesResult.reason);
+      }
+      
+      console.log('Dashboard: Overview data refreshed successfully');
+    } catch (err) {
+      console.error('Dashboard: Failed to refresh overview:', err);
+      setError("Failed to refresh overview data");
+    } finally {
+      setOverviewLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push("/login");
@@ -1575,6 +1636,27 @@ export default function Dashboard() {
             {/* Overview Tab */}
             {activeTab === "overview" && (
               <div className="space-y-6">
+                {/* Header */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-2">
+                      <div className="flex items-center space-x-2">
+                        <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
+                        <span>Dashboard Overview</span>
+                        <button
+                          onClick={handleRefreshOverview}
+                          disabled={overviewLoading}
+                          className={`ml-2 p-2 rounded-full border border-[var(--border)] bg-[var(--card-background)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--muted-foreground)] hover:text-[var(--accent)] ${overviewLoading ? 'opacity-50' : ''}`}
+                          title="Refresh overview data"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${overviewLoading ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+                    </h2>
+                    <p className="text-[var(--muted-foreground)]">Real-time trading performance and portfolio overview</p>
+                  </div>
+                </div>
+
                 {/* Enhanced Professional Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                   {/* Current Positions Card */}
