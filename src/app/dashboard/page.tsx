@@ -107,6 +107,7 @@ export default function Dashboard() {
   const [brokersLoading, setBrokersLoading] = useState(false);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [strategiesLoading, setStrategiesLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -1199,6 +1200,41 @@ export default function Dashboard() {
     }
   };
 
+  const handleRefreshOrders = async () => {
+    setOrdersLoading(true);
+    setError(null);
+    try {
+      console.log('Dashboard: Refreshing orders data...');
+      
+      // Load orders-specific data concurrently
+      const [ordersResult, overallPnlResult] = await Promise.allSettled([
+        apiClient.getOrders(),
+        apiClient.getOrdersPnlStats()
+      ]);
+      
+      // Handle orders
+      if (ordersResult.status === 'fulfilled') {
+        setOrders(ordersResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh orders:', ordersResult.reason);
+      }
+      
+      // Handle overall PnL stats (related to orders)
+      if (overallPnlResult.status === 'fulfilled') {
+        setOverallPnlStats(overallPnlResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh overall PnL stats:', overallPnlResult.reason);
+      }
+      
+      console.log('Dashboard: Orders data refreshed successfully');
+    } catch (err) {
+      console.error('Dashboard: Failed to refresh orders:', err);
+      setError("Failed to refresh orders data");
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push("/login");
@@ -2070,7 +2106,7 @@ export default function Dashboard() {
                         </button>
                       </div>
                     </h2>
-                    <p className="text-[var(--muted-foreground)]">Manage your broker connections and monitor account balances</p>
+                    <p className="text-[var(--muted-foreground)] text-sm mt-1">Manage your broker connections and monitor account balances</p>
                   </div>
                   
                   {/* Quick Stats */}
@@ -2442,6 +2478,14 @@ export default function Dashboard() {
                           <div className="flex items-center space-x-2">
                             <TrendingUp className="w-5 h-5 text-[var(--accent)]" />
                             <span>Orders</span>
+                            <button
+                              onClick={handleRefreshOrders}
+                              disabled={ordersLoading}
+                              className={`ml-2 p-2 rounded-full border border-[var(--border)] bg-[var(--card-background)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--muted-foreground)] hover:text-[var(--accent)] ${ordersLoading ? 'opacity-50' : ''}`}
+                              title="Refresh orders data"
+                            >
+                              <RefreshCw className={`w-4 h-4 ${ordersLoading ? 'animate-spin' : ''}`} />
+                            </button>
                           </div>
                         </h2>
                         <p className="text-[var(--muted-foreground)]">Monitor all your orders with Symbol, strike, P&L and status</p>

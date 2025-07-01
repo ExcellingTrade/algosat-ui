@@ -367,14 +367,7 @@ export function StrategiesPage({ className = "", perStrategyStats }: StrategiesP
     const items = [];
     
     if (viewMode === 'strategies') {
-      return (
-        <div className="flex items-center space-x-2 mb-4">
-          <Zap className="w-4 h-4 text-[var(--accent)]" />
-          <h1 className="text-xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
-            Trading Strategies
-          </h1>
-        </div>
-      );
+      return null; // No breadcrumb needed for main strategies view
     }
 
     items.push(
