@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useRouter } from "next/navigation";
@@ -68,8 +68,9 @@ import {
   Info,
   Menu,
   X,
-  ChevronLeft,
+  ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Loader2
 } from "lucide-react";
 
@@ -111,6 +112,7 @@ export default function Dashboard() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [vmDetails, setVmDetails] = useState<VmDetails | null>(null);
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics>({
@@ -168,6 +170,7 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState("");
   const [sideFilter, setSideFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [brokerFilter, setBrokerFilter] = useState("");
   
   // Sorting state
   const [sortField, setSortField] = useState<string>("signal_time");
@@ -262,6 +265,113 @@ export default function Dashboard() {
     };
   };
 
+  // Toggle row expansion for broker executions
+  const toggleRowExpansion = (orderId: number) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  // Group broker executions by broker and order ID - same logic as TradesPage
+  const groupBrokerExecutions = (executions: any[]) => {
+    const groups = new Map();
+    
+    executions.forEach(execution => {
+      const key = `${execution.broker_name}_${execution.broker_order_id}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          broker_name: execution.broker_name,
+          broker_order_id: execution.broker_order_id,
+          status: execution.status,
+          order_type: execution.order_type,
+          executions: []
+        });
+      }
+      groups.get(key).executions.push(execution);
+    });
+    
+    // Process each group to create summary
+    return Array.from(groups.values()).map(group => {
+      const buyExecutions = group.executions.filter((e: any) => e.side === 'BUY');
+      const sellExecutions = group.executions.filter((e: any) => e.side === 'SELL');
+      
+      const buyQuantity = buyExecutions.reduce((sum: number, e: any) => sum + (e.executed_quantity || 0), 0);
+      const sellQuantity = sellExecutions.reduce((sum: number, e: any) => sum + (e.executed_quantity || 0), 0);
+      
+      const avgBuyPrice = buyQuantity > 0 ? 
+        buyExecutions.reduce((sum: number, e: any) => sum + (e.execution_price || 0) * (e.executed_quantity || 0), 0) / buyQuantity : 0;
+      const avgSellPrice = sellQuantity > 0 ?
+        sellExecutions.reduce((sum: number, e: any) => sum + (e.execution_price || 0) * (e.executed_quantity || 0), 0) / sellQuantity : 0;
+      
+      const netQuantity = buyQuantity - sellQuantity;
+      const totalPnl = sellQuantity > 0 && avgSellPrice > 0 && avgBuyPrice > 0 ? 
+        ((avgSellPrice - avgBuyPrice) * Math.min(buyQuantity, sellQuantity)) : undefined;
+      
+      return {
+        ...group,
+        net_quantity: netQuantity,
+        total_pnl: totalPnl,
+        has_entry: buyQuantity > 0,
+        has_exit: sellQuantity > 0,
+        entry_price: avgBuyPrice || undefined,
+        exit_price: avgSellPrice || undefined,
+        entry_quantity: buyQuantity,
+        exit_quantity: sellQuantity,
+        entry_time: buyExecutions.length > 0 ? buyExecutions[0].execution_time : undefined,
+        exit_time: sellExecutions.length > 0 ? sellExecutions[0].execution_time : undefined,
+      };
+    });
+  };
+
+  // Helper functions for broker execution colors
+  const getBrokerNameColor = (brokerName: string) => {
+    switch (brokerName.toLowerCase()) {
+      case 'zerodha':
+        return 'bg-orange-500/20 text-orange-400 border border-orange-500/50';
+      case 'fyers':
+        return 'bg-blue-500/20 text-blue-400 border border-blue-500/50';
+      case 'upstox':
+        return 'bg-purple-500/20 text-purple-400 border border-purple-500/50';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/50';
+    }
+  };
+
+  const getExecutionStatusColor = (status: string) => {
+    switch (status?.toUpperCase()) {
+      case 'COMPLETE':
+        return 'bg-green-500/20 text-green-400 border border-green-500/50';
+      case 'OPEN':
+        return 'bg-blue-500/20 text-blue-400 border border-blue-500/50';
+      case 'CANCELLED':
+        return 'bg-red-500/20 text-red-400 border border-red-500/50';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border border-gray-500/50';
+    }
+  };
+
+  const formatExecutionTime = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      return 'N/A';
+    }
+  };
+
   // Export functionality for Orders
   const handleExportOrders = () => {
     if (sortedOrders.length === 0) {
@@ -277,6 +387,7 @@ export default function Dashboard() {
       'Status',
       'Side',
       'Quantity',
+      'Exec Qty',
       'Entry Price',
       'Exit Price',
       'Entry Time',
@@ -293,6 +404,7 @@ export default function Dashboard() {
         order.status || 'N/A',
         order.side || 'N/A',
         order.qty || order.quantity || 0,
+        order.executed_quantity || order.exec_qty || 0,
         order.entry_price || 'N/A',
         order.exit_price || 'N/A',
         order.entry_time ? new Date(order.entry_time).toLocaleTimeString('en-IN', {
@@ -339,11 +451,17 @@ export default function Dashboard() {
   // Date helper functions
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   // Get available dates for filter
@@ -385,6 +503,15 @@ export default function Dashboard() {
     if (dateFilter) {
       const orderDate = order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '';
       if (orderDate !== dateFilter) return false;
+    }
+    
+    // Broker filter - check if any broker execution matches the selected broker
+    if (brokerFilter) {
+      const hasBrokerExecution = order.broker_executions && 
+        order.broker_executions.some((exec: any) => 
+          exec.broker_name && exec.broker_name.toLowerCase() === brokerFilter.toLowerCase()
+        );
+      if (!hasBrokerExecution) return false;
     }
     
     return true;
@@ -2658,7 +2785,7 @@ export default function Dashboard() {
 
                 {/* Filters */}
                 <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Symbol</label>
                       <select 
@@ -2736,6 +2863,23 @@ export default function Dashboard() {
                         ))}
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Broker</label>
+                      <select 
+                        value={brokerFilter}
+                        onChange={(e) => setBrokerFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">All Brokers</option>
+                        {Array.from(new Set(
+                          orders.flatMap(o => 
+                            o.broker_executions ? o.broker_executions.map((exec: any) => exec.broker_name) : []
+                          ).filter(Boolean)
+                        )).map(broker => (
+                          <option key={broker} value={broker}>{broker}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -2759,6 +2903,11 @@ export default function Dashboard() {
                     <table className="w-full">
                       <thead className="bg-[var(--background)]/50 border-b border-[var(--border)]">
                         <tr>
+                          <th className="px-4 py-3 text-left text-[var(--accent)] w-12">
+                            <span className="text-sm font-medium text-[var(--muted-foreground)]">
+                              <Eye className="w-4 h-4" />
+                            </span>
+                          </th>
                           <th 
                             className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                             onClick={() => handleSort('underlying')}
@@ -2838,6 +2987,18 @@ export default function Dashboard() {
                           </th>
                           <th 
                             className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('executed_quantity')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Executed Qty</span>
+                              {sortField === 'executed_quantity' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
+
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                             onClick={() => handleSort('entry_price')}
                           >
                             <div className="flex items-center space-x-1">
@@ -2874,76 +3035,182 @@ export default function Dashboard() {
                       <tbody>
                         {sortedOrders.map((order) => {
                           const parsed = parseStrikeSymbol(order.strike_symbol || '');
+                          const isExpanded = expandedRows.has(order.id);
+                          const hasExecutions = order.broker_executions && order.broker_executions.length > 0;
+                          
                           return (
-                            <tr key={order.id} className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
-                              <td className="px-4 py-3 font-medium text-[var(--foreground)]">
-                                {parsed.underlying || 'N/A'}
-                              </td>
-                              <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
-                                {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                  parsed.type === 'CE' 
-                                    ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                                    : parsed.type === 'PE'
-                                      ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                      : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                                }`}>
-                                  {parsed.type || 'N/A'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`font-bold ${
-                                  order.pnl > 0 
-                                    ? 'text-green-400' 
-                                    : order.pnl < 0 
-                                      ? 'text-red-400' 
-                                      : 'text-[var(--muted-foreground)]'
-                                }`}>
-                                  {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                  order.status === 'OPEN' 
-                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
-                                    : order.status === 'CLOSED'
-                                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                                      : order.status === 'AWAITING_ENTRY'
-                                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
-                                        : order.status === 'CANCELLED'
-                                          ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                                }`}>
-                                  {order.status}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-1 rounded text-xs ${
-                                  order.side === 'BUY' 
-                                    ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                                    : 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                }`}>
-                                  {order.side || 'N/A'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-[var(--muted-foreground)]">{order.qty || 0}</td>
-                              <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                                {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
-                              </td>
-                              <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                                {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
-                              </td>
-                              <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
-                                {order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                }) : 'N/A'}
-                              </td>
-                            </tr>
+                            <React.Fragment key={order.id}>
+                              <tr key={order.id} className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
+                                <td className="px-4 py-3">
+                                  {hasExecutions ? (
+                                    <button
+                                      onClick={() => toggleRowExpansion(order.id)}
+                                      className="p-1 hover:bg-[var(--accent)]/20 rounded transition-colors"
+                                      title={isExpanded ? 'Hide executions' : 'Show executions'}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
+                                      ) : (
+                                        <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <div className="w-6 h-6 flex items-center justify-center">
+                                      <div className="w-1 h-1 bg-[var(--muted-foreground)]/30 rounded-full"></div>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 font-medium text-[var(--foreground)]">
+                                  {parsed.underlying || 'N/A'}
+                                </td>
+                                <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
+                                  {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                    parsed.type === 'CE' 
+                                      ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                      : parsed.type === 'PE'
+                                        ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                        : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                  }`}>
+                                    {parsed.type || 'N/A'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`font-bold ${
+                                    order.pnl > 0 
+                                      ? 'text-green-400' 
+                                      : order.pnl < 0 
+                                        ? 'text-red-400' 
+                                        : 'text-[var(--muted-foreground)]'
+                                  }`}>
+                                    {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                    order.status === 'OPEN' 
+                                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                                      : order.status === 'CLOSED'
+                                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                                        : order.status === 'AWAITING_ENTRY'
+                                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                                          : order.status === 'CANCELLED'
+                                            ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                            : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                  }`}>
+                                    {order.status}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-1 rounded text-xs ${
+                                    order.side === 'BUY' 
+                                      ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                      : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                  }`}>
+                                    {order.side || 'N/A'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-[var(--muted-foreground)]">{order.qty || 0}</td>
+                                <td className="px-4 py-3 text-[var(--muted-foreground)]">{order.executed_quantity || 0}</td>
+                                <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                  {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
+                                </td>
+                                <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                  {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
+                                </td>
+                                <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
+                                  {order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'N/A'}
+                                </td>
+                              </tr>
+                              
+                              {/* Broker Executions Row - only show if expanded */}
+                              {isExpanded && hasExecutions && (
+                                <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
+                                  <td colSpan={12} className="py-4 px-6">
+                                    <div className="space-y-4">
+                                      {groupBrokerExecutions(
+                                        brokerFilter 
+                                          ? (order.broker_executions || []).filter((exec: any) => 
+                                              exec.broker_name && exec.broker_name.toLowerCase() === brokerFilter.toLowerCase()
+                                            )
+                                          : order.broker_executions || []
+                                      ).map((summary) => (
+                                        <div
+                                          key={`${summary.broker_name}_${summary.broker_order_id}`}
+                                          className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8"
+                                        >
+                                          {/* Left: Broker, Status, Order ID */}
+                                          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px]">
+                                            <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)}`}>{summary.broker_name.toUpperCase()}</span>
+                                            <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)}`}>{summary.status}</span>
+                                            <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all" style={{letterSpacing: '0.04em'}}>{summary.broker_order_id}</span>
+                                          </div>
+                                          {/* Middle: Entry/Exit */}
+                                          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {/* Entry */}
+                                            <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-3 flex flex-col gap-1">
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-xs font-bold text-blue-500 uppercase tracking-wide">Entry</span>
+                                                {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
+                                              </div>
+                                              <div className="flex flex-wrap gap-3 text-xs">
+                                                <span className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></span>
+                                                <span className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span></span>
+                                                <span className="text-blue-400">Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></span>
+                                              </div>
+                                            </div>
+                                            {/* Exit */}
+                                            <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-3 flex flex-col gap-1">
+                                              <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-xs font-bold text-orange-500 uppercase tracking-wide">Exit</span>
+                                                {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
+                                              </div>
+                                              <div className="flex flex-wrap gap-3 text-xs">
+                                                <span className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></span>
+                                                <span className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span></span>
+                                                <span className="text-orange-400">Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          {/* Right: PNL, Net, Type */}
+                                          <div className="flex flex-col gap-2 min-w-[180px]">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs text-[var(--muted-foreground)]">Broker P&L</span>
+                                              <span className={`px-2 py-1 rounded font-bold text-sm ${
+                                                summary.total_pnl === undefined
+                                                  ? 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
+                                                  : summary.total_pnl > 0
+                                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                                                  : summary.total_pnl < 0
+                                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                                                  : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
+                                              }`}>
+                                                {summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs text-[var(--muted-foreground)]">Net Qty</span>
+                                              <span className="font-bold text-blue-500">{summary.net_quantity}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs text-[var(--muted-foreground)]">Order Type</span>
+                                              <span className="font-semibold text-[var(--foreground)]">{summary.order_type || 'N/A'}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </tbody>

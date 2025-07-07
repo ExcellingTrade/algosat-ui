@@ -53,11 +53,13 @@ interface BrokerExecutionSummary {
 }
 
 interface Order {
+  qty: number;
   id: number;
   strategy_symbol_id: number;
   strike_symbol: string;
   pnl: number;
   entry_price: number;
+  executed_quantity: number;
   exit_price?: number;
   signal_time: string;
   entry_time?: string;
@@ -95,7 +97,8 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     pnl: 'all',
     status: 'all',
     side: 'all',
-    date: 'all'
+    date: 'all',
+    broker: 'all'
   });
   
   // Sort state
@@ -147,13 +150,18 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
   // Helper function to format execution time
   const formatExecutionTime = (dateString: string) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   // Function to parse strike symbol with intelligent parsing for different formats
@@ -322,7 +330,16 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
         has_exit: exitExecutions.length > 0,
         order_type: orderType,
         product_type: productType,
-        raw_executions: execList.sort((a, b) => new Date(a.execution_time).getTime() - new Date(b.execution_time).getTime())
+        raw_executions: execList.sort((a, b) => {
+          try {
+            const dateA = new Date(a.execution_time).getTime();
+            const dateB = new Date(b.execution_time).getTime();
+            if (isNaN(dateA) || isNaN(dateB)) return 0;
+            return dateA - dateB;
+          } catch {
+            return 0;
+          }
+        })
       };
     });
 
@@ -375,10 +392,19 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
       
       // Date filter
       if (filters.date !== 'all') {
-        const orderDate = new Date(order.signal_time).toISOString().split('T')[0];
+        const orderDate = order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '';
         if (orderDate !== filters.date) return false;
       }
       
+      // Broker filter - check if any broker execution matches the selected broker
+      if (filters.broker !== 'all') {
+        const hasBrokerExecution = order.broker_executions && 
+          order.broker_executions.some((exec: any) => 
+            exec.broker_name && exec.broker_name.toLowerCase() === filters.broker.toLowerCase()
+          );
+        if (!hasBrokerExecution) return false;
+      }
+
       return true;
     });
 
@@ -562,20 +588,32 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
 
   const formatTime = (dateString: string) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
   };
 
   const getStrikeTypeColor = (type: string) => {
@@ -673,13 +711,29 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
       .map(([date, pnl]) => ({
         date,
         pnl: Number(pnl.toFixed(2)),
-        formattedDate: new Date(date).toLocaleDateString('en-IN', {
-          day: '2-digit',
-          month: 'short'
-        }),
+        formattedDate: (() => {
+          try {
+            const d = new Date(date);
+            return isNaN(d.getTime()) ? date : d.toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short'
+            });
+          } catch {
+            return date;
+          }
+        })(),
         cumulativePnl: 0 // Will be calculated below
       }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => {
+        try {
+          const dateA = new Date(a.date).getTime();
+          const dateB = new Date(b.date).getTime();
+          if (isNaN(dateA) || isNaN(dateB)) return 0;
+          return dateA - dateB;
+        } catch {
+          return 0;
+        }
+      });
     
     // Calculate cumulative P&L
     let cumulative = 0;
@@ -959,7 +1013,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
           <h3 className="text-lg font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">Filters</h3>
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 md:gap-3">
           {/* Type Filter */}
           <div>
             <label className="block text-xs text-[var(--muted-foreground)] mb-1">Type</label>
@@ -1033,6 +1087,25 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
               ))}
             </select>
           </div>
+
+          {/* Broker Filter */}
+          <div>
+            <label className="block text-xs text-[var(--muted-foreground)] mb-1">Broker</label>
+            <select
+              value={filters.broker}
+              onChange={(e) => setFilters(prev => ({ ...prev, broker: e.target.value }))}
+              className="w-full px-2 py-1 bg-[var(--background)]/50 border border-[var(--border)] rounded text-xs focus:outline-none focus:border-[var(--accent)]"
+            >
+              <option value="all">All Brokers</option>
+              {Array.from(new Set(
+                orders.flatMap(o => 
+                  o.broker_executions ? o.broker_executions.map((exec: any) => exec.broker_name) : []
+                ).filter(Boolean)
+              )).map(broker => (
+                <option key={broker} value={broker}>{broker}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Filter Summary */}
@@ -1092,7 +1165,13 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
               </span>
             )}
             
-            {(filters.type !== 'all' || filters.pnl !== 'all' || filters.status !== 'all' || filters.side !== 'all' || filters.date !== 'all') && (
+            {filters.broker !== 'all' && (
+              <span className="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded border border-indigo-500/30">
+                Broker: {filters.broker}
+              </span>
+            )}
+            
+            {(filters.type !== 'all' || filters.pnl !== 'all' || filters.status !== 'all' || filters.side !== 'all' || filters.date !== 'all' || filters.broker !== 'all') && (
               <button
                 onClick={() => {
                   setFilters({
@@ -1101,7 +1180,8 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     pnl: 'all',
                     status: 'all',
                     side: 'all',
-                    date: 'all'
+                    date: 'all',
+                    broker: 'all'
                   });
                 }}
                 className="px-2 py-1 bg-red-500/20 text-red-400 rounded border border-red-500/30 hover:bg-red-500/30 transition-colors"
@@ -1110,7 +1190,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
               </button>
             )}
             
-            {filters.type === 'all' && filters.pnl === 'all' && filters.status === 'all' && filters.side === 'all' && filters.date === 'all' && (
+            {filters.type === 'all' && filters.pnl === 'all' && filters.status === 'all' && filters.side === 'all' && filters.date === 'all' && filters.broker === 'all' && (
               <span className="text-[var(--muted-foreground)] italic">None</span>
             )}
           </div>
@@ -1151,7 +1231,8 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     pnl: 'all',
                     status: 'all',
                     side: 'all',
-                    date: 'all'
+                    date: 'all',
+                    broker: 'all'
                   })}
                   className="px-4 py-2 bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 text-[var(--accent)] rounded-lg transition-all duration-200 border border-[var(--accent)]/30"
                 >
@@ -1244,6 +1325,12 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         <ArrowUpDown className="w-3 h-3" />
                       </button>
                     </th>
+                    <th className="text-left py-4 px-6">
+                      <span title="Place order quantity (as sent to broker)">Qty</span>
+                    </th>
+                    <th className="text-left py-4 px-6">
+                      <span title="Total executed quantity across all brokers">Exec Qty</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]/30">
@@ -1270,7 +1357,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                               {isExpanded ? (
                                 <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
                               ) : (
-                                <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                                <ChevronRight className="w-4 h-4 text-[var,--accent]" />
                               )}
                             </button>
                           ) : (
@@ -1329,12 +1416,18 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                       <td className="py-4 px-6">
                         <div className="text-sm">
                           <div className="text-[var(--foreground)]">
-                            {formatDate(order.signal_time)}
+                            {formatDate(order.entry_time || "")}
                           </div>
-                          <div className="text-[var(--muted-foreground)]">
-                            {formatTime(order.signal_time)}
-                          </div>
+                          {/* <div className="text-[var(--muted-foreground)]">
+                            {formatTime(order.entry_time || "")}
+                          </div> */}
                         </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span title="Place order quantity (as sent to broker)">{order.qty}</span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span title="Total executed quantity across all brokers">{order.executed_quantity}</span>
                       </td>
                     </tr>
                     
@@ -1342,128 +1435,76 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                     {isExpanded && hasExecutions && (
                       <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
                         <td colSpan={8} className="py-4 px-6">
-                          <div className="bg-gradient-to-br from-[var(--card-background)]/80 to-[var(--background)]/40 rounded-xl p-5 border border-[var(--border)]/40 shadow-lg">
-                            <div className="flex items-center justify-between mb-4">
-                              <h4 className="text-sm font-bold text-[var(--foreground)] flex items-center">
-                                <div className="w-8 h-8 bg-gradient-to-br from-[var(--accent)] to-blue-500 rounded-lg flex items-center justify-center mr-3">
-                                  <Activity className="w-4 h-4 text-white" />
+                          <div className="space-y-3">
+                            {groupBrokerExecutions(
+                              filters.broker !== 'all' 
+                                ? (order.broker_executions || []).filter((exec: any) => 
+                                    exec.broker_name && exec.broker_name.toLowerCase() === filters.broker.toLowerCase()
+                                  )
+                                : order.broker_executions || []
+                            ).map((summary) => (
+                              <div
+                                key={`${summary.broker_name}_${summary.broker_order_id}`}
+                                className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6"
+                              >
+                                {/* Left: Broker, Status, Order ID */}
+                                <div className="flex flex-wrap md:flex-nowrap md:flex-row md:items-center gap-2 md:gap-3 min-w-[220px]">
+                                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getBrokerNameColor(summary.broker_name)}`}>{summary.broker_name.toUpperCase()}</span>
+                                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getExecutionStatusColor(summary.status)}`}>{summary.status}</span>
+                                  <span className="px-2 py-1 rounded text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] select-all" style={{letterSpacing: '0.04em'}}>{summary.broker_order_id}</span>
                                 </div>
-                                <span className="bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
-                                  Broker Executions
-                                </span>
-                              </h4>
-                              <div className="px-3 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded-full text-xs font-medium border border-[var(--accent)]/30">
-                                {groupBrokerExecutions(order.broker_executions || []).length} brokers
+                                {/* Middle: Entry/Exit - Compact Layout */}
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {/* Entry */}
+                                  <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-2 flex flex-col gap-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-xs font-bold text-blue-500 uppercase tracking-wide">Entry</span>
+                                      {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
+                                    </div>
+                                    <div className="text-xs space-y-1">
+                                      <div className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></div>
+                                      <div className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span> Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></div>
+                                    </div>
+                                  </div>
+                                  {/* Exit */}
+                                  <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-2 flex flex-col gap-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-xs font-bold text-orange-500 uppercase tracking-wide">Exit</span>
+                                      {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
+                                    </div>
+                                    <div className="text-xs space-y-1">
+                                      <div className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></div>
+                                      <div className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span> Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></div>
+                                    </div>
+                                  </div>
+                                </div>
+                                {/* Right: PNL, Net, Type - Compact */}
+                                <div className="flex flex-col gap-1 min-w-[120px]">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-[var(--muted-foreground)]">Broker P&L</span>
+                                    <span className={`px-2 py-1 rounded font-bold text-sm ${
+                                      summary.total_pnl === undefined
+                                        ? 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
+                                        : summary.total_pnl > 0
+                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                                        : summary.total_pnl < 0
+                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                                        : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
+                                    }`}>
+                                      {summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-[var(--muted-foreground)]">Net Qty</span>
+                                    <span className="font-bold text-blue-500">{summary.net_quantity}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-[var(--muted-foreground)]">Order Type</span>
+                                    <span className="font-semibold text-[var(--foreground)]">{summary.order_type || 'N/A'}</span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                            <div className="space-y-3">
-                              {groupBrokerExecutions(order.broker_executions || []).map((summary, summaryIndex) => (
-                                <div 
-                                  key={`${summary.broker_name}_${summary.broker_order_id}`} 
-                                  className="bg-[var(--background)]/50 rounded-xl p-4 border border-[var(--border)]/30 hover:border-[var(--accent)]/40 hover:shadow-md transition-all duration-200"
-                                >
-                                  {/* Header row with badges */}
-                                  <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center space-x-3">
-                                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)}`}>
-                                        {summary.broker_name.toUpperCase()}
-                                      </span>
-                                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)}`}>
-                                        {summary.status}
-                                      </span>
-                                      <span className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-500/20 text-gray-300 border border-gray-500/50">
-                                        {summary.broker_order_id}
-                                      </span>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="text-[var(--muted-foreground)] text-xs">Total Value</p>
-                                      <p className="font-bold text-[var(--foreground)] text-sm">
-                                        ₹{summary.total_value.toLocaleString()}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Entry/Exit Summary */}
-                                  <div className="grid grid-cols-2 gap-4 mb-4">
-                                    {/* Entry Summary */}
-                                    <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wide">Entry</span>
-                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${summary.has_entry ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                                          {summary.has_entry ? '✓' : '✗'}
-                                        </span>
-                                      </div>
-                                      {summary.has_entry ? (
-                                        <div className="space-y-1">
-                                          <div className="flex justify-between">
-                                            <span className="text-xs text-blue-300">Price:</span>
-                                            <span className="text-xs font-bold text-blue-400">₹{summary.entry_price?.toLocaleString()}</span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-xs text-blue-300">Quantity:</span>
-                                            <span className="text-xs font-bold text-blue-400">{summary.entry_quantity}</span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-xs text-blue-300">Time:</span>
-                                            <span className="text-xs font-medium text-blue-400">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="text-xs text-gray-400 italic">No entry executions</div>
-                                      )}
-                                    </div>
-
-                                    {/* Exit Summary */}
-                                    <div className="bg-orange-500/10 rounded-lg p-3 border border-orange-500/20">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-bold text-orange-400 uppercase tracking-wide">Exit</span>
-                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${summary.has_exit ? 'bg-orange-500/20 text-orange-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                                          {summary.has_exit ? '✓' : '✗'}
-                                        </span>
-                                      </div>
-                                      {summary.has_exit ? (
-                                        <div className="space-y-1">
-                                          <div className="flex justify-between">
-                                            <span className="text-xs text-orange-300">Price:</span>
-                                            <span className="text-xs font-bold text-orange-400">₹{summary.exit_price?.toLocaleString()}</span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-xs text-orange-300">Quantity:</span>
-                                            <span className="text-xs font-bold text-orange-400">{summary.exit_quantity}</span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-xs text-orange-300">Time:</span>
-                                            <span className="text-xs font-medium text-orange-400">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className="text-xs text-gray-400 italic">No exit executions</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Summary stats */}
-                                  <div className="grid grid-cols-3 gap-4">
-                                    <div className="bg-[var(--card-background)]/60 rounded-lg p-3 border border-[var(--border)]/20">
-                                      <p className="text-[var(--muted-foreground)] text-xs font-medium mb-1">Net Position</p>
-                                      <p className={`font-bold text-sm ${summary.net_quantity > 0 ? 'text-blue-400' : summary.net_quantity < 0 ? 'text-orange-400' : 'text-gray-400'}`}>
-                                        {summary.net_quantity > 0 ? '+' : ''}{summary.net_quantity}
-                                      </p>
-                                    </div>
-                                    <div className="bg-[var(--card-background)]/60 rounded-lg p-3 border border-[var(--border)]/20">
-                                      <p className="text-[var(--muted-foreground)] text-xs font-medium mb-1">Broker P&L</p>
-                                      <p className={`font-bold text-sm ${summary.total_pnl ? (summary.total_pnl > 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-400'}`}>
-                                        {summary.total_pnl ? `₹${summary.total_pnl.toLocaleString()}` : 'N/A'}
-                                      </p>
-                                    </div>
-                                    <div className="bg-[var(--card-background)]/60 rounded-lg p-3 border border-[var(--border)]/20">
-                                      <p className="text-[var(--muted-foreground)] text-xs font-medium mb-1">Order Type</p>
-                                      <p className="font-semibold text-[var(--foreground)] text-sm">{summary.order_type || 'N/A'}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                            ))}
                           </div>
                         </td>
                       </tr>
@@ -1498,7 +1539,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                           {isExpanded ? (
                             <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
                           ) : (
-                            <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                            <ChevronRight className="w-4 h-4 text-[var,--accent]" />
                           )}
                         </button>
                       )}
@@ -1539,7 +1580,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                       </span>
                     </div>
                     <div className="text-center">
-                      <p className="text-xs text-[var(--muted-foreground)]">Entry</p>
+                      <p className="text-xs text-[var(--muted-foreground)] mb-1">Entry</p>
                       <p className="font-medium text-xs text-[var(--foreground)]">
                         {order.entry_price ? `₹${order.entry_price.toFixed(2)}` : 'N/A'}
                       </p>
@@ -1548,7 +1589,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                   <div className="pt-2 border-t border-[var(--border)]/30">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[var(--muted-foreground)]">
-                        {formatDate(order.signal_time)} • {formatTime(order.signal_time)}
+                         {formatDate(order.entry_time || "")} • {formatTime(order.entry_time || "")}
                       </span>
                       {order.exit_price && (
                         <span className="text-[var(--foreground)]">
@@ -1561,128 +1602,73 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                   {/* Broker Executions Section for Mobile */}
                   {isExpanded && hasExecutions && (
                     <div className="mt-4 pt-4 border-t border-[var(--border)]/30">
-                      <div className="bg-gradient-to-br from-[var(--card-background)]/80 to-[var(--background)]/40 rounded-xl p-4 border border-[var(--border)]/40 shadow-lg">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-bold text-[var(--foreground)] flex items-center">
-                            <div className="w-6 h-6 bg-gradient-to-br from-[var(--accent)] to-blue-500 rounded-lg flex items-center justify-center mr-2">
-                              <Activity className="w-3 h-3 text-white" />
+                      <div className="space-y-3">
+                        {groupBrokerExecutions(
+                          filters.broker !== 'all' 
+                            ? (order.broker_executions || []).filter((exec: any) => 
+                                exec.broker_name && exec.broker_name.toLowerCase() === filters.broker.toLowerCase()
+                              )
+                            : order.broker_executions || []
+                        ).map((summary) => (
+                          <div
+                            key={`${summary.broker_name}_${summary.broker_order_id}`}
+                            className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-3 flex flex-col gap-3"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getBrokerNameColor(summary.broker_name)}`}>{summary.broker_name.toUpperCase()}</span>
+                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getExecutionStatusColor(summary.status)}`}>{summary.status}</span>
+                              <span className="px-2 py-1 rounded text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] select-all" style={{letterSpacing: '0.04em'}}>{summary.broker_order_id}</span>
                             </div>
-                            <span className="bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent">
-                              Broker Executions
-                            </span>
-                          </h4>
-                          <div className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded-full text-xs font-medium border border-[var(--accent)]/30">
-                            {groupBrokerExecutions(order.broker_executions || []).length} brokers
-                          </div>
-                        </div>
-                        <div className="space-y-3">
-                          {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
-                            <div 
-                              key={`${summary.broker_name}_${summary.broker_order_id}`} 
-                              className="bg-[var(--background)]/50 rounded-lg p-3 border border-[var(--border)]/30 hover:border-[var(--accent)]/40 transition-all duration-200"
-                            >
-                              {/* Header with badges */}
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center space-x-2">
-                                  <span className={`px-2 py-1 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)}`}>
-                                    {summary.broker_name.toUpperCase()}
-                                  </span>
-                                  <span className={`px-2 py-1 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)}`}>
-                                    {summary.status}
-                                  </span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-2 flex flex-col gap-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-bold text-blue-500 uppercase tracking-wide">Entry</span>
+                                  {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
                                 </div>
-                                <span className="px-2 py-1 rounded-lg text-xs font-medium bg-gray-500/20 text-gray-300 border border-gray-500/50">
-                                  {summary.broker_order_id}
+                                <div className="text-xs space-y-1">
+                                  <div className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></div>
+                                  <div className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span></div>
+                                  <div className="text-blue-400">Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></div>
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-2 flex flex-col gap-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-bold text-orange-500 uppercase tracking-wide">Exit</span>
+                                  {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
+                                </div>
+                                <div className="text-xs space-y-1">
+                                  <div className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></div>
+                                  <div className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span></div>
+                                  <div className="text-orange-400">Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-3 mt-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-[var(--muted-foreground)]">Broker P&L</span>
+                                <span className={`px-2 py-1 rounded font-bold text-sm ${
+                                  summary.total_pnl === undefined
+                                    ? 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
+                                    : summary.total_pnl > 0
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                                    : summary.total_pnl < 0
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                                    : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
+                                }`}>
+                                  {summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}
                                 </span>
                               </div>
-                              
-                              {/* Entry/Exit Summary */}
-                              <div className="grid grid-cols-2 gap-3 mb-3">
-                                {/* Entry */}
-                                <div className="bg-blue-500/10 rounded-lg p-2 border border-blue-500/20">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-bold text-blue-400 uppercase">Entry</span>
-                                    <span className={`px-1 py-0.5 rounded text-xs ${summary.has_entry ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                                      {summary.has_entry ? '✓' : '✗'}
-                                    </span>
-                                  </div>
-                                  {summary.has_entry ? (
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-blue-300">Price:</span>
-                                        <span className="text-xs font-bold text-blue-400">₹{summary.entry_price?.toLocaleString()}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-blue-300">Qty:</span>
-                                        <span className="text-xs font-bold text-blue-400">{summary.entry_quantity}</span>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="text-xs text-gray-400 italic">None</div>
-                                  )}
-                                </div>
-                                
-                                {/* Exit */}
-                                <div className="bg-orange-500/10 rounded-lg p-2 border border-orange-500/20">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-bold text-orange-400 uppercase">Exit</span>
-                                    <span className={`px-1 py-0.5 rounded text-xs ${summary.has_exit ? 'bg-orange-500/20 text-orange-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                                      {summary.has_exit ? '✓' : '✗'}
-                                    </span>
-                                  </div>
-                                  {summary.has_exit ? (
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-orange-300">Price:</span>
-                                        <span className="text-xs font-bold text-orange-400">₹{summary.exit_price?.toLocaleString()}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-orange-300">Qty:</span>
-                                        <span className="text-xs font-bold text-orange-400">{summary.exit_quantity}</span>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="text-xs text-gray-400 italic">None</div>
-                                  )}
-                                </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-[var(--muted-foreground)]">Net Qty</span>
+                                <span className="font-bold text-blue-500">{summary.net_quantity}</span>
                               </div>
-                              
-                              {/* Summary Stats */}
-                              <div className="grid grid-cols-2 gap-3 mb-2">
-                                <div className="bg-[var(--card-background)]/60 rounded-lg p-2 border border-[var(--border)]/20">
-                                  <p className="text-[var(--muted-foreground)] text-xs font-medium mb-1">Net Position</p>
-                                  <p className={`font-bold text-xs ${summary.net_quantity > 0 ? 'text-blue-400' : summary.net_quantity < 0 ? 'text-orange-400' : 'text-gray-400'}`}>
-                                    {summary.net_quantity > 0 ? '+' : ''}{summary.net_quantity}
-                                  </p>
-                                </div>
-                                <div className="bg-[var(--card-background)]/60 rounded-lg p-2 border border-[var(--border)]/20">
-                                  <p className="text-[var(--muted-foreground)] text-xs font-medium mb-1">Broker P&L</p>
-                                  <p className={`font-bold text-xs ${summary.total_pnl ? (summary.total_pnl > 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-400'}`}>
-                                    {summary.total_pnl ? `₹${summary.total_pnl.toLocaleString()}` : 'N/A'}
-                                  </p>
-                                </div>
-                              </div>
-                              
-                              {/* Total value and times */}
-                              <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]/20">
-                                <div>
-                                  <p className="text-[var(--muted-foreground)] text-xs">Total Value</p>
-                                  <p className="font-bold text-[var(--foreground)] text-xs">
-                                    ₹{summary.total_value.toLocaleString()}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-[var(--muted-foreground)] text-xs">Times</p>
-                                  <p className="font-medium text-[var(--foreground)] text-xs">
-                                    {summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'} 
-                                    {summary.has_exit && ' → '}
-                                    {summary.exit_time ? formatExecutionTime(summary.exit_time) : ''}
-                                  </p>
-                                </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-[var(--muted-foreground)]">Order Type</span>
+                                <span className="font-semibold text-[var(--foreground)]">{summary.order_type || 'N/A'}</span>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
