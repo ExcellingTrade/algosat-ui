@@ -189,17 +189,39 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
           let totalTrades = 0;
           let liveTrades = 0;
           
+          console.log(`Fetching stats for config ${config.id} (${config.name}) with ${configSymbols.length} symbols`);
+          
           // Fetch stats for each symbol in this config
           for (const symbol of configSymbols) {
             try {
-              const symbolStats = await apiClient.getSymbolStats(symbol.id);
-              totalPnL += symbolStats.total_pnl + symbolStats.live_pnl;
-              totalTrades += symbolStats.total_trades;
-              liveTrades += symbolStats.live_trades;
+              console.log(`Fetching stats for symbol ${symbol.id} (${symbol.symbol})`);
+              
+              // Use the same API that SymbolsPage uses to get accurate P&L data
+              const pnlStats = await apiClient.getOrdersPnlStatsBySymbolId(symbol.id);
+              const ordersSummary = await apiClient.getOrdersSummaryBySymbol(symbol.symbol);
+              
+              // Aggregate the same way as SymbolsPage does
+              const symbolTotalPnL = (pnlStats.overall_pnl || 0) + (ordersSummary.live_pnl || 0);
+              const symbolTotalTrades = pnlStats.overall_trade_count || 0;
+              const symbolLiveTrades = ordersSummary.open_trades || 0;
+              
+              totalPnL += symbolTotalPnL;
+              totalTrades += symbolTotalTrades;
+              liveTrades += symbolLiveTrades;
+              
+              console.log(`Symbol ${symbol.symbol}: P&L=${symbolTotalPnL}, Trades=${symbolTotalTrades}, Live=${symbolLiveTrades}`);
             } catch (error) {
               console.error(`Failed to fetch stats for symbol ${symbol.id}:`, error);
+              // Fallback to symbol properties if API fails
+              const fallbackPnL = (symbol.currentPnL || 0);
+              const fallbackTrades = (symbol.tradeCount || 0);
+              totalPnL += fallbackPnL;
+              totalTrades += fallbackTrades;
+              console.log(`Symbol ${symbol.symbol} (fallback): P&L=${fallbackPnL}, Trades=${fallbackTrades}`);
             }
           }
+          
+          console.log(`Config ${config.name} totals: P&L=${totalPnL}, Trades=${totalTrades}, Live=${liveTrades}`);
           
           statsMap[config.id] = {
             symbolCount: configSymbols.length,
@@ -212,16 +234,22 @@ export function ConfigsPage({ strategy, configs, symbols, onBack, onRefresh, onV
           console.error(`Failed to process config ${config.id}:`, error);
           // Fallback to old calculation
           const configSymbols = getConfigSymbols(config.id);
+          const fallbackPnL = configSymbols.reduce((sum, s) => sum + (s.currentPnL || 0), 0);
+          const fallbackTrades = configSymbols.reduce((sum, s) => sum + (s.tradeCount || 0), 0);
+          
+          console.log(`Config ${config.name} (fallback): P&L=${fallbackPnL}, Trades=${fallbackTrades}`);
+          
           statsMap[config.id] = {
             symbolCount: configSymbols.length,
             activeSymbols: configSymbols.filter(s => s.status === 'active').length,
-            totalPnL: configSymbols.reduce((sum, s) => sum + (s.currentPnL || 0), 0),
-            totalTrades: configSymbols.reduce((sum, s) => sum + (s.tradeCount || 0), 0),
+            totalPnL: fallbackPnL,
+            totalTrades: fallbackTrades,
             liveTrades: 0
           };
         }
       }
       
+      console.log('Final config stats map:', statsMap);
       setConfigStats(statsMap);
       setLoadingStats(false);
     };
