@@ -105,6 +105,8 @@ export interface Broker {
   balance?: number;
   available_balance?: number;
   utilized_margin?: number;
+  max_loss?: number;
+  max_profit?: number;
 }
 
 export interface Position {

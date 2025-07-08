@@ -92,6 +92,148 @@ interface SystemMetrics {
   outgoingTraffic: number;
 }
 
+// Risk Limits Modal Component
+interface RiskLimitsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  broker: Broker;
+  onSave: (maxLoss: number, maxProfit: number) => Promise<void>;
+}
+
+function RiskLimitsModal({ isOpen, onClose, broker, onSave }: RiskLimitsModalProps) {
+  const [maxLoss, setMaxLoss] = useState(broker.max_loss?.toString() || '0');
+  const [maxProfit, setMaxProfit] = useState(broker.max_profit?.toString() || '0');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMaxLoss(broker.max_loss?.toString() || '0');
+      setMaxProfit(broker.max_profit?.toString() || '0');
+      setError(null);
+    }
+  }, [isOpen, broker]);
+
+  const handleSave = async () => {
+    const maxLossNum = parseFloat(maxLoss) || 0;
+    const maxProfitNum = parseFloat(maxProfit) || 0;
+    
+    if (maxLossNum < 0 || maxProfitNum < 0) {
+      setError('Values cannot be negative');
+      return;
+    }
+    
+    setSaving(true);
+    setError(null);
+    
+    try {
+      await onSave(maxLossNum, maxProfitNum);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update risk limits');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-[var(--card-background)] border border-[var(--border)] rounded-2xl max-w-md w-full p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-[var(--foreground)]">
+            Risk Limits - {broker.broker_name}
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-[var(--accent)]/10 text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+              Maximum Loss (₹)
+            </label>
+            <input
+              type="text"
+              value={maxLoss}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Allow only numbers and decimal point
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setMaxLoss(value);
+                  setError(null);
+                }
+              }}
+              className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
+              placeholder="Enter maximum loss amount"
+            />
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+              Trading will be paused if losses exceed this amount (0 = no limit)
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
+              Maximum Profit (₹)
+            </label>
+            <input
+              type="text"
+              value={maxProfit}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Allow only numbers and decimal point
+                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  setMaxProfit(value);
+                  setError(null);
+                }
+              }}
+              className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent"
+              placeholder="Enter maximum profit amount"
+            />
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+              Trading will be paused if profits exceed this amount (0 = no limit)
+            </p>
+          </div>
+
+          <div className="flex space-x-3 pt-4">
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 px-4 py-3 bg-[var(--background)] border border-[var(--border)] rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:border-[var(--accent)]/50 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 px-4 py-3 bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent)]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Save Changes</span>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user, logout, isAuthenticated } = useAuth();
   const { isDark } = useTheme();
@@ -103,6 +245,8 @@ export default function Dashboard() {
   const [brokers, setBrokers] = useState<Broker[]>([]);
   const [showBrokerConfigModal, setShowBrokerConfigModal] = useState(false);
   const [selectedBrokerForConfig, setSelectedBrokerForConfig] = useState<string | null>(null);
+  const [showRiskLimitsModal, setShowRiskLimitsModal] = useState(false);
+  const [selectedBrokerForRiskLimits, setSelectedBrokerForRiskLimits] = useState<Broker | null>(null);
   const [balanceSummaries, setBalanceSummaries] = useState<BrokerBalanceSummary[]>([]);
   const [buttonLoading, setButtonLoading] = useState<Record<string, boolean>>({});
   const [brokersLoading, setBrokersLoading] = useState(false);
@@ -1509,6 +1653,53 @@ export default function Dashboard() {
     }
   };
 
+  // Handler for editing risk limits
+  const handleEditRiskLimits = (broker: Broker) => {
+    setSelectedBrokerForRiskLimits(broker);
+    setShowRiskLimitsModal(true);
+  };
+
+  // Handler for updating risk limits
+  const handleUpdateRiskLimits = async (maxLoss: number, maxProfit: number) => {
+    if (!selectedBrokerForRiskLimits) return;
+
+    try {
+      console.log('Updating risk limits:', { max_loss: maxLoss, max_profit: maxProfit });
+      
+      const updateData = {
+        max_loss: maxLoss,
+        max_profit: maxProfit
+      };
+      
+      const response = await apiClient.updateBroker(selectedBrokerForRiskLimits.broker_name, updateData);
+      console.log('Update response:', response);
+
+      // Update the local state
+      setBrokers(prev => prev.map(broker => 
+        broker.id === selectedBrokerForRiskLimits.id 
+          ? { ...broker, max_loss: maxLoss, max_profit: maxProfit }
+          : broker
+      ));
+
+      showToast({
+        type: "success",
+        title: "Risk Limits Updated",
+        message: `Risk limits for ${selectedBrokerForRiskLimits.broker_name} have been updated successfully`
+      });
+
+      setShowRiskLimitsModal(false);
+      setSelectedBrokerForRiskLimits(null);
+    } catch (err) {
+      console.error('Risk limits update error:', err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to update risk limits";
+      showToast({
+        type: "error",
+        title: "Risk Limits Update Failed", 
+        message: errorMessage
+      });
+    }
+  };
+
   const reauthBroker = async (brokerName: string) => {
     const buttonKey = `reauth-${brokerName}`;
     setButtonLoading(prev => ({ ...prev, [buttonKey]: true }));
@@ -2395,6 +2586,36 @@ export default function Dashboard() {
                               </div>
                             </div>
                           )}
+
+                          {/* Risk Limits Section */}
+                          <div className="mb-4">
+                            <div className="backdrop-blur-sm bg-[var(--background)]/30 rounded-lg p-4 border border-[var(--border)]">
+                              <div className="flex justify-between items-center mb-3">
+                                <span className="text-[var(--muted-foreground)] text-sm font-medium">Risk Limits</span>
+                                <button
+                                  onClick={() => handleEditRiskLimits(broker)}
+                                  className="p-1 rounded-md hover:bg-[var(--accent)]/10 text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                                  title="Edit risk limits"
+                                >
+                                  <Settings className="w-4 h-4" />
+                                </button>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-[var(--muted-foreground)]">Max Loss</span>
+                                  <span className="text-red-400 font-medium">
+                                    ₹{(broker.max_loss || 0) > 100000 ? ((broker.max_loss || 0) / 100000).toFixed(1) + 'L' : (broker.max_loss || 0).toLocaleString()}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-[var(--muted-foreground)]">Max Profit</span>
+                                  <span className="text-green-400 font-medium">
+                                    ₹{(broker.max_profit || 0) > 100000 ? ((broker.max_profit || 0) / 100000).toFixed(1) + 'L' : (broker.max_profit || 0).toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
                           {/* Connection Status */}
                           <div className="mb-4">
@@ -3628,6 +3849,19 @@ export default function Dashboard() {
           }}
           brokerName={selectedBrokerForConfig}
           onSuccess={handleBrokerConfigSuccess}
+        />
+      )}
+
+      {/* Risk Limits Modal */}
+      {showRiskLimitsModal && selectedBrokerForRiskLimits && (
+        <RiskLimitsModal
+          isOpen={showRiskLimitsModal}
+          onClose={() => {
+            setShowRiskLimitsModal(false);
+            setSelectedBrokerForRiskLimits(null);
+          }}
+          broker={selectedBrokerForRiskLimits}
+          onSave={handleUpdateRiskLimits}
         />
       )}
     </div>
