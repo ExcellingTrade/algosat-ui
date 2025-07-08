@@ -1430,56 +1430,57 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         <span title="Total executed quantity across all brokers">{order.executed_quantity}</span>
                       </td>
                     </tr>
-                    
-                    {/* Broker Executions Row - only show if expanded */}
+                     {/* Broker Executions Row - only show if expanded */}
                     {isExpanded && hasExecutions && (
                       <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                        <td colSpan={8} className="py-4 px-6">
-                          <div className="space-y-3">
+                        <td colSpan={11} className="py-4 px-6">
+                          <div className="space-y-4">
                             {groupBrokerExecutions(
-                              filters.broker !== 'all' 
-                                ? (order.broker_executions || []).filter((exec: any) => 
+                              filters.broker !== 'all'
+                                ? (order.broker_executions || []).filter((exec: any) =>
                                     exec.broker_name && exec.broker_name.toLowerCase() === filters.broker.toLowerCase()
                                   )
                                 : order.broker_executions || []
                             ).map((summary) => (
                               <div
                                 key={`${summary.broker_name}_${summary.broker_order_id}`}
-                                className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6"
+                                className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8"
                               >
                                 {/* Left: Broker, Status, Order ID */}
-                                <div className="flex flex-wrap md:flex-nowrap md:flex-row md:items-center gap-2 md:gap-3 min-w-[220px]">
-                                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getBrokerNameColor(summary.broker_name)}`}>{summary.broker_name.toUpperCase()}</span>
-                                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getExecutionStatusColor(summary.status)}`}>{summary.status}</span>
-                                  <span className="px-2 py-1 rounded text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] select-all" style={{letterSpacing: '0.04em'}}>{summary.broker_order_id}</span>
+                                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px]">
+                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)}`}>{summary.broker_name.toUpperCase()}</span>
+                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)}`}>{summary.status}</span>
+                                  <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all" style={{letterSpacing: '0.04em'}}>{summary.broker_order_id}</span>
                                 </div>
-                                {/* Middle: Entry/Exit - Compact Layout */}
-                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {/* Middle: Entry/Exit */}
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                                   {/* Entry */}
-                                  <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-2 flex flex-col gap-1">
+                                  <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-3 flex flex-col gap-1">
                                     <div className="flex items-center gap-2 mb-1">
                                       <span className="text-xs font-bold text-blue-500 uppercase tracking-wide">Entry</span>
                                       {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
                                     </div>
-                                    <div className="text-xs space-y-1">
-                                      <div className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></div>
-                                      <div className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span> Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></div>
+                                    <div className="flex flex-wrap gap-3 text-xs">
+                                      <span className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></span>
+                                      <span className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span></span>
+                                      <span className="text-blue-400">Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></span>
                                     </div>
                                   </div>
                                   {/* Exit */}
-                                  <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-2 flex flex-col gap-1">
+                                  <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-3 flex flex-col gap-1">
                                     <div className="flex items-center gap-2 mb-1">
                                       <span className="text-xs font-bold text-orange-500 uppercase tracking-wide">Exit</span>
                                       {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
                                     </div>
-                                    <div className="text-xs space-y-1">
-                                      <div className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></div>
-                                      <div className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span> Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></div>
+                                    <div className="flex flex-wrap gap-3 text-xs">
+                                      <span className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></span>
+                                      <span className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span></span>
+                                      <span className="text-orange-400">Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></span>
                                     </div>
                                   </div>
                                 </div>
-                                {/* Right: PNL, Net, Type - Compact */}
-                                <div className="flex flex-col gap-1 min-w-[120px]">
+                                {/* Right: PNL, Net, Type */}
+                                <div className="flex flex-col gap-2 min-w-[180px]">
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs text-[var(--muted-foreground)]">Broker P&L</span>
                                     <span className={`px-2 py-1 rounded font-bold text-sm ${
@@ -1567,7 +1568,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                             : 'bg-gray-500/10'
                       }`}>
                         {order.pnl && order.pnl > 0 && <TrendingUp className="w-3 h-3 mr-1" />}
-                        {order.pnl && order.pnl < 0 && <TrendingDown className="w-3 h-3 mr-1" />}
+                        {order.pnl && order.pnl <  0 && <TrendingDown className="w-3 h-3 mr-1" />}
                         <span className={`font-bold text-sm ${getPnLColor(order.pnl || 0)}`}>
                           {(order.pnl || 0) === 0 ? '₹0' : `₹${Math.round(Math.abs(order.pnl || 0) / 1000)}K`}
                         </span>
@@ -1612,40 +1613,77 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         ).map((summary) => (
                           <div
                             key={`${summary.broker_name}_${summary.broker_order_id}`}
-                            className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-3 flex flex-col gap-3"
+                            className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8 flex-nowrap min-w-[350px]"
                           >
-                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getBrokerNameColor(summary.broker_name)}`}>{summary.broker_name.toUpperCase()}</span>
-                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide ${getExecutionStatusColor(summary.status)}`}>{summary.status}</span>
-                              <span className="px-2 py-1 rounded text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] select-all" style={{letterSpacing: '0.04em'}}>{summary.broker_order_id}</span>
+                            {/* Left: Broker, Status, Order ID */}
+                            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px] flex-nowrap">
+                              <span
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)} whitespace-nowrap truncate max-w-[120px]`}
+                                title={summary.broker_name}
+                              >
+                                {summary.broker_name.toUpperCase()}
+                              </span>
+                              <span
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)} whitespace-nowrap truncate max-w-[120px]`}
+                                title={summary.status}
+                              >
+                                {summary.status}
+                              </span>
+                              <span
+                                className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all whitespace-nowrap truncate max-w-[120px]"
+                                style={{ letterSpacing: '0.04em' }}
+                                title={summary.broker_order_id}
+                              >
+                                {summary.broker_order_id}
+                              </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-2 flex flex-col gap-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs font-bold text-blue-500 uppercase tracking-wide">Entry</span>
+                            {/* Middle: Entry/Exit */}
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {/* Entry */}
+                              <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-2 flex flex-col gap-1 min-h-[56px] justify-center flex-nowrap">
+                                <div className="flex items-center gap-2 mb-0.5 flex-nowrap">
+                                  <span className="text-xs font-bold text-blue-500 uppercase tracking-wide whitespace-nowrap">Entry</span>
                                   {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
                                 </div>
-                                <div className="text-xs space-y-1">
-                                  <div className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></div>
-                                  <div className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span></div>
-                                  <div className="text-blue-400">Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></div>
+                                <div className="flex flex-row flex-nowrap items-center gap-3 text-xs font-medium text-blue-600">
+                                  <span className="whitespace-nowrap">
+                                    Execution Price: <span className="font-bold truncate max-w-[110px]" title={summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}>
+                                      {summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}
+                                    </span>
+                                  </span>
+                                  <span className="whitespace-nowrap">
+                                    Qty: <span className="font-bold">{summary.entry_quantity}</span>
+                                  </span>
+                                  <span className="whitespace-nowrap">
+                                    Time: {summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}
+                                  </span>
                                 </div>
                               </div>
-                              <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-2 flex flex-col gap-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs font-bold text-orange-500 uppercase tracking-wide">Exit</span>
+                              {/* Exit */}
+                              <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-2 flex flex-col gap-1 min-h-[56px] justify-center flex-nowrap">
+                                <div className="flex items-center gap-2 mb-0.5 flex-nowrap">
+                                  <span className="text-xs font-bold text-orange-500 uppercase tracking-wide whitespace-nowrap">Exit</span>
                                   {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
                                 </div>
-                                <div className="text-xs space-y-1">
-                                  <div className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></div>
-                                  <div className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span></div>
-                                  <div className="text-orange-400">Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></div>
+                                <div className="flex flex-row flex-nowrap items-center gap-3 text-xs font-medium text-orange-600">
+                                  <span className="whitespace-nowrap">
+                                    Execution Price: <span className="font-bold truncate max-w-[110px]" title={summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}>
+                                      {summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}
+                                    </span>
+                                  </span>
+                                  <span className="whitespace-nowrap">
+                                    Qty: <span className="font-bold">{summary.exit_quantity}</span>
+                                  </span>
+                                  <span className="whitespace-nowrap">
+                                    Time: {summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}
+                                  </span>
                                 </div>
                               </div>
                             </div>
-                            <div className="flex flex-wrap gap-3 mt-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-[var(--muted-foreground)]">Broker P&L</span>
+                            {/* Right: PNL, Net, Type */}
+                            <div className="flex flex-col gap-2 min-w-[180px] flex-nowrap">
+                              <div className="flex items-center gap-2 flex-nowrap">
+                                <span className="text-xs text-[var(--muted-foreground)] whitespace-nowrap">Broker P&L</span>
                                 <span className={`px-2 py-1 rounded font-bold text-sm ${
                                   summary.total_pnl === undefined
                                     ? 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
@@ -1654,17 +1692,17 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                     : summary.total_pnl < 0
                                     ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                                     : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
-                                }`}>
+                                } whitespace-nowrap`} title={summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}>
                                   {summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-[var(--muted-foreground)]">Net Qty</span>
-                                <span className="font-bold text-blue-500">{summary.net_quantity}</span>
+                              <div className="flex items-center gap-2 flex-nowrap">
+                                <span className="text-xs text-[var(--muted-foreground)] whitespace-nowrap">Net Qty</span>
+                                <span className="font-bold text-blue-500 whitespace-nowrap">{summary.net_quantity}</span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-[var(--muted-foreground)]">Order Type</span>
-                                <span className="font-semibold text-[var(--foreground)]">{summary.order_type || 'N/A'}</span>
+                              <div className="flex items-center gap-2 flex-nowrap">
+                                <span className="text-xs text-[var(--muted-foreground)] whitespace-nowrap">Order Type</span>
+                                <span className="font-semibold text-[var(--foreground)] whitespace-nowrap">{summary.order_type || 'N/A'}</span>
                               </div>
                             </div>
                           </div>
