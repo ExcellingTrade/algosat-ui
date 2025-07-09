@@ -801,15 +801,73 @@ export default function Dashboard() {
 
   // Emergency actions
   const handleEmergencyStopAll = async () => {
-    if (!confirm('⚠️ EMERGENCY STOP: This will disable ALL active strategies immediately. Are you sure?')) {
+    if (!confirm('⚠️ EMERGENCY STOP: This will first exit ALL open orders, then disable ALL active strategies. Are you sure?')) {
+      return;
+    }
+    
+    // Second confirmation for this critical action
+    if (!confirm('⚠️ FINAL CONFIRMATION: This action will:\n1. Exit ALL open orders across ALL strategies and brokers\n2. Disable ALL active strategies\n\nThis action cannot be undone. Continue?')) {
       return;
     }
     
     try {
-      console.log('Emergency stop: Disabling all strategies...');
+      console.log('Emergency stop: Starting comprehensive shutdown...');
       const activeStrategiesList = strategies.filter(s => s.enabled);
       
-      // Disable all active strategies
+      // Step 1: Exit all open orders first
+      const activeOrders = orders.filter(order => order.status === 'OPEN' || order.status === 'PARTIALLY_FILLED');
+      
+      if (activeOrders.length > 0) {
+        showToast({
+          type: "info",
+          title: "Emergency Stop - Step 1/2",
+          message: `Exiting ${activeOrders.length} open orders first...`
+        });
+        
+        try {
+          const exitResponse = await apiClient.exitAllOrders('emergency_stop');
+          console.log('Exit all orders response during emergency stop:', exitResponse);
+          
+          if (exitResponse.success) {
+            showToast({
+              type: "success",
+              title: "Emergency Stop - Orders Exited",
+              message: `Successfully initiated exit for ${activeOrders.length} open orders. Now disabling strategies...`
+            });
+          } else {
+            showToast({
+              type: "error",
+              title: "Emergency Stop - Partial Success",
+              message: "Some orders may not have been exited properly. Proceeding with strategy shutdown..."
+            });
+          }
+          
+          // Wait a moment for orders to start exiting
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+        } catch (exitErr) {
+          console.error('Exit all orders failed during emergency stop:', exitErr);
+          showToast({
+            type: "error",
+            title: "Emergency Stop - Exit Orders Failed",
+            message: "Failed to exit some orders. Proceeding with strategy shutdown anyway..."
+          });
+        }
+      } else {
+        showToast({
+          type: "info",
+          title: "Emergency Stop - No Open Orders",
+          message: "No open orders found. Proceeding to disable strategies..."
+        });
+      }
+      
+      // Step 2: Disable all active strategies
+      showToast({
+        type: "info",
+        title: "Emergency Stop - Step 2/2",
+        message: `Disabling ${activeStrategiesList.length} active strategies...`
+      });
+      
       const disablePromises = activeStrategiesList.map(strategy => 
         apiClient.disableStrategy(strategy.id)
       );
@@ -819,10 +877,19 @@ export default function Dashboard() {
       // Refresh data
       await loadDashboardData(true);
       
-      alert(`✅ Emergency stop completed. ${activeStrategiesList.length} strategies disabled.`);
+      showToast({
+        type: "success",
+        title: "Emergency Stop Completed",
+        message: `✅ Emergency stop completed successfully!\n• ${activeOrders.length} orders exited\n• ${activeStrategiesList.length} strategies disabled`
+      });
+      
     } catch (err) {
       console.error('Emergency stop failed:', err);
-      alert('❌ Emergency stop failed. Please check manually.');
+      showToast({
+        type: "error",
+        title: "Emergency Stop Failed",
+        message: "❌ Emergency stop failed. Please check all orders and strategies manually."
+      });
     }
   };
 
@@ -2398,7 +2465,7 @@ export default function Dashboard() {
                       <button
                         onClick={handleEmergencyStopAll}
                         className="flex items-center space-x-2 px-3 py-2 bg-red-600/15 hover:bg-red-600/25 border border-red-500/30 hover:border-red-400/50 rounded-lg transition-all duration-200 hover:scale-[1.02] text-red-400 text-sm font-medium shadow-sm hover:shadow-md"
-                        title="Stop all active strategies immediately"
+                        title="Exit all open orders first, then disable all strategies"
                       >
                         <PauseCircle className="w-4 h-4" />
                         <span>Stop All</span>
