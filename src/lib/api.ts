@@ -133,6 +133,19 @@ export interface Trade {
   executed_at: string;
 }
 
+export interface ExitAllOrdersResponse {
+  success: boolean;
+  message: string;
+  exit_reason?: string;
+}
+
+export interface ExitOrderResponse {
+  success: boolean;
+  message: string;
+  order_id: number;
+  exit_reason?: string;
+}
+
 export interface VmDetails {
   id: number;
   firewall_group_id: number | null;
@@ -858,6 +871,30 @@ class ApiClient {
 
   async getOrdersSummaryBySymbol(symbol: string): Promise<any> {
     return this.request(`/orders/summary/${encodeURIComponent(symbol)}`);
+  }
+
+  // Exit all orders
+  async exitAllOrders(exitReason?: string, strategyId?: number): Promise<{success: boolean, message: string, exit_reason?: string}> {
+    const queryParams = new URLSearchParams();
+    if (exitReason) queryParams.append('exit_reason', exitReason);
+    if (strategyId) queryParams.append('strategy_id', strategyId.toString());
+    
+    const query = queryParams.toString();
+    return this.request(`/orders/exit-all${query ? `?${query}` : ''}`, {
+      method: 'POST'
+    });
+  }
+
+  // Exit single order
+  async exitOrder(orderId: number, exitReason?: string, ltp?: number): Promise<{success: boolean, message: string, order_id: number, exit_reason?: string}> {
+    const queryParams = new URLSearchParams();
+    if (exitReason) queryParams.append('exit_reason', exitReason);
+    if (ltp) queryParams.append('ltp', ltp.toString());
+    
+    const query = queryParams.toString();
+    return this.request(`/orders/${orderId}/exit${query ? `?${query}` : ''}`, {
+      method: 'POST'
+    });
   }
 
   // Orders PNL Statistics

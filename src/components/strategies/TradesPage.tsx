@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Strategy, StrategySymbol } from "./StrategiesPage";
 import { apiClient } from "../../lib/api";
+import { useToast } from "../Toast";
 import { 
   TrendingUp,
   TrendingDown,
@@ -15,7 +16,9 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
-  Eye
+  Eye,
+  LogOut,
+  Loader2
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -79,6 +82,7 @@ interface TradesPageProps {
 }
 
 export function TradesPage({ symbol, strategy }: TradesPageProps) {
+  const { showToast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -86,6 +90,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalTrades, setTotalTrades] = useState(0);
+  const [exitingOrders, setExitingOrders] = useState<Set<number>>(new Set());
   
   // Expandable rows state for broker executions
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -353,6 +358,62 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
       // If same priority, sort by broker name
       return a.broker_name.localeCompare(b.broker_name);
     });
+  };
+
+  // Handle exit order
+  const handleExitOrder = async (orderId: number) => {
+    if (!confirm('⚠️ EXIT ORDER: This will attempt to exit this order/position. Are you sure?')) {
+      return;
+    }
+
+    setExitingOrders(prev => new Set(prev).add(orderId));
+
+    try {
+      console.log('Attempting to exit order:', orderId);
+
+      showToast({
+        type: "info",
+        title: "Exiting Order",
+        message: "Initiating exit for the order. Please wait..."
+      });
+
+      // Call the exit order API endpoint
+      const response = await apiClient.exitOrder(orderId, 'manual');
+
+      console.log('Exit order response:', response);
+
+      if (response.success) {
+        showToast({
+          type: "success",
+          title: "Order Exit Initiated",
+          message: response.message || "Order has been scheduled for exit successfully"
+        });
+
+        // Refresh the orders data to show updated status
+        await fetchTrades(1, true, filters.date !== 'all' ? filters.date : null);
+      } else {
+        showToast({
+          type: "error",
+          title: "Order Exit Failed",
+          message: response.message || "Failed to exit order"
+        });
+      }
+    } catch (err) {
+      console.error('Exit order failed:', err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to exit order";
+
+      showToast({
+        type: "error",
+        title: "Order Exit Failed",
+        message: errorMessage
+      });
+    } finally {
+      setExitingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    }
   };
 
   const handleSort = (key: string) => {
@@ -1394,9 +1455,26 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         </div>
                       </td>
                       <td className="py-4 px-6">
-                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusColor(order.status)}`}>
+                            {order.status}
+                          </span>
+                          {/* Exit icon - only show for orders that can be exited */}
+                          {(order.status === 'OPEN' || order.status === 'PARTIALLY_FILLED' || order.status === 'AWAITING_ENTRY') && (
+                            <button
+                              onClick={() => handleExitOrder(order.id)}
+                              disabled={exitingOrders.has(order.id)}
+                              className="flex items-center justify-center p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-md transition-all duration-200 border border-red-500/50 hover:border-red-500/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Exit this order/position"
+                            >
+                              {exitingOrders.has(order.id) ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <LogOut className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 px-6">
                         <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getSideColor(order.side || 'N/A')}`}>
@@ -1433,7 +1511,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                      {/* Broker Executions Row - only show if expanded */}
                     {isExpanded && hasExecutions && (
                       <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                        <td colSpan={11} className="py-4 px-6">
+                        <td colSpan={10} className="py-4 px-6">
                           <div className="space-y-4">
                             {groupBrokerExecutions(
                               filters.broker !== 'all'
@@ -1553,9 +1631,26 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         </span>
                       )}
                     </div>
-                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusColor(order.status)}`}>
-                      {order.status}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getStatusColor(order.status)}`}>
+                        {order.status}
+                      </span>
+                      {/* Exit icon - only show for orders that can be exited */}
+                      {(order.status === 'OPEN' || order.status === 'PARTIALLY_FILLED' || order.status === 'AWAITING_ENTRY') && (
+                        <button
+                          onClick={() => handleExitOrder(order.id)}
+                          disabled={exitingOrders.has(order.id)}
+                          className="flex items-center justify-center p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-md transition-all duration-200 border border-red-500/50 hover:border-red-500/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Exit this order/position"
+                        >
+                          {exitingOrders.has(order.id) ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <LogOut className="w-3 h-3" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="text-center">

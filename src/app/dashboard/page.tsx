@@ -827,18 +827,76 @@ export default function Dashboard() {
   };
 
   const handleExitAllPositions = async () => {
-    if (!confirm('⚠️ EXIT ALL POSITIONS: This will attempt to exit all open positions. Are you sure?')) {
+    if (!confirm('⚠️ EXIT ALL POSITIONS: This will attempt to exit all open orders/positions. Are you sure?')) {
+      return;
+    }
+    
+    // Second confirmation for this critical action
+    if (!confirm('⚠️ FINAL CONFIRMATION: This action will exit ALL open orders across ALL strategies and brokers. This action cannot be undone. Continue?')) {
       return;
     }
     
     try {
       console.log('Attempting to exit all positions...');
-      // This would need a specific API endpoint for mass position exit
-      // For now, just show a message
-      alert('⚠️ This feature requires implementation of mass exit API endpoint.');
+      
+      // Check if there are any enabled brokers
+      const enabledBrokers = brokers.filter(broker => broker.is_enabled);
+      if (enabledBrokers.length === 0) {
+        showToast({
+          type: "info",
+          title: "No Active Brokers",
+          message: "No brokers are currently enabled. Please enable at least one broker to exit positions."
+        });
+        return;
+      }
+      
+      // Check if there are any active orders to exit
+      const activeOrders = orders.filter(order => order.status === 'OPEN' || order.status === 'PARTIALLY_FILLED');
+      if (activeOrders.length === 0) {
+        showToast({
+          type: "info",
+          title: "No Active Orders",
+          message: "There are no open orders to exit."
+        });
+        return;
+      }
+      
+      showToast({
+        type: "info",
+        title: "Exiting All Positions",
+        message: `Initiating exit for ${activeOrders.length} open orders across ${enabledBrokers.length} active brokers. Please wait...`
+      });
+      
+      // Call the exit_all_orders API endpoint with manual exit reason
+      const response = await apiClient.exitAllOrders('manual');
+      
+      console.log('Exit all positions response:', response);
+      
+      if (response.success) {
+        showToast({
+          type: "success",
+          title: "Exit All Positions Initiated",
+          message: response.message || "All open orders have been scheduled for exit successfully"
+        });
+        
+        // Refresh the dashboard data to show updated order statuses
+        await loadDashboardData(true);
+      } else {
+        showToast({
+          type: "error",
+          title: "Exit All Positions Failed",
+          message: response.message || "Failed to exit all positions"
+        });
+      }
     } catch (err) {
       console.error('Exit all positions failed:', err);
-      alert('❌ Failed to exit all positions.');
+      const errorMessage = err instanceof Error ? err.message : "Failed to exit all positions";
+      
+      showToast({
+        type: "error",
+        title: "Exit All Positions Failed",
+        message: errorMessage
+      });
     }
   };
 
