@@ -65,8 +65,6 @@ export interface StrategyConfig {
   instrument?: string;
   trade: Record<string, any>;
   indicators: Record<string, any>;
-  order_type: 'MARKET' | 'LIMIT';
-  product_type: 'INTRADAY' | 'DELIVERY';
   is_default?: boolean;  // Made optional to handle API inconsistencies
   created_at: string;
   updated_at: string;

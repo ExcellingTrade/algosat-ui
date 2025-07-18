@@ -23,31 +23,15 @@ export function ConfigsModal({ strategy, configs, onClose, onRefresh }: ConfigsM
     description: '',
     exchange: 'NSE',
     instrument: '',
-    order_type: 'MARKET' as 'MARKET' | 'LIMIT',
-    product_type: 'INTRADAY' as 'INTRADAY' | 'DELIVERY',
     trade: '{}',
     indicators: '{}'
   });
 
   const handleToggleConfig = async (config: StrategyConfig) => {
-    setUpdatingConfigs(prev => new Set(prev).add(config.id));
-    setError(null);
-    
-    try {
-      await apiClient.updateStrategyConfig(strategy.id, config.id, {
-        enabled: !config.enabled
-      });
-      onRefresh(); // Refresh the configs list
-    } catch (err) {
-      console.error('Failed to toggle config:', err);
-      setError(err instanceof Error ? err.message : 'Failed to toggle config');
-    } finally {
-      setUpdatingConfigs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(config.id);
-        return newSet;
-      });
-    }
+    // TODO: Enable/disable functionality not implemented for strategy configs
+    // This is handled at the strategy level now
+    console.log('Toggle config functionality not available for individual configs');
+    setError('Config enable/disable is handled at the strategy level');
   };
 
   const handleUpdateConfig = async (config: StrategyConfig, updates: Partial<StrategyConfig>) => {
@@ -100,11 +84,9 @@ export function ConfigsModal({ strategy, configs, onClose, onRefresh }: ConfigsM
 
       await apiClient.createStrategyConfig(strategy.id, {
         name: newConfig.name.trim(),
-        description: newConfig.description.trim() || null,
+        description: newConfig.description.trim() || undefined,
         exchange: newConfig.exchange,
-        instrument: newConfig.instrument.trim() || null,
-        order_type: newConfig.order_type,
-        product_type: newConfig.product_type,
+        instrument: newConfig.instrument.trim() || undefined,
         trade: tradeData,
         indicators: indicatorsData
       });
@@ -115,8 +97,6 @@ export function ConfigsModal({ strategy, configs, onClose, onRefresh }: ConfigsM
         description: '',
         exchange: 'NSE',
         instrument: '',
-        order_type: 'MARKET',
-        product_type: 'INTRADAY',
         trade: '{}',
         indicators: '{}'
       });
@@ -139,10 +119,8 @@ export function ConfigsModal({ strategy, configs, onClose, onRefresh }: ConfigsM
   };
 
   const getConfigStatus = (config: StrategyConfig) => {
-    if (config.enabled) {
-      return { text: 'ACTIVE', className: 'bg-green-500/20 text-green-400 border border-green-500/30' };
-    }
-    return { text: 'INACTIVE', className: 'bg-red-500/20 text-red-400 border border-red-500/30' };
+    // For now, all configs are considered active since we don't have enabled/disabled at config level
+    return { text: 'ACTIVE', className: 'bg-green-500/20 text-green-400 border border-green-500/30' };
   };
 
   return (
@@ -231,36 +209,6 @@ export function ConfigsModal({ strategy, configs, onClose, onRefresh }: ConfigsM
                     className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
                     placeholder="e.g., INDEX, EQUITY"
                   />
-                </div>
-
-                {/* Order Type */}
-                <div>
-                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                    Order Type *
-                  </label>
-                  <select
-                    value={newConfig.order_type}
-                    onChange={(e) => setNewConfig(prev => ({ ...prev, order_type: e.target.value as 'MARKET' | 'LIMIT' }))}
-                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                  >
-                    <option value="MARKET">MARKET</option>
-                    <option value="LIMIT">LIMIT</option>
-                  </select>
-                </div>
-
-                {/* Product Type */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                    Product Type *
-                  </label>
-                  <select
-                    value={newConfig.product_type}
-                    onChange={(e) => setNewConfig(prev => ({ ...prev, product_type: e.target.value as 'INTRADAY' | 'DELIVERY' }))}
-                    className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)]"
-                  >
-                    <option value="INTRADAY">INTRADAY</option>
-                    <option value="DELIVERY">DELIVERY</option>
-                  </select>
                 </div>
               </div>
 
@@ -363,7 +311,7 @@ export function ConfigsModal({ strategy, configs, onClose, onRefresh }: ConfigsM
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
                           <h3 className="text-lg font-semibold text-[var(--foreground)]">
-                            {config.name || `${config.symbol} Config`}
+                            {config.name || "Config"}
                           </h3>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.className}`}>
                             {status.text}
@@ -375,33 +323,22 @@ export function ConfigsModal({ strategy, configs, onClose, onRefresh }: ConfigsM
                           )}
                         </div>
                         <div className="flex items-center space-x-4 text-sm text-[var(--muted-foreground)]">
-                          <span>Symbol: {config.symbol}</span>
                           <span>Exchange: {config.exchange}</span>
-                          <span>Order Type: {config.order_type}</span>
-                          <span>Product: {config.product_type}</span>
+                          {config.instrument && <span>Instrument: {config.instrument}</span>}
                         </div>
                         <p className="text-[var(--muted-foreground)] text-sm mt-1">
-                          {config.description || `Configuration for ${config.symbol} on ${config.exchange}`}
+                          {config.description || `Configuration for ${config.exchange}`}
                         </p>
                       </div>
                       
                       <div className="flex items-center space-x-2 flex-shrink-0">
                         <button
                           onClick={() => handleToggleConfig(config)}
-                          disabled={isUpdating}
-                          className={`p-2 rounded-lg transition-all duration-200 ${
-                            config.enabled
-                              ? 'bg-green-500/20 hover:bg-green-500/30 text-green-400'
-                              : 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
-                          } ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          disabled={true}
+                          className="p-2 rounded-lg transition-all duration-200 bg-gray-500/20 text-gray-400 opacity-50 cursor-not-allowed"
+                          title="Config enable/disable is handled at strategy level"
                         >
-                          {isUpdating ? (
-                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          ) : config.enabled ? (
-                            <Check className="w-4 h-4" />
-                          ) : (
-                            <X className="w-4 h-4" />
-                          )}
+                          <Check className="w-4 h-4" />
                         </button>
                         
                         <button

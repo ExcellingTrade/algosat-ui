@@ -194,10 +194,6 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
                               <span>{config.instrument}</span>
                             </>
                           )}
-                          <span> • </span>
-                          <span>{config.order_type}</span>
-                          <span> • </span>
-                          <span>{config.product_type}</span>
                         </div>
                         {config.description && (
                           <p className="text-sm text-[var(--muted-foreground)] mt-1">{config.description}</p>
