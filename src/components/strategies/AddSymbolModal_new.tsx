@@ -171,7 +171,7 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
                           <span className="font-medium text-[var(--foreground)]">
-                            {config.name || `${config.symbol} Config`}
+                            {config.name || `Config ${config.id}`}
                           </span>
                           {config.is_default && (
                             <span className="px-2 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-xs font-medium">

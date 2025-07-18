@@ -29,6 +29,7 @@ export const LogsManagement: React.FC = () => {
   // State management
   const [logFiles, setLogFiles] = useState<LogFile[]>([]);
   const [logStats, setLogStats] = useState<LogStats | null>(null);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedLogType, setSelectedLogType] = useState<string>("all");
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
@@ -77,15 +78,15 @@ export const LogsManagement: React.FC = () => {
   // Load initial data
   useEffect(() => {
     loadLogOverview();
+    loadAvailableDates();
   }, []);
 
-  // Set initial date to today IST if not set
+  // Set initial date to most recent available date if not set
   useEffect(() => {
-    if (logStats && !selectedDate) {
-      const todayIST = getISTDate();
-      setSelectedDate(todayIST);
+    if (availableDates.length > 0 && !selectedDate) {
+      setSelectedDate(availableDates[0]);
     }
-  }, [logStats, selectedDate]);
+  }, [availableDates, selectedDate]);
 
   // Auto-scroll live logs
   useEffect(() => {
@@ -103,18 +104,23 @@ export const LogsManagement: React.FC = () => {
     };
   }, []);
 
+  const loadAvailableDates = async () => {
+    try {
+      setError(null);
+      const response = await apiClient.getLogDates();
+      setAvailableDates(response.dates);
+    } catch (err) {
+      setError("Failed to load available dates");
+      console.error("Error loading available dates:", err);
+    }
+  };
+
   const loadLogOverview = async () => {
     try {
       setError(null);
       const response = await apiClient.getLogOverview();
       setLogFiles(response.files);
       setLogStats(response.stats);
-      
-      // Set default selected date to most recent
-      if (response.files.length > 0) {
-        const dates = [...new Set(response.files.map(f => f.date))].sort().reverse();
-        setSelectedDate(dates[0]);
-      }
     } catch (err) {
       setError("Failed to load log overview");
       console.error("Error loading log overview:", err);
@@ -330,9 +336,6 @@ export const LogsManagement: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Get unique dates from log files
-  const availableDates = [...new Set(logFiles.map(f => f.date))].sort().reverse();
-  
   // Get unique log types from log files
   const availableLogTypes = [...new Set(logFiles.map(f => f.type))].sort();
 
@@ -689,16 +692,38 @@ export const LogsManagement: React.FC = () => {
                 {/* Date and Search Row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-[var(--foreground)] flex items-center">
-                      <Calendar className="w-4 h-4 mr-2 text-[var(--muted-foreground)]" />
-                      Date
+                    <label className="text-sm font-medium text-[var(--foreground)] flex items-center justify-between">
+                      <span className="flex items-center">
+                        <Calendar className="w-4 h-4 mr-2 text-[var(--muted-foreground)]" />
+                        Date
+                      </span>
+                      <button
+                        onClick={loadAvailableDates}
+                        className="p-1 text-[var(--muted-foreground)] hover:text-[var(--accent)] transition-colors"
+                        title="Refresh available dates"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
                     </label>
-                    <input
-                      type="date"
+                    <select
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
                       className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-[var(--foreground)] text-sm focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
-                    />
+                    >
+                      <option value="">
+                        {availableDates.length === 0 ? "No dates available" : "Select a date"}
+                      </option>
+                      {availableDates.map((date) => (
+                        <option key={date} value={date}>
+                          {date} (IST)
+                        </option>
+                      ))}
+                    </select>
+                    {availableDates.length === 0 && (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        No log dates available. Try refreshing or check if logs exist.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
