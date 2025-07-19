@@ -3383,7 +3383,7 @@ export default function Dashboard() {
                           const parsed = parseStrikeSymbol(order.strike_symbol || '');
                           const isExpanded = expandedRows.has(order.id);
                           const hasExecutions = order.broker_executions && order.broker_executions.length > 0;
-                          
+
                           return (
                             <React.Fragment key={order.id}>
                               <tr key={order.id} className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
