@@ -69,6 +69,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   ChevronLeft,
   Loader2
@@ -319,6 +320,9 @@ export default function Dashboard() {
   // Sorting state
   const [sortField, setSortField] = useState<string>("signal_time");
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  // Row expansion for detailed broker executions (Already declared above)
+  // const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   // Function to parse strike symbol with intelligent parsing for different formats
   const parseStrikeSymbol = (strikeSymbol: string) => {
@@ -409,6 +413,41 @@ export default function Dashboard() {
     };
   };
 
+  // Computed values for filters
+  const availableSymbols = useMemo(() => {
+    if (!orders || !Array.isArray(orders)) {
+      return [];
+    }
+    const symbols = orders
+      .map((order: any) => {
+        const parsed = parseStrikeSymbol(order.strike_symbol || '');
+        return parsed.underlying;
+      })
+      .filter(symbol => symbol && symbol !== 'N/A');
+    return Array.from(new Set(symbols)).sort();
+  }, [orders]);
+
+  const availableDates = useMemo(() => {
+    if (!orders || !Array.isArray(orders)) {
+      return [];
+    }
+    const dates = orders
+      .map((order: any) => {
+        if (!order?.entry_time) return null;
+        try {
+          return new Date(order.entry_time).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          });
+        } catch {
+          return null;
+        }
+      })
+      .filter((date): date is string => date !== null);
+    return Array.from(new Set(dates)).sort().reverse();
+  }, [orders]);
+
   // Toggle row expansion for broker executions
   const toggleRowExpansion = (orderId: number) => {
     setExpandedRows(prev => {
@@ -424,9 +463,12 @@ export default function Dashboard() {
 
   // Group broker executions by broker and order ID - same logic as TradesPage
   const groupBrokerExecutions = (executions: any[]) => {
+    console.log('groupBrokerExecutions called with:', executions);
+    
     const groups = new Map();
     
     executions.forEach(execution => {
+      console.log('Processing execution:', execution);
       const key = `${execution.broker_name}_${execution.broker_order_id}`;
       if (!groups.has(key)) {
         groups.set(key, {
@@ -440,24 +482,45 @@ export default function Dashboard() {
       groups.get(key).executions.push(execution);
     });
     
+    console.log('Groups created:', Array.from(groups.values()));
+    
     // Process each group to create summary
     return Array.from(groups.values()).map(group => {
-      const buyExecutions = group.executions.filter((e: any) => e.side === 'BUY');
-      const sellExecutions = group.executions.filter((e: any) => e.side === 'SELL');
+      // Try different possible field names for 'side'
+      const buyExecutions = group.executions.filter((e: any) => {
+        const side = e.side || e.transaction_type || e.order_side || e.buy_sell;
+        return side && (side.toUpperCase() === 'BUY' || side.toUpperCase() === 'B' || side.toUpperCase() === 'ENTRY');
+      });
+      const sellExecutions = group.executions.filter((e: any) => {
+        const side = e.side || e.transaction_type || e.order_side || e.buy_sell;
+        return side && (side.toUpperCase() === 'SELL' || side.toUpperCase() === 'S' || side.toUpperCase() === 'EXIT');
+      });
       
-      const buyQuantity = buyExecutions.reduce((sum: number, e: any) => sum + (e.executed_quantity || 0), 0);
-      const sellQuantity = sellExecutions.reduce((sum: number, e: any) => sum + (e.executed_quantity || 0), 0);
+      console.log(`Processing group ${group.broker_name}_${group.broker_order_id}:`, {
+        buyExecutions,
+        sellExecutions,
+        firstBuyExecution: buyExecutions[0],
+        firstSellExecution: sellExecutions[0]
+      });
+      
+      // Try different possible field names for quantity and price
+      const getQuantity = (e: any) => e.executed_quantity || e.qty || e.quantity || e.filled_qty || 0;
+      const getPrice = (e: any) => e.execution_price || e.price || e.avg_price || e.fill_price || 0;
+      const getTime = (e: any) => e.execution_time || e.timestamp || e.time || e.created_at || e.updated_at;
+      
+      const buyQuantity = buyExecutions.reduce((sum: number, e: any) => sum + getQuantity(e), 0);
+      const sellQuantity = sellExecutions.reduce((sum: number, e: any) => sum + getQuantity(e), 0);
       
       const avgBuyPrice = buyQuantity > 0 ? 
-        buyExecutions.reduce((sum: number, e: any) => sum + (e.execution_price || 0) * (e.executed_quantity || 0), 0) / buyQuantity : 0;
+        buyExecutions.reduce((sum: number, e: any) => sum + getPrice(e) * getQuantity(e), 0) / buyQuantity : 0;
       const avgSellPrice = sellQuantity > 0 ?
-        sellExecutions.reduce((sum: number, e: any) => sum + (e.execution_price || 0) * (e.executed_quantity || 0), 0) / sellQuantity : 0;
+        sellExecutions.reduce((sum: number, e: any) => sum + getPrice(e) * getQuantity(e), 0) / sellQuantity : 0;
       
       const netQuantity = buyQuantity - sellQuantity;
       const totalPnl = sellQuantity > 0 && avgSellPrice > 0 && avgBuyPrice > 0 ? 
         ((avgSellPrice - avgBuyPrice) * Math.min(buyQuantity, sellQuantity)) : undefined;
       
-      return {
+      const result = {
         ...group,
         net_quantity: netQuantity,
         total_pnl: totalPnl,
@@ -467,9 +530,12 @@ export default function Dashboard() {
         exit_price: avgSellPrice || undefined,
         entry_quantity: buyQuantity,
         exit_quantity: sellQuantity,
-        entry_time: buyExecutions.length > 0 ? buyExecutions[0].execution_time : undefined,
-        exit_time: sellExecutions.length > 0 ? sellExecutions[0].execution_time : undefined,
+        entry_time: buyExecutions.length > 0 ? getTime(buyExecutions[0]) : undefined,
+        exit_time: sellExecutions.length > 0 ? getTime(sellExecutions[0]) : undefined,
       };
+      
+      console.log('Group result:', result);
+      return result;
     });
   };
 
@@ -505,7 +571,10 @@ export default function Dashboard() {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'N/A';
-      return date.toLocaleTimeString('en-IN', {
+      return date.toLocaleString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
@@ -535,7 +604,7 @@ export default function Dashboard() {
       'Entry Price',
       'Exit Price',
       'Entry Time',
-      'Entry Date'
+      'Exit Time'
     ];
 
     const csvData = sortedOrders.map(order => {
@@ -551,15 +620,21 @@ export default function Dashboard() {
         order.executed_quantity || order.exec_qty || 0,
         order.entry_price || 'N/A',
         order.exit_price || 'N/A',
-        order.entry_time ? new Date(order.entry_time).toLocaleTimeString('en-IN', {
+        order.entry_time ? new Date(order.entry_time).toLocaleString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
           hour12: true
         }) : 'N/A',
-        order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
-          day: '2-digit',
+        order.exit_time ? new Date(order.exit_time).toLocaleString('en-IN', {
+          year: 'numeric',
           month: 'short',
-          year: 'numeric'
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
         }) : 'N/A'
       ];
     });
@@ -608,94 +683,105 @@ export default function Dashboard() {
     }
   };
 
-  // Get available dates for filter
-  const availableDates = useMemo(() => {
-    const dates = orders
-      .map(order => order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '')
-      .filter(date => date !== '')
-      .filter((date, index, arr) => arr.indexOf(date) === index)
-      .sort()
-      .reverse();
-    return dates;
-  }, [orders]);
+  // Get available dates for filter (already computed above as availableDates)
+  // const availableDates = useMemo(() => {
+  //   const dates = orders
+  //     .map(order => order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '')
+  //     .filter(date => date !== '')
+  //     .filter((date, index, arr) => arr.indexOf(date) === index)
+  //     .sort()
+  //     .reverse();
+  //   return dates;
+  // }, [orders]);
 
   // Filter orders based on selected filters
-  const filteredOrders = orders.filter((order: any) => {
-    const parsed = parseStrikeSymbol(order.strike_symbol || '');
-    
-    // Symbol filter
-    if (symbolFilter && parsed.underlying !== symbolFilter) return false;
-    
-    // Type filter  
-    if (typeFilter && parsed.type !== typeFilter) return false;
-    
-    // P&L filter
-    if (pnlFilter) {
-      const pnl = Number(order.pnl || 0);
-      if (pnlFilter === 'profit' && pnl <= 0) return false;
-      if (pnlFilter === 'loss' && pnl >= 0) return false;
-      if (pnlFilter === 'breakeven' && pnl !== 0) return false;
+  const filteredOrders = useMemo(() => {
+    if (!orders || !Array.isArray(orders)) {
+      return [];
     }
-    
-    // Status filter
-    if (statusFilter && order.status !== statusFilter) return false;
-    
-    // Side filter
-    if (sideFilter && order.side !== sideFilter) return false;
-    
-    // Date filter
-    if (dateFilter) {
-      const orderDate = order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '';
-      if (orderDate !== dateFilter) return false;
-    }
-    
-    // Broker filter - check if any broker execution matches the selected broker
-    if (brokerFilter) {
-      const hasBrokerExecution = order.broker_executions && 
-        order.broker_executions.some((exec: any) => 
-          exec.broker_name && exec.broker_name.toLowerCase() === brokerFilter.toLowerCase()
-        );
-      if (!hasBrokerExecution) return false;
-    }
-    
-    return true;
-  });
+    return orders.filter((order: any) => {
+      const parsed = parseStrikeSymbol(order.strike_symbol || '');
+      
+      // Symbol filter
+      if (symbolFilter && parsed.underlying !== symbolFilter) return false;
+      
+      // Type filter  
+      if (typeFilter && parsed.type !== typeFilter) return false;
+      
+      // P&L filter
+      if (pnlFilter) {
+        const pnl = Number(order.pnl || 0);
+        if (pnlFilter === 'profit' && pnl <= 0) return false;
+        if (pnlFilter === 'loss' && pnl >= 0) return false;
+        if (pnlFilter === 'breakeven' && pnl !== 0) return false;
+      }
+      
+      // Status filter
+      if (statusFilter && order.status !== statusFilter) return false;
+      
+      // Side filter
+      if (sideFilter && order.side !== sideFilter) return false;
+      
+      // Date filter
+      if (dateFilter) {
+        const orderDate = order.signal_time ? new Date(order.signal_time).toISOString().split('T')[0] : '';
+        if (orderDate !== dateFilter) return false;
+      }
+      
+      // Broker filter - check if any broker execution matches the selected broker
+      if (brokerFilter) {
+        const hasBrokerExecution = order.broker_executions && 
+          order.broker_executions.some((exec: any) => 
+            exec.broker_name && exec.broker_name.toLowerCase() === brokerFilter.toLowerCase()
+          );
+        if (!hasBrokerExecution) return false;
+      }
+      
+      return true;
+    });
+  }, [orders, symbolFilter, typeFilter, pnlFilter, statusFilter, sideFilter, dateFilter, brokerFilter]);
 
   // Sort the filtered orders
-  const sortedOrders = [...filteredOrders].sort((a: any, b: any) => {
-    let aValue = a[sortField];
-    let bValue = b[sortField];
-    
-    // Handle special cases for parsing
-    if (sortField === 'underlying') {
-      aValue = parseStrikeSymbol(a.strike_symbol || '').underlying;
-      bValue = parseStrikeSymbol(b.strike_symbol || '').underlying;
-    } else if (sortField === 'type') {
-      aValue = parseStrikeSymbol(a.strike_symbol || '').type;
-      bValue = parseStrikeSymbol(b.strike_symbol || '').type;
-    } else if (sortField === 'strike') {
-      aValue = Number(parseStrikeSymbol(a.strike_symbol || '').strike) || 0;
-      bValue = Number(parseStrikeSymbol(b.strike_symbol || '').strike) || 0;
-    } else if (sortField === 'pnl') {
-      aValue = Number(a.pnl || 0);
-      bValue = Number(b.pnl || 0);
-    } else if (sortField === 'entry_price' || sortField === 'exit_price') {
-      aValue = Number(a[sortField] || 0);
-      bValue = Number(b[sortField] || 0);
-    } else if (sortField === 'signal_time' || sortField === 'entry_time') {
-      aValue = new Date(a[sortField] || 0).getTime();
-      bValue = new Date(b[sortField] || 0).getTime();
-    }
-    
-    if (sortDirection === 'asc') {
-      return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-    } else {
-      return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
-    }
-  });
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a: any, b: any) => {
+      let aValue = a[sortField];
+      let bValue = b[sortField];
+      
+      // Handle special cases for parsing
+      if (sortField === 'underlying') {
+        aValue = parseStrikeSymbol(a.strike_symbol || '').underlying;
+        bValue = parseStrikeSymbol(b.strike_symbol || '').underlying;
+      } else if (sortField === 'type') {
+        aValue = parseStrikeSymbol(a.strike_symbol || '').type;
+        bValue = parseStrikeSymbol(b.strike_symbol || '').type;
+      } else if (sortField === 'strike') {
+        aValue = Number(parseStrikeSymbol(a.strike_symbol || '').strike) || 0;
+        bValue = Number(parseStrikeSymbol(b.strike_symbol || '').strike) || 0;
+      } else if (sortField === 'pnl') {
+        aValue = Number(a.pnl || 0);
+        bValue = Number(b.pnl || 0);
+      } else if (sortField === 'entry_price' || sortField === 'exit_price') {
+        aValue = Number(a[sortField] || 0);
+        bValue = Number(b[sortField] || 0);
+      } else if (sortField === 'signal_time' || sortField === 'entry_time') {
+        aValue = new Date(a[sortField] || 0).getTime();
+        bValue = new Date(b[sortField] || 0).getTime();
+      }
+      
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+  }, [filteredOrders, sortField, sortDirection]);
 
   // P&L Graph Data Processing
   const getPnlGraphData = () => {
+    if (!sortedOrders || sortedOrders.length === 0) {
+      return [];
+    }
+    
     const dailyPnl = new Map();
     
     sortedOrders.forEach(order => {
@@ -769,17 +855,23 @@ export default function Dashboard() {
     // Sharpe ratio (assuming risk-free rate of 0 for simplicity)
     const sharpeRatio = volatility > 0 ? (avgDailyReturn / volatility) : 0;
     
-    // Max drawdown calculation
-    let maxDrawdown = 0;
+    // Max drawdown calculation - return actual loss amount instead of percentage
+    let maxDrawdownAmount = 0;
+    let maxDrawdownPercent = 0;
     let peak = dailyPnlHistory.history[0]?.cumulative_pnl || 0;
     
     for (const day of dailyPnlHistory.history) {
       if (day.cumulative_pnl > peak) {
         peak = day.cumulative_pnl;
       }
-      const drawdown = peak > 0 ? ((peak - day.cumulative_pnl) / Math.abs(peak)) * 100 : 0;
-      if (drawdown > maxDrawdown) {
-        maxDrawdown = drawdown;
+      const drawdownAmount = peak - day.cumulative_pnl;
+      const drawdownPercent = peak > 0 ? (drawdownAmount / Math.abs(peak)) * 100 : 0;
+      
+      if (drawdownAmount > maxDrawdownAmount) {
+        maxDrawdownAmount = drawdownAmount;
+      }
+      if (drawdownPercent > maxDrawdownPercent) {
+        maxDrawdownPercent = drawdownPercent;
       }
     }
     
@@ -789,7 +881,8 @@ export default function Dashboard() {
     
     return {
       sharpeRatio: Math.round(sharpeRatio * 100) / 100,
-      maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+      maxDrawdown: Math.round(maxDrawdownPercent * 100) / 100,
+      maxDrawdownAmount: Math.round(maxDrawdownAmount * 100) / 100,
       avgDailyReturn: Math.round(avgDailyReturn * 100) / 100,
       volatility: Math.round(volatility * 100) / 100,
       bestDay: Math.round(bestDay * 100) / 100,
@@ -1283,6 +1376,8 @@ export default function Dashboard() {
       // Handle orders
       if (ordersResult.status === 'fulfilled') {
         ordersData = ordersResult.value;
+        console.log('Dashboard: Orders data received in loadDashboardData:', ordersData);
+        console.log('Dashboard: First order broker_executions in loadDashboardData:', ordersData[0]?.broker_executions);
       } else {
         console.error('Dashboard: Failed to load orders:', ordersResult.reason);
       }
@@ -1610,6 +1705,12 @@ export default function Dashboard() {
       
       // Handle orders
       if (ordersResult.status === 'fulfilled') {
+        console.log('Dashboard: Orders data received:', ordersResult.value);
+        console.log('Dashboard: First order broker_executions:', ordersResult.value[0]?.broker_executions);
+        if (ordersResult.value[0]?.broker_executions && ordersResult.value[0].broker_executions.length > 0) {
+          console.log('Dashboard: First broker execution details:', ordersResult.value[0].broker_executions[0]);
+          console.log('Dashboard: Broker execution fields:', Object.keys(ordersResult.value[0].broker_executions[0]));
+        }
         setOrders(ordersResult.value);
       } else {
         console.error('Dashboard: Failed to refresh orders:', ordersResult.reason);
@@ -2214,7 +2315,7 @@ export default function Dashboard() {
                       <p className="text-[var(--muted-foreground)] text-sm">Overall P/L</p>
                       <p className={`text-xl lg:text-2xl font-bold break-words ${overallPnlStats && overallPnlStats.overall_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {overallPnlStats ? (
-                          `${overallPnlStats.overall_pnl >= 0 ? '+' : ''}₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString('en-IN')}`
+                          `${overallPnlStats.overall_pnl >= 0 ? '+' : '-'}₹${Math.abs(overallPnlStats.overall_pnl).toLocaleString('en-IN')}`
                         ) : (
                           '₹0'
                         )}
@@ -2231,7 +2332,7 @@ export default function Dashboard() {
                       <p className="text-[var(--muted-foreground)] text-sm">Today's P/L</p>
                       <p className={`text-xl lg:text-2xl font-bold break-words ${overallPnlStats && overallPnlStats.today_pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {overallPnlStats ? (
-                          `${overallPnlStats.today_pnl >= 0 ? '+' : ''}₹${Math.abs(overallPnlStats.today_pnl).toLocaleString('en-IN')}`
+                          `${overallPnlStats.today_pnl >= 0 ? '+' : '-'}₹${Math.abs(overallPnlStats.today_pnl).toLocaleString('en-IN')}`
                         ) : (
                           '₹0'
                         )}
@@ -2317,82 +2418,91 @@ export default function Dashboard() {
                         {/* Gradient background for chart area */}
                         <div className="absolute inset-0 bg-gradient-to-t from-[var(--accent)]/5 to-transparent rounded-2xl"></div>
                         
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart 
-                            data={dailyPnlHistory.history.map(day => ({
-                              date: day.date,
-                              formattedDate: new Date(day.date).toLocaleDateString('en-IN', {
-                                day: '2-digit',
-                                month: 'short'
-                              }),
-                              cumulative_pnl: day.cumulative_pnl,
-                              trade_count: day.trade_count
-                            }))}
-                            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                          >
-                            <defs>
-                              <linearGradient id="cumulativePnlGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#10b981" stopOpacity={0.8}/>
-                                <stop offset="50%" stopColor="#10b981" stopOpacity={0.3}/>
-                                <stop offset="100%" stopColor="#10b981" stopOpacity={0.1}/>
-                              </linearGradient>
-                            </defs>
-                            <XAxis 
-                              dataKey="formattedDate" 
-                              stroke="var(--muted-foreground)"
-                              fontSize={12}
-                              axisLine={false}
-                              tickLine={false}
-                              tick={{ fill: 'var(--muted-foreground)' }}
-                            />
-                            <YAxis 
-                              stroke="var(--muted-foreground)"
-                              fontSize={12}
-                              axisLine={false}
-                              tickLine={false}
-                              tick={{ fill: 'var(--muted-foreground)' }}
-                              tickFormatter={(value) => {
-                                if (Math.abs(value) >= 1000) {
-                                  return `₹${(value/1000).toFixed(1)}K`;
-                                }
-                                return `₹${value}`;
-                              }}
-                            />
-                            <Tooltip 
-                              contentStyle={{ 
-                                backgroundColor: 'var(--card-background)', 
-                                border: '1px solid var(--border)',
-                                borderRadius: '12px',
-                                color: 'var(--foreground)',
-                                boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-                                backdropFilter: 'blur(10px)'
-                              }}
-                              formatter={(value, name) => {
-                                const numValue = Number(value);
-                                const formattedValue = numValue >= 1000 ?
-                                  `₹${(numValue/1000).toFixed(1)}K (₹${numValue.toLocaleString()})` : 
-                                  `₹${numValue.toLocaleString()}`;
-                                return [formattedValue, 'Cumulative P&L'];
-                              }}
-                              labelFormatter={(label) => `Date: ${label}`}
-                            />
-                            <Area 
-                              type="monotone" 
-                              dataKey="cumulative_pnl" 
-                              stroke="#10b981" 
-                              strokeWidth={3}
-                              fill="url(#cumulativePnlGradient)"
-                              dot={false}
-                              activeDot={{ 
-                                r: 6, 
-                                stroke: '#10b981', 
-                                strokeWidth: 3,
-                                fill: 'var(--card-background)'
-                              }}
-                              name="Cumulative P&L"
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
+                        {(() => {
+                          // Determine final P&L and chart colors
+                          const finalPnl = dailyPnlHistory.history[dailyPnlHistory.history.length - 1]?.cumulative_pnl || 0;
+                          const isPositive = finalPnl >= 0;
+                          const chartColor = isPositive ? "#10b981" : "#ef4444"; // Green for positive, red for negative
+                          
+                          return (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart 
+                                data={dailyPnlHistory.history.map(day => ({
+                                  date: day.date,
+                                  formattedDate: new Date(day.date).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short'
+                                  }),
+                                  cumulative_pnl: day.cumulative_pnl,
+                                  trade_count: day.trade_count
+                                }))}
+                                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                              >
+                                <defs>
+                                  <linearGradient id="cumulativePnlGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={chartColor} stopOpacity={0.8}/>
+                                    <stop offset="50%" stopColor={chartColor} stopOpacity={0.3}/>
+                                    <stop offset="100%" stopColor={chartColor} stopOpacity={0.1}/>
+                                  </linearGradient>
+                                </defs>
+                                <XAxis 
+                                  dataKey="formattedDate" 
+                                  stroke="var(--muted-foreground)"
+                                  fontSize={12}
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tick={{ fill: 'var(--muted-foreground)' }}
+                                />
+                                <YAxis 
+                                  stroke="var(--muted-foreground)"
+                                  fontSize={12}
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tick={{ fill: 'var(--muted-foreground)' }}
+                                  tickFormatter={(value) => {
+                                    if (Math.abs(value) >= 1000) {
+                                      return `₹${(value/1000).toFixed(1)}K`;
+                                    }
+                                    return `₹${value}`;
+                                  }}
+                                />
+                                <Tooltip 
+                                  contentStyle={{ 
+                                    backgroundColor: 'var(--card-background)', 
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '12px',
+                                    color: 'var(--foreground)',
+                                    boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+                                    backdropFilter: 'blur(10px)'
+                                  }}
+                                  formatter={(value, name) => {
+                                    const numValue = Number(value);
+                                    const formattedValue = numValue >= 1000 ?
+                                      `₹${(numValue/1000).toFixed(1)}K (₹${numValue.toLocaleString()})` : 
+                                      `₹${numValue.toLocaleString()}`;
+                                    return [formattedValue, 'Cumulative P&L'];
+                                  }}
+                                  labelFormatter={(label) => `Date: ${label}`}
+                                />
+                                <Area 
+                                  type="monotone" 
+                                  dataKey="cumulative_pnl" 
+                                  stroke={chartColor} 
+                                  strokeWidth={3}
+                                  fill="url(#cumulativePnlGradient)"
+                                  dot={false}
+                                  activeDot={{ 
+                                    r: 6, 
+                                    stroke: chartColor, 
+                                    strokeWidth: 3,
+                                    fill: 'var(--card-background)'
+                                  }}
+                                  name="Cumulative P&L"
+                                />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div className="h-80 flex items-center justify-center">
@@ -2426,7 +2536,12 @@ export default function Dashboard() {
                       <div className="flex items-center space-x-2">
                         <TrendingDown className="w-4 h-4 text-red-400" />
                         <span className="text-[var(--muted-foreground)]">Max Drawdown:</span>
-                        <span className="font-semibold text-red-400">{riskMetrics.maxDrawdown}%</span>
+                        <span className="font-semibold text-red-400">
+                          {riskMetrics.maxDrawdownAmount && riskMetrics.maxDrawdownAmount >= 1000 ? 
+                            `-₹${(riskMetrics.maxDrawdownAmount/1000).toFixed(1)}K` : 
+                            `-₹${(riskMetrics.maxDrawdownAmount || 0).toFixed(0)}`
+                          }
+                        </span>
                       </div>
                       
                       <div className="w-px h-4 bg-[var(--border)]"></div>
@@ -2434,7 +2549,9 @@ export default function Dashboard() {
                       <div className="flex items-center space-x-2">
                         <BarChart3 className="w-4 h-4 text-blue-400" />
                         <span className="text-[var(--muted-foreground)]">Avg Daily:</span>
-                        <span className="font-semibold text-blue-400">₹{Math.abs(riskMetrics.avgDailyReturn).toLocaleString('en-IN')}</span>
+                        <span className={`font-semibold ${riskMetrics.avgDailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {riskMetrics.avgDailyReturn >= 0 ? '+' : '-'}₹{Math.abs(riskMetrics.avgDailyReturn).toLocaleString('en-IN')}
+                        </span>
                       </div>
                       
                       <div className="w-px h-4 bg-[var(--border)]"></div>
@@ -2442,7 +2559,9 @@ export default function Dashboard() {
                       <div className="flex items-center space-x-2">
                         <Activity className="w-4 h-4 text-purple-400" />
                         <span className="text-[var(--muted-foreground)]">Best Day:</span>
-                        <span className="font-semibold text-purple-400">₹{Math.abs(riskMetrics.bestDay).toLocaleString('en-IN')}</span>
+                        <span className={`font-semibold ${riskMetrics.bestDay >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {riskMetrics.bestDay >= 0 ? '+' : '-'}₹{Math.abs(riskMetrics.bestDay).toLocaleString('en-IN')}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -2527,7 +2646,7 @@ export default function Dashboard() {
                 {/* Strategies Content */}
                 <StrategiesPage 
                   perStrategyStats={perStrategyStats} 
-                  strategiesData={strategies}
+                  strategiesData={strategies as any}
                   onRefresh={handleRefreshStrategies}
                 />
               </div>
@@ -3035,16 +3154,30 @@ export default function Dashboard() {
                           margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                         >
                           <defs>
-                            <linearGradient id="ordersDailyPnlGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                              <stop offset="50%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                            </linearGradient>
-                            <linearGradient id="ordersCumulativePnlGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#10b981" stopOpacity={0.8}/>
-                              <stop offset="50%" stopColor="#10b981" stopOpacity={0.3}/>
-                              <stop offset="100%" stopColor="#10b981" stopOpacity={0.1}/>
-                            </linearGradient>
+                            {(() => {
+                              // Dynamic colors for daily P&L based on final value
+                              const finalDailyPnl = pnlGraphData[pnlGraphData.length - 1]?.pnl || 0;
+                              const dailyPnlColor = finalDailyPnl >= 0 ? "#10b981" : "#ef4444";
+                              
+                              // Dynamic colors for cumulative P&L based on final value
+                              const finalCumulativePnl = pnlGraphData[pnlGraphData.length - 1]?.cumulativePnl || 0;
+                              const cumulativePnlColor = finalCumulativePnl >= 0 ? "#10b981" : "#ef4444";
+                              
+                              return (
+                                <>
+                                  <linearGradient id="ordersDailyPnlGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={dailyPnlColor} stopOpacity={0.8}/>
+                                    <stop offset="50%" stopColor={dailyPnlColor} stopOpacity={0.3}/>
+                                    <stop offset="100%" stopColor={dailyPnlColor} stopOpacity={0.1}/>
+                                  </linearGradient>
+                                  <linearGradient id="ordersCumulativePnlGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={cumulativePnlColor} stopOpacity={0.8}/>
+                                    <stop offset="50%" stopColor={cumulativePnlColor} stopOpacity={0.3}/>
+                                    <stop offset="100%" stopColor={cumulativePnlColor} stopOpacity={0.1}/>
+                                  </linearGradient>
+                                </>
+                              );
+                            })()}
                           </defs>
                           <XAxis 
                             dataKey="formattedDate" 
@@ -3086,13 +3219,19 @@ export default function Dashboard() {
                           <Area 
                             type="monotone" 
                             dataKey="pnl" 
-                            stroke="#3b82f6" 
+                            stroke={(() => {
+                              const finalDailyPnl = pnlGraphData[pnlGraphData.length - 1]?.pnl || 0;
+                              return finalDailyPnl >= 0 ? "#10b981" : "#ef4444";
+                            })()} 
                             strokeWidth={2}
                             fill="url(#ordersDailyPnlGradient)"
                             dot={false}
                             activeDot={{ 
                               r: 5, 
-                              stroke: '#3b82f6', 
+                              stroke: (() => {
+                                const finalDailyPnl = pnlGraphData[pnlGraphData.length - 1]?.pnl || 0;
+                                return finalDailyPnl >= 0 ? "#10b981" : "#ef4444";
+                              })(), 
                               strokeWidth: 2,
                               fill: 'var(--card-background)'
                             }}
@@ -3101,7 +3240,10 @@ export default function Dashboard() {
                           <Area 
                             type="monotone" 
                             dataKey="cumulativePnl" 
-                            stroke="#10b981" 
+                            stroke={(() => {
+                              const finalCumulativePnl = pnlGraphData[pnlGraphData.length - 1]?.cumulativePnl || 0;
+                              return finalCumulativePnl >= 0 ? "#10b981" : "#ef4444";
+                            })()} 
                             strokeWidth={2}
                             strokeDasharray="8 4"
                             fill="url(#ordersCumulativePnlGradient)"
@@ -3109,7 +3251,10 @@ export default function Dashboard() {
                             dot={false}
                             activeDot={{ 
                               r: 4, 
-                              stroke: '#10b981', 
+                              stroke: (() => {
+                                const finalCumulativePnl = pnlGraphData[pnlGraphData.length - 1]?.cumulativePnl || 0;
+                                return finalCumulativePnl >= 0 ? "#10b981" : "#ef4444";
+                              })(), 
                               strokeWidth: 2,
                               fill: 'var(--card-background)'
                             }}
@@ -3122,11 +3267,29 @@ export default function Dashboard() {
                     {/* Simple Legend */}
                     <div className="flex justify-center items-center space-x-8 mt-6 pt-4 border-t border-[var(--border)]/30">
                       <div className="flex items-center space-x-3">
-                        <div className="w-4 h-2 bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"></div>
+                        <div 
+                          className="w-4 h-2 rounded-full" 
+                          style={{
+                            background: (() => {
+                              const finalDailyPnl = pnlGraphData[pnlGraphData.length - 1]?.pnl || 0;
+                              const color = finalDailyPnl >= 0 ? "#10b981" : "#ef4444";
+                              return `linear-gradient(to right, ${color}, ${color}dd)`;
+                            })()
+                          }}
+                        ></div>
                         <span className="text-sm text-[var(--muted-foreground)]">Daily P&L</span>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <div className="w-4 h-2 bg-gradient-to-r from-green-500 to-green-400 rounded-full opacity-70" style={{backgroundImage: 'repeating-linear-gradient(90deg, #10b981 0px, #10b981 4px, transparent 4px, transparent 8px)'}}></div>
+                        <div 
+                          className="w-4 h-2 rounded-full opacity-70" 
+                          style={{
+                            backgroundImage: (() => {
+                              const finalCumulativePnl = pnlGraphData[pnlGraphData.length - 1]?.cumulativePnl || 0;
+                              const color = finalCumulativePnl >= 0 ? "#10b981" : "#ef4444";
+                              return `repeating-linear-gradient(90deg, ${color} 0px, ${color} 4px, transparent 4px, transparent 8px)`;
+                            })()
+                          }}
+                        ></div>
                         <span className="text-sm text-[var(--muted-foreground)]">Cumulative P&L</span>
                       </div>
                     </div>
@@ -3380,6 +3543,17 @@ export default function Dashboard() {
                               )}
                             </div>
                           </th>
+                          <th 
+                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                            onClick={() => handleSort('exit_time')}
+                          >
+                            <div className="flex items-center space-x-1">
+                              <span>Exit Time</span>
+                              {sortField === 'exit_time' && (
+                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                              )}
+                            </div>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3478,12 +3652,20 @@ export default function Dashboard() {
                                     minute: '2-digit'
                                   }) : 'N/A'}
                                 </td>
+                                <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
+                                  {order.exit_time ? new Date(order.exit_time).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'N/A'}
+                                </td>
                               </tr>
                               
                               {/* Broker Executions Row - only show if expanded */}
                               {isExpanded && hasExecutions && (
                                 <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                  <td colSpan={12} className="py-4 px-6">
+                                  <td colSpan={13} className="py-4 px-6">
                                     <div className="space-y-4">
                                       {groupBrokerExecutions(
                                         brokerFilter 
@@ -3511,7 +3693,7 @@ export default function Dashboard() {
                                                 {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
                                               </div>
                                               <div className="flex flex-wrap gap-3 text-xs">
-                                                <span className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></span>
+                                                <span className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price.toFixed(2)}` : 'N/A'}</span></span>
                                                 <span className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span></span>
                                                 <span className="text-blue-400">Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></span>
                                               </div>
@@ -3523,7 +3705,7 @@ export default function Dashboard() {
                                                 {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
                                               </div>
                                               <div className="flex flex-wrap gap-3 text-xs">
-                                                <span className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></span>
+                                                <span className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price.toFixed(2)}` : 'N/A'}</span></span>
                                                 <span className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span></span>
                                                 <span className="text-orange-400">Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></span>
                                               </div>
@@ -3542,7 +3724,7 @@ export default function Dashboard() {
                                                   ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                                                   : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
                                               }`}>
-                                                {summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}
+                                                {summary.total_pnl !== undefined ? `₹${Number(summary.total_pnl).toFixed(2)}` : 'N/A'}
                                               </span>
                                             </div>
                                             <div className="flex items-center gap-2">

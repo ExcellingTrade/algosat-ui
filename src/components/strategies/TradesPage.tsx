@@ -158,7 +158,10 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'N/A';
-      return date.toLocaleTimeString('en-IN', {
+      return date.toLocaleString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
@@ -722,7 +725,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
       'Entry Price',
       'Exit Price',
       'Entry Time',
-      'Entry Date'
+      'Exit Time'
     ];
 
     const csvData = filteredAndSortedOrders.map(order => {
@@ -735,8 +738,8 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
         order.side || 'N/A',
         order.entry_price || 'N/A',
         order.exit_price || 'N/A',
-        formatTime(order.signal_time),
-        formatDate(order.signal_time)
+        order.entry_time ? formatExecutionTime(order.entry_time) : 'N/A',
+        order.exit_time ? formatExecutionTime(order.exit_time) : 'N/A'
       ];
     });
 
@@ -1387,6 +1390,15 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                       </button>
                     </th>
                     <th className="text-left py-4 px-6">
+                      <button
+                        onClick={() => handleSort('exit_time')}
+                        className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                      >
+                        <span>Exit Time</span>
+                        <ArrowUpDown className="w-3 h-3" />
+                      </button>
+                    </th>
+                    <th className="text-left py-4 px-6">
                       <span title="Place order quantity (as sent to broker)">Qty</span>
                     </th>
                     <th className="text-left py-4 px-6">
@@ -1502,6 +1514,13 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         </div>
                       </td>
                       <td className="py-4 px-6">
+                        <div className="text-sm">
+                          <div className="text-[var(--foreground)]">
+                            {order.exit_time ? formatDate(order.exit_time) : 'N/A'}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
                         <span title="Place order quantity (as sent to broker)">{order.qty}</span>
                       </td>
                       <td className="py-4 px-6">
@@ -1511,7 +1530,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                      {/* Broker Executions Row - only show if expanded */}
                     {isExpanded && hasExecutions && (
                       <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                        <td colSpan={10} className="py-4 px-6">
+                        <td colSpan={11} className="py-4 px-6">
                           <div className="space-y-4">
                             {groupBrokerExecutions(
                               filters.broker !== 'all'
@@ -1539,7 +1558,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                       {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
                                     </div>
                                     <div className="flex flex-wrap gap-3 text-xs">
-                                      <span className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}</span></span>
+                                      <span className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price.toFixed(2)}` : 'N/A'}</span></span>
                                       <span className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span></span>
                                       <span className="text-blue-400">Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></span>
                                     </div>
@@ -1551,7 +1570,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                       {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
                                     </div>
                                     <div className="flex flex-wrap gap-3 text-xs">
-                                      <span className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}</span></span>
+                                      <span className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price.toFixed(2)}` : 'N/A'}</span></span>
                                       <span className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span></span>
                                       <span className="text-orange-400">Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></span>
                                     </div>
@@ -1570,7 +1589,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                         ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                                         : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
                                     }`}>
-                                      {summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}
+                                      {summary.total_pnl !== undefined ? `₹${Number(summary.total_pnl).toFixed(2)}` : 'N/A'}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -1742,8 +1761,8 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                 </div>
                                 <div className="flex flex-row flex-nowrap items-center gap-3 text-xs font-medium text-blue-600">
                                   <span className="whitespace-nowrap">
-                                    Execution Price: <span className="font-bold truncate max-w-[110px]" title={summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}>
-                                      {summary.entry_price !== undefined ? `₹${summary.entry_price}` : 'N/A'}
+                                    Execution Price: <span className="font-bold truncate max-w-[110px]" title={summary.entry_price !== undefined ? `₹${summary.entry_price.toFixed(2)}` : 'N/A'}>
+                                      {summary.entry_price !== undefined ? `₹${summary.entry_price.toFixed(2)}` : 'N/A'}
                                     </span>
                                   </span>
                                   <span className="whitespace-nowrap">
@@ -1762,8 +1781,8 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                 </div>
                                 <div className="flex flex-row flex-nowrap items-center gap-3 text-xs font-medium text-orange-600">
                                   <span className="whitespace-nowrap">
-                                    Execution Price: <span className="font-bold truncate max-w-[110px]" title={summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}>
-                                      {summary.exit_price !== undefined ? `₹${summary.exit_price}` : 'N/A'}
+                                    Execution Price: <span className="font-bold truncate max-w-[110px]" title={summary.exit_price !== undefined ? `₹${summary.exit_price.toFixed(2)}` : 'N/A'}>
+                                      {summary.exit_price !== undefined ? `₹${summary.exit_price.toFixed(2)}` : 'N/A'}
                                     </span>
                                   </span>
                                   <span className="whitespace-nowrap">
@@ -1787,8 +1806,8 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                     : summary.total_pnl < 0
                                     ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                                     : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
-                                } whitespace-nowrap`} title={summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}>
-                                  {summary.total_pnl !== undefined ? `₹${summary.total_pnl}` : 'N/A'}
+                                } whitespace-nowrap`} title={summary.total_pnl !== undefined ? `₹${Number(summary.total_pnl).toFixed(2)}` : 'N/A'}>
+                                  {summary.total_pnl !== undefined ? `₹${Number(summary.total_pnl).toFixed(2)}` : 'N/A'}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 flex-nowrap">
