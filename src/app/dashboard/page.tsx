@@ -2525,7 +2525,11 @@ export default function Dashboard() {
                 </div>
                 
                 {/* Strategies Content */}
-                <StrategiesPage perStrategyStats={perStrategyStats} />
+                <StrategiesPage 
+                  perStrategyStats={perStrategyStats} 
+                  strategiesData={strategies}
+                  onRefresh={handleRefreshStrategies}
+                />
               </div>
             )}
 

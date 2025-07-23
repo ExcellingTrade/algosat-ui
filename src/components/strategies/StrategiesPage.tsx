@@ -91,9 +91,11 @@ type ViewMode = 'strategies' | 'symbols' | 'trades' | 'configs';
 interface StrategiesPageProps {
   className?: string;
   perStrategyStats?: PerStrategyStatsResponse | null;
+  strategiesData?: Strategy[]; // Pass strategies directly from dashboard
+  onRefresh?: () => Promise<void>; // Callback for external refresh triggers
 }
 
-export function StrategiesPage({ className = "", perStrategyStats }: StrategiesPageProps) {
+export function StrategiesPage({ className = "", perStrategyStats, strategiesData, onRefresh }: StrategiesPageProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('strategies');
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<StrategySymbol | null>(null);
@@ -276,9 +278,35 @@ export function StrategiesPage({ className = "", perStrategyStats }: StrategiesP
     fetchStrategies();
   }, []);
 
+  // Watch for external strategies data changes and sync internal state  
+  useEffect(() => {
+    if (strategiesData && strategiesData.length > 0) {
+      console.log('StrategiesPage: Syncing with external strategies data', strategiesData);
+      // Update local strategies with fresh data from dashboard
+      setStrategies(strategiesData);
+    }
+  }, [strategiesData]);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchStrategies(false);
+    
+    try {
+      // If external refresh callback is provided, use that instead of internal fetch
+      if (onRefresh) {
+        console.log('StrategiesPage: Using external refresh callback');
+        await onRefresh();
+        // After external refresh, also refresh internal state to ensure consistency
+        await fetchStrategies(false);
+      } else {
+        // Use internal refresh
+        console.log('StrategiesPage: Using internal refresh');
+        await fetchStrategies(false);
+      }
+    } catch (error) {
+      console.error('StrategiesPage: Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleStrategyUpdated = (updatedStrategy: Strategy) => {
