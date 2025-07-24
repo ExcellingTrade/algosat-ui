@@ -1060,6 +1060,73 @@ export default function Dashboard() {
     }
   };
 
+  const handleResetDatabase = async () => {
+    // First confirmation with detailed warning
+    if (!confirm('⚠️ CRITICAL WARNING: DATABASE RESET\n\n' +
+                 'This action will PERMANENTLY DELETE:\n' +
+                 '• ALL orders and their execution history\n' +
+                 '• ALL trading data from broker_executions table\n' +
+                 '• This action is IRREVERSIBLE\n\n' +
+                 'IMPORTANT: Please ensure all open orders are closed in all brokers before proceeding.\n\n' +
+                 'Your strategies, brokers, and configurations will remain intact.\n\n' +
+                 'Are you absolutely sure you want to continue?')) {
+      return;
+    }
+    
+    // Second confirmation with typing requirement
+    const confirmText = prompt('⚠️ FINAL CONFIRMATION\n\n' +
+                              'To proceed with the database reset, please type: RESET DATABASE\n\n' +
+                              'This will delete all order and execution data permanently.');
+    
+    if (confirmText !== 'RESET DATABASE') {
+      showToast({
+        type: "info",
+        title: "Database Reset Cancelled",
+        message: "Database reset cancelled - confirmation text did not match."
+      });
+      return;
+    }
+    
+    try {
+      showToast({
+        type: "info",
+        title: "Database Reset Starting",
+        message: "⚠️ Resetting database... This may take a few moments."
+      });
+      
+      console.log('Initiating database reset...');
+      const response = await apiClient.resetDatabase();
+      
+      console.log('Database reset response:', response);
+      
+      if (response.status === 'success') {
+        // Refresh dashboard data to reflect empty state
+        await loadDashboardData(true);
+        
+        showToast({
+          type: "success",
+          title: "Database Reset Completed",
+          message: `✅ Database reset successful!\n• ${response.summary.deleted_orders} orders deleted\n• ${response.summary.deleted_broker_executions} executions deleted\n• Total records removed: ${response.summary.total_deleted}`
+        });
+      } else {
+        showToast({
+          type: "error",
+          title: "Database Reset Failed",
+          message: response.message || "Failed to reset database"
+        });
+      }
+    } catch (err) {
+      console.error('Database reset failed:', err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to reset database";
+      
+      showToast({
+        type: "error",
+        title: "Database Reset Failed",
+        message: `❌ ${errorMessage}. Please check the logs and try again.`
+      });
+    }
+  };
+
   // Helper function to get balance summary for a specific broker
   const getBrokerBalance = (brokerName: string) => {
     const balanceSummary = balanceSummaries.find(
@@ -2597,6 +2664,15 @@ export default function Dashboard() {
                       >
                         <XCircle className="w-4 h-4" />
                         <span>Exit All</span>
+                      </button>
+                      
+                      <button
+                        onClick={handleResetDatabase}
+                        className="flex items-center space-x-2 px-3 py-2 bg-purple-600/15 hover:bg-purple-600/25 border border-purple-500/30 hover:border-purple-400/50 rounded-lg transition-all duration-200 hover:scale-[1.02] text-purple-400 text-sm font-medium shadow-sm hover:shadow-md"
+                        title="Reset database - Remove all orders and executions"
+                      >
+                        <Database className="w-4 h-4" />
+                        <span>Reset DB</span>
                       </button>
                       
                       <button

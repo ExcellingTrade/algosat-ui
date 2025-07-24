@@ -1098,6 +1098,13 @@ class ApiClient {
   async getDailyPnlHistory(days: number = 30): Promise<DailyPnlHistory> {
     return this.request(`/orders/daily-pnl-history?days=${days}`);
   }
+
+  // Admin APIs
+  async resetDatabase(): Promise<{ status: string; message: string; summary: any }> {
+    return this.request('/admin/resetdb', {
+      method: 'POST'
+    });
+  }
 }
 
 export const apiClient = new ApiClient();
