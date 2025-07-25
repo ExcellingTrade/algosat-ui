@@ -1403,6 +1403,33 @@ export default function Dashboard() {
       // Handle strategies
       if (strategiesResult.status === 'fulfilled') {
         strategiesData = strategiesResult.value;
+        
+        // If it's initial load (not background refresh), fetch symbol counts
+        if (!isBackgroundRefresh) {
+          try {
+            const strategiesWithCounts = await Promise.all(
+              strategiesData.map(async (strategy: any) => {
+                try {
+                  const symbols = await apiClient.getStrategySymbols(strategy.id);
+                  return {
+                    ...strategy,
+                    symbolCount: symbols ? symbols.length : 0
+                  };
+                } catch (error) {
+                  console.warn(`Failed to fetch symbols for strategy ${strategy.id}:`, error);
+                  return {
+                    ...strategy,
+                    symbolCount: 0
+                  };
+                }
+              })
+            );
+            strategiesData = strategiesWithCounts;
+            console.log('Dashboard: Strategies with symbol counts loaded:', strategiesData);
+          } catch (error) {
+            console.error('Dashboard: Error fetching symbol counts:', error);
+          }
+        }
       } else {
         console.error('Dashboard: Failed to load strategies:', strategiesResult.reason);
       }
@@ -1716,21 +1743,29 @@ export default function Dashboard() {
       
       // Handle strategies
       if (strategiesResult.status === 'fulfilled') {
-        setStrategies(strategiesResult.value);
+        const strategiesData = strategiesResult.value;
         
-        // Also fetch symbols for each strategy in the background (non-blocking)
-        const symbolsPromises = strategiesResult.value.map(async (strategy: any) => {
-          try {
-            return await apiClient.getStrategySymbols(strategy.id);
-          } catch (error) {
-            console.warn(`Failed to refresh symbols for strategy ${strategy.id}:`, error);
-            return [];
-          }
-        });
+        // Fetch symbols for each strategy and update symbolCount
+        const strategiesWithCounts = await Promise.all(
+          strategiesData.map(async (strategy: any) => {
+            try {
+              const symbols = await apiClient.getStrategySymbols(strategy.id);
+              return {
+                ...strategy,
+                symbolCount: symbols ? symbols.length : 0
+              };
+            } catch (error) {
+              console.warn(`Failed to fetch symbols for strategy ${strategy.id}:`, error);
+              return {
+                ...strategy,
+                symbolCount: 0
+              };
+            }
+          })
+        );
         
-        Promise.allSettled(symbolsPromises).then(() => {
-          console.log('Dashboard: Strategy symbols refreshed in background');
-        });
+        setStrategies(strategiesWithCounts);
+        console.log('Dashboard: Strategies with symbol counts loaded:', strategiesWithCounts);
       } else {
         console.error('Dashboard: Failed to refresh strategies:', strategiesResult.reason);
       }
