@@ -1924,7 +1924,6 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             )}
           </>
         )}
-      </div>
     </div>
   );
 }
