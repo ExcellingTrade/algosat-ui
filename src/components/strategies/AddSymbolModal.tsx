@@ -9,12 +9,13 @@ interface AddSymbolModalProps {
   configs: StrategyConfig[];
   existingSymbols: StrategySymbol[];
   onClose: () => void;
-  onAdd: (symbolData: { symbol: string; configId: number }) => void;
+  onAdd: (symbolData: { symbol: string; configId: number; enableSmartLevels?: boolean }) => void;
 }
 
 export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, onAdd }: AddSymbolModalProps) {
   const [symbolName, setSymbolName] = useState("");
   const [selectedConfigId, setSelectedConfigId] = useState<number | null>(null);
+  const [enableSmartLevels, setEnableSmartLevels] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +36,8 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
     try {
       await onAdd({
         symbol: symbolName.trim().toUpperCase(),
-        configId: selectedConfigId!
+        configId: selectedConfigId!,
+        enableSmartLevels
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add symbol');
@@ -208,6 +210,28 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
               </div>
             )}
           </div>
+
+          {/* Smart Levels Checkbox - Only show for swing strategies */}
+          {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+            <div className="space-y-2">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enableSmartLevels}
+                  onChange={(e) => setEnableSmartLevels(e.target.checked)}
+                  className="w-4 h-4 text-[var(--accent)] bg-[var(--background)] border-[var(--border)] rounded focus:ring-[var(--accent)] focus:ring-2"
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-[var(--foreground)]">
+                    Enable Smart Levels
+                  </span>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                    Allow this symbol to use advanced smart level functionality for enhanced trading decisions.
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Summary */}
           {symbolName.trim() && selectedConfigId && !isDuplicate && (

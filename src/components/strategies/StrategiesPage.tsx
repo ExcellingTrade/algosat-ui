@@ -6,13 +6,13 @@ import { SymbolsPage } from "./SymbolsPage";
 import { TradesPage } from "./TradesPage";
 import { ConfigsPage } from "./ConfigsPage";
 import { AddSymbolModal } from "./AddSymbolModal";
+import { SmartLevelsModal } from "./SmartLevelsModal";
 import { apiClient, PerStrategyStatsResponse, PerStrategyStatsData } from "../../lib/api";
 import { 
   ArrowLeft, 
   Zap, 
   TrendingUp, 
   Target,
-  Settings,
   Activity,
   RefreshCw,
   AlertCircle
@@ -42,6 +42,7 @@ export interface StrategySymbol {
   symbol: string;
   config_id: number;
   status: string;
+  enable_smart_levels?: boolean;
   created_at: string;
   updated_at: string;
   // Enhanced fields from API joins
@@ -100,6 +101,7 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<StrategySymbol | null>(null);
   const [showAddSymbolModal, setShowAddSymbolModal] = useState(false);
+  const [showSmartLevelsModal, setShowSmartLevelsModal] = useState(false);
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [symbols, setSymbols] = useState<StrategySymbol[]>([]);
   const [configs, setConfigs] = useState<StrategyConfig[]>([]);
@@ -107,6 +109,18 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [preSelectedConfigId, setPreSelectedConfigId] = useState<number | undefined>(undefined);
+  
+  // Smart Levels data
+  const [smartLevelsData, setSmartLevelsData] = useState<{
+    smartEnabledCount: number;
+    swingStrategiesCount: number;
+    activeLevelsCount: number;
+  }>({
+    smartEnabledCount: 0,
+    swingStrategiesCount: 0,
+    activeLevelsCount: 0
+  });
+  const [isRefreshingSmartLevels, setIsRefreshingSmartLevels] = useState(false);
 
   // Background stats fetching (non-blocking)
   const fetchStrategiesStats = async (strategies: Strategy[]) => {
@@ -245,6 +259,46 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
     }
   };
 
+  // Fetch Smart Levels data using the dedicated API endpoint
+  const fetchSmartLevelsData = async () => {
+    try {
+      console.log('Fetching Smart Levels data...');
+      const smartLevelsResponse = await apiClient.getSmartLevelsSymbols();
+      console.log('Smart Levels API response:', smartLevelsResponse);
+      
+      // Get actual count of configured smart levels
+      const allSmartLevels = await apiClient.getAllSmartLevels();
+      const activeLevelsCount = allSmartLevels.filter(level => level.is_active).length;
+      
+      const swingStrategiesCount = strategies.filter(s => 
+        s.key === 'SwingHighLowBuy' || s.key === 'SwingHighLowSell'
+      ).length;
+      
+      setSmartLevelsData({
+        smartEnabledCount: smartLevelsResponse.total_count,
+        swingStrategiesCount: swingStrategiesCount,
+        activeLevelsCount: activeLevelsCount // Actual count of active smart levels
+      });
+      
+    } catch (err) {
+      console.error('Failed to fetch Smart Levels data:', err);
+      setSmartLevelsData({
+        smartEnabledCount: 0,
+        swingStrategiesCount: strategies.filter(s => 
+          s.key === 'SwingHighLowBuy' || s.key === 'SwingHighLowSell'
+        ).length,
+        activeLevelsCount: 0
+      });
+    }
+  };
+
+  // Refresh Smart Levels data
+  const refreshSmartLevels = async () => {
+    setIsRefreshingSmartLevels(true);
+    await fetchSmartLevelsData();
+    setIsRefreshingSmartLevels(false);
+  };
+
   // Background stats fetching for symbols (non-blocking)
   const fetchSymbolsStats = async (symbols: StrategySymbol[]) => {
     console.log('Starting background symbol stats fetching...');
@@ -277,6 +331,13 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
   useEffect(() => {
     fetchStrategies();
   }, []);
+  
+  // Fetch Smart Levels data when strategies are loaded
+  useEffect(() => {
+    if (strategies.length > 0) {
+      fetchSmartLevelsData();
+    }
+  }, [strategies]);
 
   // Watch for external strategies data changes and sync internal state  
   useEffect(() => {
@@ -346,7 +407,7 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
     setShowAddSymbolModal(true);
   };
 
-  const handleSymbolAdded = async (symbolData: { symbol: string; configId: number }) => {
+  const handleSymbolAdded = async (symbolData: { symbol: string; configId: number; enableSmartLevels?: boolean }) => {
     if (!selectedStrategy) return;
     
     try {
@@ -355,7 +416,8 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
         strategy_id: selectedStrategy.id,
         symbol: symbolData.symbol,
         config_id: symbolData.configId,
-        status: 'active'
+        status: 'active',
+        enable_smart_levels: symbolData.enableSmartLevels || false
       });
       
       // Refresh symbols list
@@ -377,6 +439,19 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
     } catch (err) {
       console.error('Failed to toggle symbol:', err);
       setError(err instanceof Error ? err.message : 'Failed to toggle symbol');
+    }
+  };
+
+  const handleToggleSmartLevels = async (symbolId: number) => {
+    try {
+      await apiClient.toggleSmartLevels(symbolId);
+      // Refresh symbols list
+      if (selectedStrategy) {
+        await fetchStrategySymbols(selectedStrategy.id);
+      }
+    } catch (err) {
+      console.error('Failed to toggle smart levels:', err);
+      setError(err instanceof Error ? err.message : 'Failed to toggle smart levels');
     }
   };
 
@@ -612,6 +687,76 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
                     </button>
                   </div>
                 )}
+
+                {/* Smart Controls Section */}
+                {strategies.length > 0 && (
+                  <div className="space-y-4 md:space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl md:text-2xl font-bold text-[var(--foreground)]">Smart Controls</h2>
+                      <div className="flex items-center space-x-3">
+                        <p className="text-sm text-[var(--muted-foreground)]">Configure advanced trading features</p>
+                        <button
+                          onClick={refreshSmartLevels}
+                          disabled={isRefreshingSmartLevels}
+                          className="p-2 rounded-lg bg-[var(--card-background)] border border-[var(--border)] hover:bg-[var(--accent)]/10 transition-colors disabled:opacity-50"
+                          title="Refresh Smart Levels data"
+                        >
+                          <RefreshCw className={`w-4 h-4 text-[var(--muted-foreground)] ${isRefreshingSmartLevels ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Smart Levels Configuration Card */}
+                    <div className="bg-gradient-to-br from-[var(--card-background)]/90 to-[var(--card-background)]/50 backdrop-blur-xl border border-[var(--border)]/50 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 hover:border-[var(--accent)]/50 p-6">
+                      <div className="flex items-start space-x-4">
+                        <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Target className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1 space-y-4">
+                          <div className="space-y-2">
+                            <h3 className="text-lg font-bold text-[var(--foreground)]">Smart Levels Management</h3>
+                            <p className="text-sm text-[var(--muted-foreground)]">
+                              Configure intelligent support and resistance levels for enhanced trading decisions. 
+                              Manage smart levels across all your swing trading strategies.
+                            </p>
+                          </div>
+                          
+                          {/* Smart Levels Stats */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-[var(--background)]/40 rounded-lg p-3 border border-[var(--border)]/30">
+                              <div className="text-center">
+                                <p className="text-lg font-bold text-blue-400">
+                                  {smartLevelsData.smartEnabledCount}
+                                </p>
+                                <p className="text-xs text-[var(--muted-foreground)] mt-1">Smart Enabled</p>
+                              </div>
+                            </div>
+                            <div className="bg-[var(--background)]/40 rounded-lg p-3 border border-[var(--border)]/30">
+                              <div className="text-center">
+                                <p className="text-lg font-bold text-green-400">
+                                  {smartLevelsData.swingStrategiesCount}
+                                </p>
+                                <p className="text-xs text-[var(--muted-foreground)] mt-1">Swing Strategies</p>
+                              </div>
+                            </div>
+                            <div 
+                              className="bg-[var(--background)]/40 rounded-lg p-3 border border-[var(--border)]/30 cursor-pointer hover:bg-[var(--accent)]/10 hover:border-[var(--accent)]/30 transition-all duration-200"
+                              onClick={() => setShowSmartLevelsModal(true)}
+                              title="Click to configure Smart Levels"
+                            >
+                              <div className="text-center">
+                                <p className="text-lg font-bold text-purple-400">
+                                  {smartLevelsData.activeLevelsCount}
+                                </p>
+                                <p className="text-xs text-[var(--muted-foreground)] mt-1">Active Levels</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -624,6 +769,7 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
           onViewTrades={handleViewTrades}
           onAddSymbol={handleAddSymbol}
           onToggleSymbol={handleToggleSymbol}
+          onToggleSmartLevels={handleToggleSmartLevels}
           onRefreshSymbols={() => fetchStrategySymbols(selectedStrategy.id)}
           preSelectedConfigId={preSelectedConfigId}
           onClearPreSelection={() => setPreSelectedConfigId(undefined)}
@@ -664,6 +810,13 @@ export function StrategiesPage({ className = "", perStrategyStats, strategiesDat
           onAdd={handleSymbolAdded}
         />
       )}
+
+      {/* Smart Levels Configuration Modal */}
+      <SmartLevelsModal
+        isOpen={showSmartLevelsModal}
+        onClose={() => setShowSmartLevelsModal(false)}
+        onRefresh={refreshSmartLevels}
+      />
       </div>
     </div>
   );

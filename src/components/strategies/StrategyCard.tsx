@@ -298,7 +298,9 @@ export function StrategyCard({ strategy, strategyStats, onViewSymbols, onViewCon
 
         <div className="grid grid-cols-3 gap-2 mb-3 md:mb-4">
           <div className="text-center p-2 md:p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">
-            <p className="text-xs md:text-sm font-bold text-blue-400 leading-none">{strategy.symbolCount || 0}</p>
+            <p className="text-xs md:text-sm font-bold text-blue-400 leading-none">
+              {strategy.symbolCount !== undefined ? strategy.symbolCount : '...'}
+            </p>
             <p className="text-xs text-[var(--muted-foreground)] mt-1">Symbols</p>
           </div>
           <div className="text-center p-2 md:p-2.5 bg-[var(--background)]/30 rounded hover:bg-[var(--background)]/50 transition-colors">

@@ -25,6 +25,7 @@ interface SymbolsPageProps {
   onViewTrades: (symbol: StrategySymbol) => void;
   onAddSymbol: () => void;
   onToggleSymbol?: (symbolId: number) => Promise<void>;
+  onToggleSmartLevels?: (symbolId: number) => Promise<void>;
   onRefreshSymbols?: () => Promise<void>; // Add refresh callback
   preSelectedConfigId?: number; // Config to pre-select when coming from configs page
   onClearPreSelection?: () => void; // Function to clear the pre-selection
@@ -68,8 +69,19 @@ function ToggleSwitch({
   );
 }
 
-export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onToggleSymbol, onRefreshSymbols, preSelectedConfigId, onClearPreSelection }: SymbolsPageProps) {
+export function SymbolsPage({ 
+  strategy, 
+  symbols, 
+  onViewTrades, 
+  onAddSymbol, 
+  onToggleSymbol, 
+  onToggleSmartLevels,
+  onRefreshSymbols, 
+  preSelectedConfigId, 
+  onClearPreSelection 
+}: SymbolsPageProps) {
   const [toggleStates, setToggleStates] = useState<Record<number, boolean>>({});
+  const [smartLevelsToggleStates, setSmartLevelsToggleStates] = useState<Record<number, boolean>>({});
   const [configs, setConfigs] = useState<StrategyConfig[]>([]);
   const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
   const [selectedConfigIds, setSelectedConfigIds] = useState<number[]>([]);
@@ -268,6 +280,22 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
     
     setTimeout(() => {
       setToggleStates(prev => ({ ...prev, [symbolId]: false }));
+    }, 1000);
+  };
+
+  const handleToggleSmartLevels = async (symbolId: number) => {
+    setSmartLevelsToggleStates(prev => ({ ...prev, [symbolId]: true }));
+    
+    if (onToggleSmartLevels) {
+      try {
+        await onToggleSmartLevels(symbolId);
+      } catch (error) {
+        console.error('Failed to toggle smart levels:', error);
+      }
+    }
+    
+    setTimeout(() => {
+      setSmartLevelsToggleStates(prev => ({ ...prev, [symbolId]: false }));
     }, 1000);
   };
 
@@ -627,6 +655,10 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Today</th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Trades</th>
                     <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Status</th>
+                    {/* Only show Smart Levels column for swing strategies */}
+                    {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+                      <th className="text-left py-4 px-6 text-sm font-medium text-[var(--muted-foreground)]">Smart Levels</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]/30">
@@ -711,6 +743,21 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                           />
                         </div>
                       </td>
+                      {/* Smart Levels column - only for swing strategies */}
+                      {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+                        <td className="py-4 px-6">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm text-[var(--muted-foreground)]">
+                              {symbol.enable_smart_levels ? 'Enabled' : 'Disabled'}
+                            </span>
+                            <ToggleSwitch
+                              enabled={symbol.enable_smart_levels ?? false}
+                              loading={smartLevelsToggleStates[symbol.id]}
+                              onChange={() => handleToggleSmartLevels(symbol.id)}
+                            />
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -777,6 +824,19 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                           {symbol.enabled ? 'Active' : 'Inactive'}
                         </span>
                       </div>
+                      {/* Smart Levels info for swing strategies */}
+                      {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-[var(--muted-foreground)]">Smart Levels:</span>
+                          <span className={`text-xs font-medium px-2 py-1 rounded ${
+                            symbol.enable_smart_levels 
+                              ? 'bg-green-500/20 text-green-400' 
+                              : 'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {symbol.enable_smart_levels ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center space-x-1">
                         <button
                           onClick={() => handleEditSymbol(symbol)}
@@ -794,11 +854,21 @@ export function SymbolsPage({ strategy, symbols, onViewTrades, onAddSymbol, onTo
                         </button>
                       </div>
                     </div>
-                    <ToggleSwitch
-                      enabled={symbol.enabled ?? false}
-                      loading={toggleStates[symbol.id]}
-                      onChange={() => handleToggleSymbol(symbol.id)}
-                    />
+                    <div className="flex items-center space-x-2">
+                      <ToggleSwitch
+                        enabled={symbol.enabled ?? false}
+                        loading={toggleStates[symbol.id]}
+                        onChange={() => handleToggleSymbol(symbol.id)}
+                      />
+                      {/* Smart Levels toggle for swing strategies */}
+                      {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+                        <ToggleSwitch
+                          enabled={symbol.enable_smart_levels ?? false}
+                          loading={smartLevelsToggleStates[symbol.id]}
+                          onChange={() => handleToggleSmartLevels(symbol.id)}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

@@ -51,6 +51,7 @@ export interface LoginResponse {
 export interface Strategy {
   id: number;
   name: string;
+  key?: string;  // Strategy key identifier
   description?: string;
   enabled: boolean;
   created_at?: string;
@@ -77,6 +78,7 @@ export interface StrategySymbol {
   symbol: string;
   config_id: number;
   status: string;
+  enable_smart_levels?: boolean;
   created_at: string;
   updated_at: string;
   config_name?: string;
@@ -88,6 +90,63 @@ export interface StrategySymbolCreate {
   symbol: string;
   config_id: number;
   status?: string;
+  enable_smart_levels?: boolean;
+}
+
+export interface SmartLevelsSymbol {
+  symbol: string;
+  enable_smart_levels: boolean;
+  strategies: string[];
+}
+
+export interface SmartLevelsSymbolsResponse {
+  symbols: SmartLevelsSymbol[];
+  total_count: number;
+}
+
+export interface SmartLevelConfig {
+  id?: number;
+  strategy_symbol_id: number;
+  name: string;
+  is_active: boolean;
+  entry_level: number;
+  bullish_target?: number;
+  bearish_target?: number;
+  initial_lot_ce?: number;
+  initial_lot_pe?: number;
+  remaining_lot_ce?: number;
+  remaining_lot_pe?: number;
+  ce_buy_enabled: boolean;
+  ce_sell_enabled: boolean;
+  pe_buy_enabled: boolean;
+  pe_sell_enabled: boolean;
+  max_trades?: number;
+  max_loss_trades?: number;
+  pullback_percentage?: number;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SmartLevelCreate {
+  strategy_symbol_id: number;
+  name: string;
+  is_active?: boolean;
+  entry_level: number;
+  bullish_target?: number;
+  bearish_target?: number;
+  initial_lot_ce?: number;
+  initial_lot_pe?: number;
+  remaining_lot_ce?: number;
+  remaining_lot_pe?: number;
+  ce_buy_enabled?: boolean;
+  ce_sell_enabled?: boolean;
+  pe_buy_enabled?: boolean;
+  pe_sell_enabled?: boolean;
+  max_trades?: number;
+  max_loss_trades?: number;
+  pullback_percentage?: number;
+  notes?: string;
 }
 
 export interface Broker {
@@ -755,6 +814,65 @@ class ApiClient {
   async disableSymbol(symbolId: number): Promise<StrategySymbol> {
     return this.request(`/strategies/symbols/${symbolId}/disable`, {
       method: 'PUT',
+    });
+  }
+
+  // Smart Levels API methods
+  async enableSmartLevels(symbolId: number): Promise<StrategySymbol> {
+    return this.request(`/strategies/symbols/${symbolId}/smart-levels/enable`, {
+      method: 'PUT',
+    });
+  }
+
+  async disableSmartLevels(symbolId: number): Promise<StrategySymbol> {
+    return this.request(`/strategies/symbols/${symbolId}/smart-levels/disable`, {
+      method: 'PUT',
+    });
+  }
+
+  async toggleSmartLevels(symbolId: number): Promise<StrategySymbol> {
+    return this.request(`/strategies/symbols/${symbolId}/smart-levels/toggle`, {
+      method: 'PUT',
+    });
+  }
+
+  async getSmartLevelsSymbols(): Promise<SmartLevelsSymbolsResponse> {
+    return this.request('/strategies/smart-levels/symbols', {
+      method: 'GET',
+    });
+  }
+
+  // Smart Levels Configuration API methods
+  async getAllSmartLevels(strategySymbolId?: number): Promise<SmartLevelConfig[]> {
+    const params = strategySymbolId ? `?strategy_symbol_id=${strategySymbolId}` : '';
+    return this.request(`/smart-levels/${params}`, {
+      method: 'GET',
+    });
+  }
+
+  async getSmartLevel(smartLevelId: number): Promise<SmartLevelConfig> {
+    return this.request(`/smart-levels/${smartLevelId}`, {
+      method: 'GET',
+    });
+  }
+
+  async createSmartLevel(smartLevelData: SmartLevelCreate): Promise<SmartLevelConfig> {
+    return this.request('/smart-levels/', {
+      method: 'POST',
+      body: JSON.stringify(smartLevelData),
+    });
+  }
+
+  async updateSmartLevel(smartLevelId: number, updateData: Partial<SmartLevelConfig>): Promise<SmartLevelConfig> {
+    return this.request(`/smart-levels/${smartLevelId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    });
+  }
+
+  async deleteSmartLevel(smartLevelId: number): Promise<{ message: string; id: number }> {
+    return this.request(`/smart-levels/${smartLevelId}`, {
+      method: 'DELETE',
     });
   }
 
