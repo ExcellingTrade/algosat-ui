@@ -321,6 +321,9 @@ export default function Dashboard() {
   const [sortField, setSortField] = useState<string>("signal_time");
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
+  // Orders tab splitting state - similar to TradesPage
+  const [showOldOrders, setShowOldOrders] = useState(false);
+  
   // Row expansion for detailed broker executions (Already declared above)
   // const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
@@ -411,6 +414,18 @@ export default function Dashboard() {
       type,
       expiry: expiry || 'N/A'
     };
+  };
+
+  // Helper function to check if an order is from today - similar to TradesPage
+  const isToday = (dateString: string) => {
+    if (!dateString) return false;
+    try {
+      const orderDate = new Date(dateString).toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0];
+      return orderDate === today;
+    } catch (error) {
+      return false;
+    }
   };
 
   // Computed values for filters
@@ -775,6 +790,22 @@ export default function Dashboard() {
       }
     });
   }, [filteredOrders, sortField, sortDirection]);
+
+  // Split filtered orders into today's and old orders - similar to TradesPage
+  const { todaysOrders, oldOrders } = useMemo(() => {
+    const today = [];
+    const old = [];
+    
+    for (const order of sortedOrders) {
+      if (isToday(order.signal_time)) {
+        today.push(order);
+      } else {
+        old.push(order);
+      }
+    }
+    
+    return { todaysOrders: today, oldOrders: old };
+  }, [sortedOrders]);
 
   // P&L Graph Data Processing
   const getPnlGraphData = () => {
@@ -3210,7 +3241,7 @@ export default function Dashboard() {
                   {/* Order Stats */}
                   <div className="grid grid-cols-4 gap-4 text-center">
                     <div className="backdrop-blur-xl bg-green-500/10 border border-green-500/30 rounded-2xl p-3 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300">
-                      <p className="text-xl font-bold text-green-400">{sortedOrders.length}</p>
+                      <p className="text-xl font-bold text-green-400">Today: {todaysOrders.length} / Total: {sortedOrders.length}</p>
                       <p className="text-xs text-green-300">Showing</p>
                     </div>
                     <div className="backdrop-blur-xl bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300">
@@ -3507,359 +3538,528 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {sortedOrders.length === 0 ? (
-                  /* Empty State for Orders */
-                  <div className="relative backdrop-blur-xl bg-[var(--card-background)]/95 border border-[var(--border)] rounded-2xl p-12 text-center shadow-2xl shadow-[var(--accent)]/20 overflow-hidden">
-                    <div className="relative z-10">
-                      <div className="w-16 h-16 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <TrendingUp className="w-8 h-8 text-[var(--accent)]" />
+                {/* Orders Table - Split View */}
+                <div className="space-y-6">
+                  {/* Header */}
+                  <div className="bg-[var(--card-background)]/95 border border-[var(--border)] rounded-xl shadow-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-[var(--foreground)]">Orders</h3>
+                        <p className="text-sm text-[var(--muted-foreground)] mt-1">
+                          All orders from active strategies
+                        </p>
                       </div>
-                      <h3 className="text-3xl font-bold bg-gradient-to-r from-[var(--accent)] to-blue-400 bg-clip-text text-transparent mb-4">
-                        {orders.length === 0 ? 'No Orders Found' : 'No Orders Match Filters'}
-                      </h3>
-                      <p className="text-[var(--muted-foreground)] text-lg mb-8 max-w-md mx-auto leading-relaxed">
-                        {orders.length === 0 ? 'Start trading with your strategies to see orders here.' : 'Try adjusting your filters to see more orders.'}
-                      </p>
+                      <div className="flex items-center space-x-4 text-sm">
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-[var(--accent)]">{todaysOrders.length}</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">Today's</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-[var(--muted-foreground)]">{oldOrders.length}</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">Historical</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-[var(--foreground)]">{sortedOrders.length}</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">Total</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="backdrop-blur-sm bg-[var(--card-background)] border border-[var(--border)] rounded-lg overflow-hidden shadow-lg">
-                    <table className="w-full">
-                      <thead className="bg-[var(--background)]/50 border-b border-[var(--border)]">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-[var(--accent)] w-12">
-                            <span className="text-sm font-medium text-[var(--muted-foreground)]">
-                              <Eye className="w-4 h-4" />
+
+                  {sortedOrders.length === 0 ? (
+                    <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] p-6 md:p-8 text-center">
+                      <div className="w-12 h-12 bg-[var(--accent)]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <TrendingUp className="w-6 h-6 text-[var(--accent)]" />
+                      </div>
+                      {orders.length === 0 ? (
+                        <>
+                          <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Orders Found</h3>
+                          <p className="text-[var(--muted-foreground)]">
+                            Start trading with your strategies to see orders here
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Matches</h3>
+                          <p className="text-[var(--muted-foreground)] mb-4">
+                            No orders match the current filter criteria
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Today's Orders Section */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <h3 className="text-lg font-semibold text-[var(--foreground)]">Today's Orders</h3>
+                            <span className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded-full text-sm font-medium">
+                              {todaysOrders.length} {todaysOrders.length === 1 ? 'order' : 'orders'}
                             </span>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('underlying')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Symbol</span>
-                              {sortField === 'underlying' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('strike')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Strike</span>
-                              {sortField === 'strike' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('type')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Type</span>
-                              {sortField === 'type' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('pnl')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>P&L</span>
-                              {sortField === 'pnl' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('status')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Status</span>
-                              {sortField === 'status' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('side')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Side</span>
-                              {sortField === 'side' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('qty')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Qty</span>
-                              {sortField === 'qty' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('executed_quantity')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Executed Qty</span>
-                              {sortField === 'executed_quantity' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
+                          </div>
+                        </div>
 
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('entry_price')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Entry Price</span>
-                              {sortField === 'entry_price' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('exit_price')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Exit Price</span>
-                              {sortField === 'exit_price' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('entry_time')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Entry Time</span>
-                              {sortField === 'entry_time' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
-                            onClick={() => handleSort('exit_time')}
-                          >
-                            <div className="flex items-center space-x-1">
-                              <span>Exit Time</span>
-                              {sortField === 'exit_time' && (
-                                <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                              )}
-                            </div>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedOrders.map((order) => {
-                          const parsed = parseStrikeSymbol(order.strike_symbol || '');
-                          const isExpanded = expandedRows.has(order.id);
-                          const hasExecutions = order.broker_executions && order.broker_executions.length > 0;
-
-                          return (
-                            <React.Fragment key={order.id}>
-                              <tr key={order.id} className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
-                                <td className="px-4 py-3">
-                                  {hasExecutions ? (
-                                    <button
-                                      onClick={() => toggleRowExpansion(order.id)}
-                                      className="p-1 hover:bg-[var(--accent)]/20 rounded transition-colors"
-                                      title={isExpanded ? 'Hide executions' : 'Show executions'}
-                                    >
-                                      {isExpanded ? (
-                                        <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
-                                      ) : (
-                                        <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                        {todaysOrders.length === 0 ? (
+                          <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] p-8 text-center">
+                            <TrendingUp className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4 opacity-50" />
+                            <p className="text-[var(--muted-foreground)] text-lg">No orders today</p>
+                          </div>
+                        ) : (
+                          <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-hidden shadow-lg">
+                            <table className="w-full">
+                              <thead className="bg-[var(--background)]/50 border-b border-[var(--border)]">
+                                <tr>
+                                  <th className="px-4 py-3 text-left text-[var(--accent)] w-12">
+                                    <Eye className="w-4 h-4" />
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('underlying')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Symbol</span>
+                                      {sortField === 'underlying' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
-                                    </button>
-                                  ) : (
-                                    <div className="w-6 h-6 flex items-center justify-center">
-                                      <div className="w-1 h-1 bg-[var(--muted-foreground)]/30 rounded-full"></div>
                                     </div>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 font-medium text-[var(--foreground)]">
-                                  {parsed.underlying || 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
-                                  {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                    parsed.type === 'CE' 
-                                      ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                                      : parsed.type === 'PE'
-                                        ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                        : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                                  }`}>
-                                    {parsed.type || 'N/A'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`font-bold ${
-                                    order.pnl > 0 
-                                      ? 'text-green-400' 
-                                      : order.pnl < 0 
-                                        ? 'text-red-400' 
-                                        : 'text-[var(--muted-foreground)]'
-                                  }`}>
-                                    {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                    order.status === 'OPEN' 
-                                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
-                                      : order.status === 'CLOSED'
-                                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                                        : order.status === 'AWAITING_ENTRY'
-                                          ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
-                                          : order.status === 'CANCELLED'
-                                            ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                            : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                                  }`}>
-                                    {order.status}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`px-2 py-1 rounded text-xs ${
-                                    order.side === 'BUY' 
-                                      ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                                      : 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                  }`}>
-                                    {order.side || 'N/A'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-[var(--muted-foreground)]">{order.qty || 0}</td>
-                                <td className="px-4 py-3 text-[var(--muted-foreground)]">{order.executed_quantity || 0}</td>
-                                <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                                  {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--muted-foreground)]">
-                                  {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
-                                  {order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  }) : 'N/A'}
-                                </td>
-                                <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
-                                  {order.exit_time ? new Date(order.exit_time).toLocaleDateString('en-IN', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  }) : 'N/A'}
-                                </td>
-                              </tr>
-                              
-                              {/* Broker Executions Row - only show if expanded */}
-                              {isExpanded && hasExecutions && (
-                                <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                  <td colSpan={13} className="py-4 px-6">
-                                    <div className="space-y-4">
-                                      {groupBrokerExecutions(
-                                        brokerFilter 
-                                          ? (order.broker_executions || []).filter((exec: any) => 
-                                              exec.broker_name && exec.broker_name.toLowerCase() === brokerFilter.toLowerCase()
-                                            )
-                                          : order.broker_executions || []
-                                      ).map((summary) => (
-                                        <div
-                                          key={`${summary.broker_name}_${summary.broker_order_id}`}
-                                          className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8"
-                                        >
-                                          {/* Left: Broker, Status, Order ID */}
-                                          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px]">
-                                            <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)}`}>{summary.broker_name.toUpperCase()}</span>
-                                            <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)}`}>{summary.status}</span>
-                                            <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all" style={{letterSpacing: '0.04em'}}>{summary.broker_order_id}</span>
-                                          </div>
-                                          {/* Middle: Entry/Exit */}
-                                          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            {/* Entry */}
-                                            <div className="rounded-lg border border-blue-400/30 bg-blue-50 dark:bg-blue-900/10 p-3 flex flex-col gap-1">
-                                              <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-bold text-blue-500 uppercase tracking-wide">Entry</span>
-                                                {summary.has_entry ? <span className="text-blue-400">✓</span> : <span className="text-gray-400">✗</span>}
-                                              </div>
-                                              <div className="flex flex-wrap gap-3 text-xs">
-                                                <span className="text-blue-400">Execution Price: <span className="font-bold text-blue-600">{summary.entry_price !== undefined ? `₹${summary.entry_price.toFixed(2)}` : 'N/A'}</span></span>
-                                                <span className="text-blue-400">Qty: <span className="font-bold text-blue-600">{summary.entry_quantity}</span></span>
-                                                <span className="text-blue-400">Time: <span className="font-medium text-blue-600">{summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}</span></span>
-                                              </div>
-                                            </div>
-                                            {/* Exit */}
-                                            <div className="rounded-lg border border-orange-400/30 bg-orange-50 dark:bg-orange-900/10 p-3 flex flex-col gap-1">
-                                              <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-bold text-orange-500 uppercase tracking-wide">Exit</span>
-                                                {summary.has_exit ? <span className="text-orange-400">✓</span> : <span className="text-gray-400">✗</span>}
-                                              </div>
-                                              <div className="flex flex-wrap gap-3 text-xs">
-                                                <span className="text-orange-400">Execution Price: <span className="font-bold text-orange-600">{summary.exit_price !== undefined ? `₹${summary.exit_price.toFixed(2)}` : 'N/A'}</span></span>
-                                                <span className="text-orange-400">Qty: <span className="font-bold text-orange-600">{summary.exit_quantity}</span></span>
-                                                <span className="text-orange-400">Time: <span className="font-medium text-orange-600">{summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}</span></span>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          {/* Right: PNL, Net, Type */}
-                                          <div className="flex flex-col gap-2 min-w-[180px]">
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-xs text-[var(--muted-foreground)]">Broker P&L</span>
-                                              <span className={`px-2 py-1 rounded font-bold text-sm ${
-                                                summary.total_pnl === undefined
-                                                  ? 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
-                                                  : summary.total_pnl > 0
-                                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                                                  : summary.total_pnl < 0
-                                                  ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                                                  : 'bg-gray-100 text-gray-500 dark:bg-gray-900/20 dark:text-gray-400'
-                                              }`}>
-                                                {summary.total_pnl !== undefined ? `₹${Number(summary.total_pnl).toFixed(2)}` : 'N/A'}
-                                              </span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-xs text-[var(--muted-foreground)]">Net Qty</span>
-                                              <span className="font-bold text-blue-500">{summary.net_quantity}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-xs text-[var(--muted-foreground)]">Order Type</span>
-                                              <span className="font-semibold text-[var(--foreground)]">{summary.order_type || 'N/A'}</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('strike')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Strike</span>
+                                      {sortField === 'strike' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
                                     </div>
-                                  </td>
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('type')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Type</span>
+                                      {sortField === 'type' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('pnl')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>P&L</span>
+                                      {sortField === 'pnl' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('status')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Status</span>
+                                      {sortField === 'status' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('side')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Side</span>
+                                      {sortField === 'side' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('signal_time')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Signal Time</span>
+                                      {sortField === 'signal_time' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('entry_price')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Entry Price</span>
+                                      {sortField === 'entry_price' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('exit_price')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span>Exit Price</span>
+                                      {sortField === 'exit_price' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
                                 </tr>
+                              </thead>
+                              <tbody>
+                                {todaysOrders.map((order) => {
+                                  const parsed = parseStrikeSymbol(order.strike_symbol || '');
+                                  const isExpanded = expandedRows.has(order.id);
+                                  const hasExecutions = order.broker_executions && order.broker_executions.length > 0;
+
+                                  return (
+                                    <React.Fragment key={order.id}>
+                                      <tr className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
+                                        <td className="px-4 py-3">
+                                          {hasExecutions ? (
+                                            <button
+                                              onClick={() => toggleRowExpansion(order.id)}
+                                              className="p-1 hover:bg-[var(--accent)]/20 rounded transition-colors"
+                                              title={isExpanded ? 'Hide executions' : 'Show executions'}
+                                            >
+                                              {isExpanded ? (
+                                                <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
+                                              ) : (
+                                                <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                                              )}
+                                            </button>
+                                          ) : (
+                                            <div className="w-6 h-6 flex items-center justify-center">
+                                              <div className="w-1 h-1 bg-[var(--muted-foreground)]/30 rounded-full"></div>
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="px-4 py-3 font-medium text-[var(--foreground)]">
+                                          {parsed.underlying || 'N/A'}
+                                        </td>
+                                        <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
+                                          {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                            parsed.type === 'CE' 
+                                              ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                              : parsed.type === 'PE'
+                                                ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                          }`}>
+                                            {parsed.type || 'N/A'}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <span className={`font-bold ${
+                                            order.pnl > 0 
+                                              ? 'text-green-400' 
+                                              : order.pnl < 0 
+                                                ? 'text-red-400' 
+                                                : 'text-[var(--muted-foreground)]'
+                                          }`}>
+                                            {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                            order.status === 'OPEN' 
+                                              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                                              : order.status === 'CLOSED'
+                                                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                                                : order.status === 'AWAITING_ENTRY'
+                                                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                                                  : order.status === 'CANCELLED'
+                                                    ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                    : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                          }`}>
+                                            {order.status}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <span className={`px-2 py-1 rounded text-xs ${
+                                            order.side === 'BUY' 
+                                              ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                              : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                          }`}>
+                                            {order.side || 'N/A'}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
+                                          {order.signal_time ? new Date(order.signal_time).toLocaleDateString('en-IN', {
+                                            day: '2-digit',
+                                            month: 'short',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          }) : 'N/A'}
+                                        </td>
+                                        <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                          {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
+                                        </td>
+                                        <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                          {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
+                                        </td>
+                                      </tr>
+                                      
+                                      {/* Broker Executions Row - only show if expanded */}
+                                      {isExpanded && hasExecutions && (
+                                        <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
+                                          <td colSpan={10} className="py-4 px-6">
+                                            <div className="space-y-4">
+                                              {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
+                                                <div
+                                                  key={`${summary.broker_name}_${summary.broker_order_id}`}
+                                                  className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8"
+                                                >
+                                                  <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px]">
+                                                    <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">{summary.broker_name.toUpperCase()}</span>
+                                                    <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">{summary.status}</span>
+                                                    <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all">{summary.broker_order_id}</span>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Historical Orders Section - Collapsible */}
+                      {oldOrders.length > 0 && (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <h3 className="text-lg font-semibold text-[var(--foreground)]">Historical Orders</h3>
+                              <span className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded-full text-sm font-medium">
+                                {oldOrders.length} {oldOrders.length === 1 ? 'order' : 'orders'}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => setShowOldOrders(!showOldOrders)}
+                              className="flex items-center space-x-2 px-3 py-1.5 bg-[var(--card-background)] border border-[var(--border)] rounded-lg hover:bg-[var(--accent)]/10 transition-all duration-200"
+                            >
+                              <span className="text-sm text-[var(--foreground)]">
+                                {showOldOrders ? 'Hide' : 'Show'} Historical Orders
+                              </span>
+                              {showOldOrders ? (
+                                <ChevronDown className="w-4 h-4 text-[var(--muted-foreground)]" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
                               )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                            </button>
+                          </div>
+
+                          {showOldOrders && (
+                            <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-hidden shadow-lg">
+                              <div className="max-h-96 overflow-y-auto">
+                                <table className="w-full">
+                                  <thead className="bg-[var(--background)]/50 border-b border-[var(--border)] sticky top-0">
+                                    <tr>
+                                      <th className="px-4 py-3 text-left text-[var(--accent)] w-12">
+                                        <Eye className="w-4 h-4" />
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('underlying')}
+                                      >
+                                        <span>Symbol</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('strike')}
+                                      >
+                                        <span>Strike</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('type')}
+                                      >
+                                        <span>Type</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('pnl')}
+                                      >
+                                        <span>P&L</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('status')}
+                                      >
+                                        <span>Status</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('side')}
+                                      >
+                                        <span>Side</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('signal_time')}
+                                      >
+                                        <span>Signal Time</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('entry_price')}
+                                      >
+                                        <span>Entry Price</span>
+                                      </th>
+                                      <th 
+                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('exit_price')}
+                                      >
+                                        <span>Exit Price</span>
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {oldOrders.map((order) => {
+                                      const parsed = parseStrikeSymbol(order.strike_symbol || '');
+                                      const isExpanded = expandedRows.has(order.id);
+                                      const hasExecutions = order.broker_executions && order.broker_executions.length > 0;
+
+                                      return (
+                                        <React.Fragment key={order.id}>
+                                          <tr className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
+                                            <td className="px-4 py-3">
+                                              {hasExecutions ? (
+                                                <button
+                                                  onClick={() => toggleRowExpansion(order.id)}
+                                                  className="p-1 hover:bg-[var(--accent)]/20 rounded transition-colors"
+                                                  title={isExpanded ? 'Hide executions' : 'Show executions'}
+                                                >
+                                                  {isExpanded ? (
+                                                    <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
+                                                  ) : (
+                                                    <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                                                  )}
+                                                </button>
+                                              ) : (
+                                                <div className="w-6 h-6 flex items-center justify-center">
+                                                  <div className="w-1 h-1 bg-[var(--muted-foreground)]/30 rounded-full"></div>
+                                                </div>
+                                              )}
+                                            </td>
+                                            <td className="px-4 py-3 font-medium text-[var(--foreground)]">
+                                              {parsed.underlying || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
+                                              {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                parsed.type === 'CE' 
+                                                  ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                                  : parsed.type === 'PE'
+                                                    ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                    : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                              }`}>
+                                                {parsed.type || 'N/A'}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span className={`font-bold ${
+                                                order.pnl > 0 
+                                                  ? 'text-green-400' 
+                                                  : order.pnl < 0 
+                                                    ? 'text-red-400' 
+                                                    : 'text-[var(--muted-foreground)]'
+                                              }`}>
+                                                {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                order.status === 'OPEN' 
+                                                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                                                  : order.status === 'CLOSED'
+                                                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                                                    : order.status === 'AWAITING_ENTRY'
+                                                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                                                      : order.status === 'CANCELLED'
+                                                        ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                        : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                              }`}>
+                                                {order.status}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                              <span className={`px-2 py-1 rounded text-xs ${
+                                                order.side === 'BUY' 
+                                                  ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                                  : 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                              }`}>
+                                                {order.side || 'N/A'}
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
+                                              {order.signal_time ? new Date(order.signal_time).toLocaleDateString('en-IN', {
+                                                day: '2-digit',
+                                                month: 'short',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                              }) : 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                              {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                              {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
+                                            </td>
+                                          </tr>
+                                          
+                                          {/* Broker Executions Row - only show if expanded */}
+                                          {isExpanded && hasExecutions && (
+                                            <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
+                                              <td colSpan={10} className="py-4 px-6">
+                                                <div className="space-y-4">
+                                                  {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
+                                                    <div
+                                                      key={`${summary.broker_name}_${summary.broker_order_id}`}
+                                                      className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8"
+                                                    >
+                                                      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px]">
+                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">{summary.broker_name.toUpperCase()}</span>
+                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">{summary.status}</span>
+                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all">{summary.broker_order_id}</span>
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
