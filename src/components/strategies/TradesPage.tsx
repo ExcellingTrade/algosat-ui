@@ -879,11 +879,15 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
           )}
         </div>
 
+        {/* Only show empty state if there are actually no trades AND not collapsed */}
         {isEmpty ? (
           <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] p-8 text-center">
             <Activity className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4 opacity-50" />
             <p className="text-[var(--muted-foreground)] text-lg">No trades found for {title.toLowerCase()}</p>
           </div>
+        ) : showCollapse && isCollapsed ? (
+          /* When collapsed, don't show table content but show collapsed indicator */
+          null
         ) : (
           <>
             {/* Desktop Table View */}
@@ -1891,7 +1895,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             {oldTrades.length > 0 && (
               <div className={`transition-all duration-300 ${showOldTrades ? 'opacity-100' : 'opacity-100'}`}>
                 <TradesTable 
-                  trades={showOldTrades ? oldTrades : []} 
+                  trades={oldTrades} 
                   title="Historical Trades" 
                   showCollapse={true}
                   isCollapsed={!showOldTrades}
