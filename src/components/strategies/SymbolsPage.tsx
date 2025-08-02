@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Strategy, StrategySymbol, StrategyConfig } from "./StrategiesPage";
+import { SmartLevelsModal } from "./SmartLevelsModal";
 import { apiClient, SymbolStats } from "../../lib/api";
 import { 
   Plus, 
@@ -93,6 +94,8 @@ export function SymbolsPage({
   const [isUpdatingSymbol, setIsUpdatingSymbol] = useState(false);
   const [deletingSymbol, setDeletingSymbol] = useState<StrategySymbol | null>(null);
   const [isDeletingSymbol, setIsDeletingSymbol] = useState(false);
+  const [managingSmartLevelsSymbol, setManagingSmartLevelsSymbol] = useState<StrategySymbol | null>(null);
+  const [showSmartLevelsModal, setShowSmartLevelsModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -364,6 +367,24 @@ export function SymbolsPage({
 
   const handleCancelDelete = () => {
     setDeletingSymbol(null);
+  };
+
+  // Smart Levels Management Handlers
+  const handleManageSmartLevels = (symbol: StrategySymbol) => {
+    setManagingSmartLevelsSymbol(symbol);
+    setShowSmartLevelsModal(true);
+  };
+
+  const handleCloseSmartLevelsModal = () => {
+    setShowSmartLevelsModal(false);
+    setManagingSmartLevelsSymbol(null);
+  };
+
+  const handleSmartLevelsRefresh = async () => {
+    // Refresh symbols data after smart levels changes
+    if (onRefreshSymbols) {
+      await onRefreshSymbols();
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -746,15 +767,29 @@ export function SymbolsPage({
                       {/* Smart Levels column - only for swing strategies */}
                       {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
                         <td className="py-4 px-6">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm text-[var(--muted-foreground)]">
-                              {symbol.enable_smart_levels ? 'Enabled' : 'Disabled'}
-                            </span>
-                            <ToggleSwitch
-                              enabled={symbol.enable_smart_levels ?? false}
-                              loading={smartLevelsToggleStates[symbol.id]}
-                              onChange={() => handleToggleSmartLevels(symbol.id)}
-                            />
+                          <div className="flex items-center space-x-3">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm text-[var(--muted-foreground)]">
+                                {symbol.enable_smart_levels ? 'Enabled' : 'Disabled'}
+                              </span>
+                              <ToggleSwitch
+                                enabled={symbol.enable_smart_levels ?? false}
+                                loading={smartLevelsToggleStates[symbol.id]}
+                                onChange={() => handleToggleSmartLevels(symbol.id)}
+                              />
+                            </div>
+                            
+                            {/* Manage Smart Levels button - only show when enabled */}
+                            {symbol.enable_smart_levels && (
+                              <button
+                                onClick={() => handleManageSmartLevels(symbol)}
+                                className="p-2 hover:bg-[var(--accent)]/20 rounded-lg transition-colors text-[var(--muted-foreground)] hover:text-[var(--accent)]"
+                                title="Manage Smart Levels"
+                                aria-label="Manage Smart Levels"
+                              >
+                                <Target className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}
@@ -852,6 +887,17 @@ export function SymbolsPage({
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
+                        {/* Manage Smart Levels button for swing strategies - only when enabled */}
+                        {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && symbol.enable_smart_levels && (
+                          <button
+                            onClick={() => handleManageSmartLevels(symbol)}
+                            className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-all duration-200 border border-blue-500/30"
+                            title="Manage Smart Levels"
+                            aria-label="Manage Smart Levels"
+                          >
+                            <Target className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -1021,6 +1067,14 @@ export function SymbolsPage({
         </div>
       )}
 
+      {/* Smart Levels Management Modal */}
+      {showSmartLevelsModal && managingSmartLevelsSymbol && (
+        <SmartLevelsModal
+          isOpen={showSmartLevelsModal}
+          onClose={handleCloseSmartLevelsModal}
+          onRefresh={handleSmartLevelsRefresh}
+        />
+      )}
 
     </div>
   );

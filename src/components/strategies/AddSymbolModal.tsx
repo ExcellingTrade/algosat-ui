@@ -19,10 +19,39 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if symbol already exists in this strategy
-  const isDuplicate = symbolName.trim() && existingSymbols.some(
-    existing => existing.symbol.toLowerCase() === symbolName.trim().toLowerCase()
-  );
+  // Helper function to check for duplicates
+  const checkDuplicate = (symbolName: string, smartLevelsEnabled: boolean) => {
+    if (!symbolName.trim()) return false;
+    
+    // For swing strategies, check if symbol exists with same smart levels status
+    if (strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') {
+      return existingSymbols.some(existing => 
+        existing.symbol.toLowerCase() === symbolName.trim().toLowerCase() && 
+        (existing.enable_smart_levels ?? false) === smartLevelsEnabled
+      );
+    }
+    // For non-swing strategies, use original logic (symbol name only)
+    return existingSymbols.some(existing => 
+      existing.symbol.toLowerCase() === symbolName.trim().toLowerCase()
+    );
+  };
+
+  // Check if symbol already exists in this strategy with same smart levels configuration
+  const isDuplicate = checkDuplicate(symbolName, enableSmartLevels);
+  
+  // Helper function to check if symbol exists with different smart levels status
+  const existsWithDifferentSmartLevels = (symbolName: string, smartLevelsEnabled: boolean) => {
+    if (!symbolName.trim() || !(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell')) {
+      return false;
+    }
+    
+    return existingSymbols.some(existing => 
+      existing.symbol.toLowerCase() === symbolName.trim().toLowerCase() && 
+      (existing.enable_smart_levels ?? false) !== smartLevelsEnabled
+    );
+  };
+  
+  const hasSymbolWithDifferentSmartLevels = existsWithDifferentSmartLevels(symbolName, enableSmartLevels);
 
   const canSubmit = symbolName.trim() && selectedConfigId && !isDuplicate && !isSubmitting && configs.length > 0;
 
@@ -128,14 +157,39 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
                 {isDuplicate ? (
                   <p className="text-red-400 text-sm flex items-center space-x-1">
                     <AlertCircle className="w-4 h-4" />
-                    <span>Symbol "{symbolName}" already exists in this strategy</span>
+                    <span>
+                      {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') 
+                        ? `Symbol "${symbolName}" with smart levels ${enableSmartLevels ? 'enabled' : 'disabled'} already exists in this strategy`
+                        : `Symbol "${symbolName}" already exists in this strategy`
+                      }
+                    </span>
                   </p>
                 ) : (
                   <p className="text-green-400 text-sm flex items-center space-x-1">
                     <CheckCircle className="w-4 h-4" />
-                    <span>Symbol "{symbolName}" is available</span>
+                    <span>
+                      {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') 
+                        ? `Symbol "${symbolName}" with smart levels ${enableSmartLevels ? 'enabled' : 'disabled'} is available`
+                        : `Symbol "${symbolName}" is available`
+                      }
+                    </span>
                   </p>
                 )}
+              </div>
+            )}
+            
+            {/* Additional info for symbol with different smart levels status */}
+            {symbolName.trim() && hasSymbolWithDifferentSmartLevels && !isDuplicate && (strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+              <div className="mt-2">
+                <p className="text-blue-400 text-sm flex items-center space-x-1">
+                  <div className="w-4 h-4 bg-blue-400 rounded-full flex items-center justify-center">
+                    <span className="text-[var(--background)] text-xs font-bold">i</span>
+                  </div>
+                  <span>
+                    Symbol "{symbolName}" already exists with smart levels {enableSmartLevels ? 'disabled' : 'enabled'}.
+                    You can add it again with smart levels {enableSmartLevels ? 'enabled' : 'disabled'}.
+                  </span>
+                </p>
               </div>
             )}
             
@@ -252,6 +306,15 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
                     {configs.find(c => c.id === selectedConfigId)?.name}
                   </p>
                 </div>
+                {/* Show smart levels status for swing strategies */}
+                {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+                  <div className="md:col-span-2">
+                    <p className="text-[var(--muted-foreground)]">Smart Levels</p>
+                    <p className={`font-medium ${enableSmartLevels ? 'text-green-400' : 'text-[var(--foreground)]'}`}>
+                      {enableSmartLevels ? 'Enabled' : 'Disabled'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -266,12 +329,38 @@ export function AddSymbolModal({ strategy, configs, existingSymbols, onClose, on
                 {existingSymbols.map((symbol) => (
                   <span 
                     key={symbol.id}
-                    className="px-2 py-1 bg-[var(--muted)]/20 text-[var(--muted-foreground)] rounded text-xs"
+                    className="px-3 py-2 bg-[var(--muted)]/20 text-[var(--muted-foreground)] rounded-lg text-sm flex items-center space-x-2 border border-[var(--border)]"
                   >
-                    {symbol.symbol}
+                    <span className="font-medium">{symbol.symbol}</span>
+                    {/* Show smart levels status for swing strategies */}
+                    {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+                      <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider border ${
+                        symbol.enable_smart_levels 
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm' 
+                          : 'bg-slate-500/20 text-slate-400 border-slate-500/40'
+                      }`}>
+                        {symbol.enable_smart_levels ? 'SL' : 'NO'}
+                      </span>
+                    )}
                   </span>
                 ))}
               </div>
+              {/* Legend for swing strategies */}
+              {(strategy.key === 'SwingHighLowBuy' || strategy.key === 'SwingHighLowSell') && (
+                <div className="mt-3 pt-2 border-t border-[var(--border)]/50">
+                  <p className="text-xs text-[var(--muted-foreground)] flex items-center space-x-4">
+                    <span className="font-medium">Legend:</span> 
+                    <span className="flex items-center space-x-1">
+                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">SL</span>
+                      <span>= Smart Levels Enabled</span>
+                    </span>
+                    <span className="flex items-center space-x-1">
+                      <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-500/20 text-slate-400 border border-slate-500/40">NO</span>
+                      <span>= Smart Levels Disabled</span>
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

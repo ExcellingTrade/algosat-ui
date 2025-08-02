@@ -8,13 +8,26 @@ interface SmartLevelsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRefresh?: () => void;
+  // Symbol-specific mode props
+  targetSymbolId?: number;
+  targetStrategySymbolId?: number;
+  symbolName?: string;
+  mode?: 'list' | 'manage' | 'create';
 }
 
 interface SymbolWithStrategyId extends SmartLevelsSymbol {
   strategy_symbol_id?: number;
 }
 
-export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModalProps) {
+export function SmartLevelsModal({ 
+  isOpen, 
+  onClose, 
+  onRefresh,
+  targetSymbolId,
+  targetStrategySymbolId,
+  symbolName,
+  mode = 'list'
+}: SmartLevelsModalProps) {
   const [symbols, setSymbols] = useState<SymbolWithStrategyId[]>([]);
   const [smartLevels, setSmartLevels] = useState<SmartLevelConfig[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>("");
@@ -23,6 +36,11 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
   const [editingLevelId, setEditingLevelId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Symbol-specific mode state
+  const [filteredLevels, setFilteredLevels] = useState<SmartLevelConfig[]>([]);
+  const [symbolInfo, setSymbolInfo] = useState<SymbolWithStrategyId | null>(null);
+  const isSymbolSpecificMode = mode === 'manage' || mode === 'create';
 
   // Helper function to format timestamps
   const formatTimestamp = (timestamp?: string) => {
@@ -87,7 +105,9 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
     max_loss_trades: undefined,
     pullback_percentage: undefined,
     strict_entry_vs_swing_check: false,
-    notes: ""
+    notes: "",
+    // Pre-fill symbol data for symbol-specific mode
+    ...(targetStrategySymbolId && { strategy_symbol_id: targetStrategySymbolId })
   });
 
   // Load symbols and smart levels
@@ -96,6 +116,23 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
       loadData();
     }
   }, [isOpen]);
+
+  // Initialize symbol-specific mode when props change
+  useEffect(() => {
+    if (isSymbolSpecificMode && targetStrategySymbolId && symbols.length > 0) {
+      const targetSymbol = symbols.find(s => s.strategy_symbol_id === targetStrategySymbolId);
+      if (targetSymbol) {
+        setSymbolInfo(targetSymbol);
+        setSelectedSymbol(targetSymbol.strategy_symbol_id?.toString() || "");
+        
+        // Filter levels for this symbol
+        const symbolSpecificLevels = smartLevels.filter(
+          level => level.strategy_symbol_id === targetStrategySymbolId
+        );
+        setFilteredLevels(symbolSpecificLevels);
+      }
+    }
+  }, [isSymbolSpecificMode, targetStrategySymbolId, symbols, smartLevels]);
 
   // Helper function to get available symbols (exclude symbols that already have configurations)
   const getAvailableSymbols = () => {
@@ -213,9 +250,26 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
       
       setSymbols(symbolsWithIds);
       
+      // For symbol-specific mode, find and set the target symbol info
+      if (isSymbolSpecificMode && targetStrategySymbolId) {
+        const targetSymbol = symbolsWithIds.find(s => s.strategy_symbol_id === targetStrategySymbolId);
+        setSymbolInfo(targetSymbol || null);
+        setSelectedSymbol(targetSymbol?.strategy_symbol_id?.toString() || "");
+      }
+      
       // Load all smart levels
       const smartLevelsResponse = await apiClient.getAllSmartLevels();
       setSmartLevels(smartLevelsResponse);
+      
+      // Filter levels for symbol-specific mode
+      if (isSymbolSpecificMode && targetStrategySymbolId) {
+        const symbolSpecificLevels = smartLevelsResponse.filter(
+          level => level.strategy_symbol_id === targetStrategySymbolId
+        );
+        setFilteredLevels(symbolSpecificLevels);
+      } else {
+        setFilteredLevels(smartLevelsResponse);
+      }
       
     } catch (err) {
       console.error('Failed to load Smart Levels data:', err);
@@ -358,8 +412,18 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
               <Target className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-[var(--foreground)]">Smart Levels Configuration</h2>
-              <p className="text-sm text-[var(--muted-foreground)]">Manage intelligent support and resistance levels</p>
+              <h2 className="text-xl font-bold text-[var(--foreground)]">
+                {isSymbolSpecificMode && symbolName 
+                  ? `Smart Levels - ${symbolName}` 
+                  : 'Smart Levels Configuration'
+                }
+              </h2>
+              <p className="text-sm text-[var(--muted-foreground)]">
+                {isSymbolSpecificMode && symbolName
+                  ? `Manage levels for ${symbolName}`
+                  : 'Manage intelligent support and resistance levels'
+                }
+              </p>
             </div>
           </div>
           <button
@@ -394,7 +458,12 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
                     className="flex items-center space-x-2 px-4 py-2 bg-[var(--accent)] hover:bg-blue-600 text-white rounded-lg transition-all duration-200 font-medium"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add New Smart Level</span>
+                    <span>
+                      {isSymbolSpecificMode 
+                        ? `Add Level for ${symbolName}` 
+                        : 'Add New Smart Level'
+                      }
+                    </span>
                   </button>
                 </div>
               )}
@@ -403,7 +472,14 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
               {showForm && (
                 <div className="bg-[var(--background)]/50 border border-[var(--border)]/50 rounded-xl p-6 mb-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-[var(--foreground)]">Add New Smart Level</h3>
+                    <h3 className="text-lg font-semibold text-[var(--foreground)]">
+                      {editingLevelId 
+                        ? 'Edit Smart Level' 
+                        : isSymbolSpecificMode 
+                          ? `Add Level for ${symbolName}` 
+                          : 'Add New Smart Level'
+                      }
+                    </h3>
                     <button
                       onClick={() => setShowForm(false)}
                       className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
@@ -413,32 +489,44 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
                   </div>
 
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Symbol Selection */}
+                    {/* Symbol Selection - Hidden in symbol-specific mode */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Symbol</label>
-                        <select
-                          value={selectedSymbol}
-                          onChange={(e) => setSelectedSymbol(e.target.value)}
-                          className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent text-[var(--foreground)]"
-                          required
-                          disabled={getAvailableSymbols().length === 0}
-                        >
-                          <option value="">
-                            {getAvailableSymbols().length === 0 ? "No symbols available" : "Select Symbol"}
-                          </option>
-                          {getAvailableSymbols().map((symbol) => (
-                            <option key={symbol.symbol} value={symbol.symbol}>
-                              {symbol.symbol}
+                      {!isSymbolSpecificMode && (
+                        <div>
+                          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Symbol</label>
+                          <select
+                            value={selectedSymbol}
+                            onChange={(e) => setSelectedSymbol(e.target.value)}
+                            className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent text-[var(--foreground)]"
+                            required
+                            disabled={getAvailableSymbols().length === 0}
+                          >
+                            <option value="">
+                              {getAvailableSymbols().length === 0 ? "No symbols available" : "Select Symbol"}
                             </option>
-                          ))}
-                        </select>
-                        {getAvailableSymbols().length === 0 && (
-                          <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                            All symbols already have Smart Levels configured. Edit existing configurations or add more symbols to swing strategies.
-                          </p>
-                        )}
-                      </div>
+                            {getAvailableSymbols().map((symbol) => (
+                              <option key={symbol.symbol} value={symbol.symbol}>
+                                {symbol.symbol}
+                              </option>
+                            ))}
+                          </select>
+                          {getAvailableSymbols().length === 0 && (
+                            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                              All symbols already have Smart Levels configured. Edit existing configurations or add more symbols to swing strategies.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Show symbol info in symbol-specific mode */}
+                      {isSymbolSpecificMode && symbolInfo && (
+                        <div>
+                          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Symbol</label>
+                          <div className="w-full px-3 py-2 bg-[var(--muted)] border border-[var(--border)] rounded-lg text-[var(--foreground)]">
+                            {symbolInfo.symbol}
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-sm font-medium text-[var(--foreground)] mb-2">Name</label>
@@ -710,11 +798,13 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
               )}
 
               {/* Configured Smart Levels List */}
-              {smartLevels.length > 0 ? (
+              {filteredLevels.length > 0 ? (
                 <div>
-                  <h3 className="text-lg font-semibold text-[var(--foreground)] mb-4">Configured Smart Levels</h3>
+                  <h3 className="text-lg font-semibold text-[var(--foreground)] mb-4">
+                    {isSymbolSpecificMode ? `Smart Levels for ${symbolName}` : 'Configured Smart Levels'}
+                  </h3>
                   <div className="space-y-4">
-                    {smartLevels.map((level) => {
+                    {filteredLevels.map((level) => {
                       const symbol = symbols.find(s => s.strategy_symbol_id === level.strategy_symbol_id);
                       return (
                         <div key={level.id} className="bg-[var(--background)]/50 border border-[var(--border)]/50 rounded-xl p-4">
@@ -879,8 +969,18 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
                 !showForm && (
                   <div className="text-center py-8">
                     <Settings className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">No Smart Levels Configured</h3>
-                    <p className="text-[var(--muted-foreground)] mb-4">Create your first Smart Level configuration to get started.</p>
+                    <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
+                      {isSymbolSpecificMode 
+                        ? `No Smart Levels for ${symbolName}` 
+                        : 'No Smart Levels Configured'
+                      }
+                    </h3>
+                    <p className="text-[var(--muted-foreground)] mb-4">
+                      {isSymbolSpecificMode
+                        ? `Create your first Smart Level for ${symbolName} to get started.`
+                        : 'Create your first Smart Level configuration to get started.'
+                      }
+                    </p>
                   </div>
                 )
               )}

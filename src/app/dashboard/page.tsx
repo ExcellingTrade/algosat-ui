@@ -327,6 +327,9 @@ export default function Dashboard() {
   // Row expansion for detailed broker executions (Already declared above)
   // const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
+  // Exit orders state - track which orders are being exited
+  const [exitingOrders, setExitingOrders] = useState<Set<number>>(new Set());
+
   // Function to parse strike symbol with intelligent parsing for different formats
   const parseStrikeSymbol = (strikeSymbol: string) => {
     if (!strikeSymbol) {
@@ -1087,6 +1090,61 @@ export default function Dashboard() {
         type: "error",
         title: "Exit All Positions Failed",
         message: errorMessage
+      });
+    }
+  };
+
+  const handleExitOrder = async (orderId: number) => {
+    if (!confirm('⚠️ EXIT ORDER: This will attempt to exit this order/position. Are you sure?')) {
+      return;
+    }
+
+    setExitingOrders(prev => new Set(prev).add(orderId));
+
+    try {
+      console.log('Attempting to exit order:', orderId);
+
+      showToast({
+        type: "info",
+        title: "Exiting Order",
+        message: "Initiating exit for the order. Please wait..."
+      });
+
+      // Call the exit order API endpoint
+      const response = await apiClient.exitOrder(orderId, 'manual');
+
+      console.log('Exit order response:', response);
+
+      if (response.success) {
+        showToast({
+          type: "success",
+          title: "Order Exit Initiated",
+          message: response.message || "Order has been scheduled for exit successfully"
+        });
+
+        // Refresh the dashboard data to show updated status
+        await loadDashboardData(true);
+      } else {
+        showToast({
+          type: "error",
+          title: "Order Exit Failed",
+          message: response.message || "Failed to exit order"
+        });
+      }
+    } catch (err) {
+      console.error('Exit order failed:', err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to exit order";
+      
+      showToast({
+        type: "error",
+        title: "Order Exit Failed",
+        message: errorMessage
+      });
+    } finally {
+      setExitingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
       });
     }
   };
@@ -3607,11 +3665,33 @@ export default function Dashboard() {
                           </div>
                         ) : (
                           <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-x-auto shadow-lg">
-                            <table className="w-full min-w-[1300px]">
+                            <table className="w-full min-w-[1400px]">
                               <thead className="bg-[var(--background)]/50 border-b border-[var(--border)]">
                                 <tr>
                                   <th className="px-3 py-2 text-left text-[var(--accent)] w-12">
                                     <Eye className="w-3 h-3" />
+                                  </th>
+                                  <th 
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('id')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span className="text-xs font-medium">Order ID</span>
+                                      {sortField === 'id' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('strategy_name')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span className="text-xs font-medium">Strategy</span>
+                                      {sortField === 'strategy_name' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
                                   </th>
                                   <th 
                                     className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
@@ -3765,6 +3845,14 @@ export default function Dashboard() {
                                           )}
                                         </td>
                                         <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
+                                          #{order.order_id || order.id}
+                                        </td>
+                                        <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                          <span className="px-2 py-1 bg-[var(--accent)]/10 text-[var(--accent)] rounded-md font-medium">
+                                            {order.strategy_name || 'N/A'}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
                                           {parsed.underlying || 'N/A'}
                                         </td>
                                         <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
@@ -3812,9 +3900,18 @@ export default function Dashboard() {
                                               {order.status?.replace('_', ' ')}
                                             </span>
                                             {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
-                                              <div className="flex items-center justify-center w-6 h-6 bg-red-500/20 text-red-400 rounded border border-red-500/30" title="Exit functionality available in individual strategy pages">
-                                                <LogOut className="w-3 h-3" />
-                                              </div>
+                                              <button
+                                                onClick={() => handleExitOrder(order.id)}
+                                                disabled={exitingOrders.has(order.id)}
+                                                className="flex items-center justify-center w-6 h-6 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-all duration-200 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="Exit this order"
+                                              >
+                                                {exitingOrders.has(order.id) ? (
+                                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                                ) : (
+                                                  <LogOut className="w-3 h-3" />
+                                                )}
+                                              </button>
                                             )}
                                           </div>
                                         </td>
@@ -3889,7 +3986,7 @@ export default function Dashboard() {
                                       {/* Broker Executions Row - only show if expanded */}
                                       {isExpanded && hasExecutions && (
                                         <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                          <td colSpan={12} className="py-4 px-6">
+                                          <td colSpan={14} className="py-4 px-6">
                                             <div className="space-y-4">
                                               {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                 <div
@@ -4066,11 +4163,23 @@ export default function Dashboard() {
                           {showOldOrders && (
                             <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-x-auto shadow-lg">
                               <div className="max-h-96 overflow-y-auto">
-                                <table className="w-full min-w-[1300px]">
+                                <table className="w-full min-w-[1400px]">
                                   <thead className="bg-[var(--background)]/50 border-b border-[var(--border)] sticky top-0">
                                     <tr>
                                       <th className="px-3 py-2 text-left text-[var(--accent)] w-12">
                                         <Eye className="w-3 h-3" />
+                                      </th>
+                                      <th 
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('id')}
+                                      >
+                                        <span className="text-xs font-medium">Order ID</span>
+                                      </th>
+                                      <th 
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('strategy_name')}
+                                      >
+                                        <span className="text-xs font-medium">Strategy</span>
                                       </th>
                                       <th 
                                         className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
@@ -4169,6 +4278,14 @@ export default function Dashboard() {
                                               )}
                                             </td>
                                             <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
+                                              #{order.order_id || order.id}
+                                            </td>
+                                            <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                              <span className="px-2 py-1 bg-[var(--accent)]/10 text-[var(--accent)] rounded-md font-medium">
+                                                {order.strategy_name || 'N/A'}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
                                               {parsed.underlying || 'N/A'}
                                             </td>
                                             <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
@@ -4216,9 +4333,18 @@ export default function Dashboard() {
                                                   {order.status?.replace('_', ' ')}
                                                 </span>
                                                 {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
-                                                  <div className="flex items-center justify-center w-6 h-6 bg-red-500/20 text-red-400 rounded border border-red-500/30" title="Exit functionality available in individual strategy pages">
-                                                    <LogOut className="w-3 h-3" />
-                                                  </div>
+                                                  <button
+                                                    onClick={() => handleExitOrder(order.id)}
+                                                    disabled={exitingOrders.has(order.id)}
+                                                    className="flex items-center justify-center w-6 h-6 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-all duration-200 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    title="Exit this order"
+                                                  >
+                                                    {exitingOrders.has(order.id) ? (
+                                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                                    ) : (
+                                                      <LogOut className="w-3 h-3" />
+                                                    )}
+                                                  </button>
                                                 )}
                                               </div>
                                             </td>
@@ -4293,7 +4419,7 @@ export default function Dashboard() {
                                           {/* Broker Executions Row - only show if expanded */}
                                           {isExpanded && hasExecutions && (
                                             <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                              <td colSpan={12} className="py-4 px-6">
+                                              <td colSpan={14} className="py-4 px-6">
                                                 <div className="space-y-4">
                                                   {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                     <div
