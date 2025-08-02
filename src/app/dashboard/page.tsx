@@ -3803,7 +3803,11 @@ export default function Dashboard() {
                                                     ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
                                                     : order.status === 'CANCELLED'
                                                       ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                                      : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                                      : order.status === 'EXIT_REVERSAL'
+                                                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                                                        : order.status === 'EXIT_TARGET'
+                                                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                                                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
                                             }`}>
                                               {order.status?.replace('_', ' ')}
                                             </span>
@@ -3890,12 +3894,134 @@ export default function Dashboard() {
                                               {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                 <div
                                                   key={`${summary.broker_name}_${summary.broker_order_id}`}
-                                                  className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8"
+                                                  className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4"
                                                 >
-                                                  <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px]">
-                                                    <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">{summary.broker_name.toUpperCase()}</span>
-                                                    <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">{summary.status}</span>
-                                                    <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all">{summary.broker_order_id}</span>
+                                                  {/* Header with Broker Info */}
+                                                  <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
+                                                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)}`}>
+                                                      {summary.broker_name}
+                                                    </span>
+                                                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)}`}>
+                                                      {summary.status}
+                                                    </span>
+                                                    <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all">
+                                                      {summary.broker_order_id}
+                                                    </span>
+                                                    {summary.total_pnl !== undefined && (
+                                                      <span className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${
+                                                        summary.total_pnl > 0 
+                                                          ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                                          : summary.total_pnl < 0 
+                                                            ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                            : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                                      }`}>
+                                                        P&L: ₹{summary.total_pnl.toFixed(2)}
+                                                      </span>
+                                                    )}
+                                                  </div>
+
+                                                  {/* Entry and Exit Details Grid */}
+                                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                    {/* Entry Details */}
+                                                    {summary.has_entry && (
+                                                      <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-3">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                                          <span className="text-xs font-semibold text-green-400 uppercase tracking-wide">Entry</span>
+                                                        </div>
+                                                        <div className="space-y-1 text-xs">
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Price:</span>
+                                                            <span className="font-mono text-[var(--foreground)]">₹{summary.entry_price?.toFixed(2) || 'N/A'}</span>
+                                                          </div>
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Quantity:</span>
+                                                            <span className="font-mono text-[var(--foreground)]">{summary.entry_quantity || 0}</span>
+                                                          </div>
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Time:</span>
+                                                            <span className="font-mono text-[var(--foreground)] text-right">
+                                                              {summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}
+                                                            </span>
+                                                          </div>
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Value:</span>
+                                                            <span className="font-mono text-[var(--foreground)]">₹{((summary.entry_price || 0) * (summary.entry_quantity || 0)).toFixed(2)}</span>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    )}
+
+                                                    {/* Exit Details */}
+                                                    {summary.has_exit && (
+                                                      <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                          <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                                                          <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Exit</span>
+                                                        </div>
+                                                        <div className="space-y-1 text-xs">
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Price:</span>
+                                                            <span className="font-mono text-[var(--foreground)]">₹{summary.exit_price?.toFixed(2) || 'N/A'}</span>
+                                                          </div>
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Quantity:</span>
+                                                            <span className="font-mono text-[var(--foreground)]">{summary.exit_quantity || 0}</span>
+                                                          </div>
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Time:</span>
+                                                            <span className="font-mono text-[var(--foreground)] text-right">
+                                                              {summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}
+                                                            </span>
+                                                          </div>
+                                                          <div className="flex justify-between">
+                                                            <span className="text-[var(--muted-foreground)]">Value:</span>
+                                                            <span className="font-mono text-[var(--foreground)]">₹{((summary.exit_price || 0) * (summary.exit_quantity || 0)).toFixed(2)}</span>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    )}
+
+                                                    {/* Position Summary */}
+                                                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 lg:col-span-2">
+                                                      <div className="flex items-center gap-2 mb-2">
+                                                        <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                                        <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">Position Summary</span>
+                                                      </div>
+                                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                                        <div className="flex flex-col">
+                                                          <span className="text-[var(--muted-foreground)] mb-1">Net Qty</span>
+                                                          <span className={`font-mono font-semibold ${
+                                                            (summary.net_quantity || 0) > 0 ? 'text-green-400' :
+                                                            (summary.net_quantity || 0) < 0 ? 'text-red-400' : 'text-[var(--muted-foreground)]'
+                                                          }`}>
+                                                            {summary.net_quantity || 0}
+                                                          </span>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                          <span className="text-[var(--muted-foreground)] mb-1">Type</span>
+                                                          <span className="font-mono text-[var(--foreground)]">{summary.order_type || 'N/A'}</span>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                          <span className="text-[var(--muted-foreground)] mb-1">Status</span>
+                                                          <span className={`font-mono font-semibold ${
+                                                            summary.net_quantity === 0 ? 'text-purple-400' :
+                                                            (summary.net_quantity || 0) > 0 ? 'text-green-400' : 'text-red-400'
+                                                          }`}>
+                                                            {summary.net_quantity === 0 ? 'CLOSED' : 'OPEN'}
+                                                          </span>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                          <span className="text-[var(--muted-foreground)] mb-1">P&L</span>
+                                                          <span className={`font-mono font-bold ${
+                                                            (summary.total_pnl || 0) > 0 ? 'text-green-400' :
+                                                            (summary.total_pnl || 0) < 0 ? 'text-red-400' : 'text-[var(--muted-foreground)]'
+                                                          }`}>
+                                                            {summary.total_pnl !== undefined ? `₹${summary.total_pnl.toFixed(2)}` : 'N/A'}
+                                                          </span>
+                                                        </div>
+                                                      </div>
+                                                    </div>
                                                   </div>
                                                 </div>
                                               ))}
@@ -4081,7 +4207,11 @@ export default function Dashboard() {
                                                         ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
                                                         : order.status === 'CANCELLED'
                                                           ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                                          : order.status === 'EXIT_REVERSAL'
+                                                            ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50'
+                                                            : order.status === 'EXIT_TARGET'
+                                                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                                                              : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
                                                 }`}>
                                                   {order.status?.replace('_', ' ')}
                                                 </span>
@@ -4168,12 +4298,134 @@ export default function Dashboard() {
                                                   {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                     <div
                                                       key={`${summary.broker_name}_${summary.broker_order_id}`}
-                                                      className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-8"
+                                                      className="rounded-xl border border-[var(--border)]/40 bg-[var(--background)]/80 shadow-md p-4"
                                                     >
-                                                      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 min-w-[220px]">
-                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">{summary.broker_name.toUpperCase()}</span>
-                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">{summary.status}</span>
-                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all">{summary.broker_order_id}</span>
+                                                      {/* Header with Broker Info */}
+                                                      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4">
+                                                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getBrokerNameColor(summary.broker_name)}`}>
+                                                          {summary.broker_name}
+                                                        </span>
+                                                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide shadow-sm ${getExecutionStatusColor(summary.status)}`}>
+                                                          {summary.status}
+                                                        </span>
+                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border-2 border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] shadow-sm select-all">
+                                                          {summary.broker_order_id}
+                                                        </span>
+                                                        {summary.total_pnl !== undefined && (
+                                                          <span className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${
+                                                            summary.total_pnl > 0 
+                                                              ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                                                              : summary.total_pnl < 0 
+                                                                ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                                : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                                          }`}>
+                                                            P&L: ₹{summary.total_pnl.toFixed(2)}
+                                                          </span>
+                                                        )}
+                                                      </div>
+
+                                                      {/* Entry and Exit Details Grid */}
+                                                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                        {/* Entry Details */}
+                                                        {summary.has_entry && (
+                                                          <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-3">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                                              <span className="text-xs font-semibold text-green-400 uppercase tracking-wide">Entry</span>
+                                                            </div>
+                                                            <div className="space-y-1 text-xs">
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Price:</span>
+                                                                <span className="font-mono text-[var(--foreground)]">₹{summary.entry_price?.toFixed(2) || 'N/A'}</span>
+                                                              </div>
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Quantity:</span>
+                                                                <span className="font-mono text-[var(--foreground)]">{summary.entry_quantity || 0}</span>
+                                                              </div>
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Time:</span>
+                                                                <span className="font-mono text-[var(--foreground)] text-right">
+                                                                  {summary.entry_time ? formatExecutionTime(summary.entry_time) : 'N/A'}
+                                                                </span>
+                                                              </div>
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Value:</span>
+                                                                <span className="font-mono text-[var(--foreground)]">₹{((summary.entry_price || 0) * (summary.entry_quantity || 0)).toFixed(2)}</span>
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        )}
+
+                                                        {/* Exit Details */}
+                                                        {summary.has_exit && (
+                                                          <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                              <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                                                              <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Exit</span>
+                                                            </div>
+                                                            <div className="space-y-1 text-xs">
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Price:</span>
+                                                                <span className="font-mono text-[var(--foreground)]">₹{summary.exit_price?.toFixed(2) || 'N/A'}</span>
+                                                              </div>
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Quantity:</span>
+                                                                <span className="font-mono text-[var(--foreground)]">{summary.exit_quantity || 0}</span>
+                                                              </div>
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Time:</span>
+                                                                <span className="font-mono text-[var(--foreground)] text-right">
+                                                                  {summary.exit_time ? formatExecutionTime(summary.exit_time) : 'N/A'}
+                                                                </span>
+                                                              </div>
+                                                              <div className="flex justify-between">
+                                                                <span className="text-[var(--muted-foreground)]">Value:</span>
+                                                                <span className="font-mono text-[var(--foreground)]">₹{((summary.exit_price || 0) * (summary.exit_quantity || 0)).toFixed(2)}</span>
+                                                              </div>
+                                                            </div>
+                                                          </div>
+                                                        )}
+
+                                                        {/* Position Summary */}
+                                                        <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 lg:col-span-2">
+                                                          <div className="flex items-center gap-2 mb-2">
+                                                            <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                                            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">Position Summary</span>
+                                                          </div>
+                                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                                            <div className="flex flex-col">
+                                                              <span className="text-[var(--muted-foreground)] mb-1">Net Qty</span>
+                                                              <span className={`font-mono font-semibold ${
+                                                                (summary.net_quantity || 0) > 0 ? 'text-green-400' :
+                                                                (summary.net_quantity || 0) < 0 ? 'text-red-400' : 'text-[var(--muted-foreground)]'
+                                                              }`}>
+                                                                {summary.net_quantity || 0}
+                                                              </span>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                              <span className="text-[var(--muted-foreground)] mb-1">Type</span>
+                                                              <span className="font-mono text-[var(--foreground)]">{summary.order_type || 'N/A'}</span>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                              <span className="text-[var(--muted-foreground)] mb-1">Status</span>
+                                                              <span className={`font-mono font-semibold ${
+                                                                summary.net_quantity === 0 ? 'text-purple-400' :
+                                                                (summary.net_quantity || 0) > 0 ? 'text-green-400' : 'text-red-400'
+                                                              }`}>
+                                                                {summary.net_quantity === 0 ? 'CLOSED' : 'OPEN'}
+                                                              </span>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                              <span className="text-[var(--muted-foreground)] mb-1">P&L</span>
+                                                              <span className={`font-mono font-bold ${
+                                                                (summary.total_pnl || 0) > 0 ? 'text-green-400' :
+                                                                (summary.total_pnl || 0) < 0 ? 'text-red-400' : 'text-[var(--muted-foreground)]'
+                                                              }`}>
+                                                                {summary.total_pnl !== undefined ? `₹${summary.total_pnl.toFixed(2)}` : 'N/A'}
+                                                              </span>
+                                                            </div>
+                                                          </div>
+                                                        </div>
                                                       </div>
                                                     </div>
                                                   ))}
