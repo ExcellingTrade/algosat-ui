@@ -86,6 +86,7 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
     max_trades: undefined,
     max_loss_trades: undefined,
     pullback_percentage: undefined,
+    strict_entry_vs_swing_check: false,
     notes: ""
   });
 
@@ -131,6 +132,7 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
       max_trades: undefined,
       max_loss_trades: undefined,
       pullback_percentage: undefined,
+      strict_entry_vs_swing_check: false,
       notes: ""
     });
     setSelectedSymbol("");
@@ -160,6 +162,7 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
       max_trades: level.max_trades,
       max_loss_trades: level.max_loss_trades,
       pullback_percentage: level.pullback_percentage,
+      strict_entry_vs_swing_check: level.strict_entry_vs_swing_check || false,
       notes: level.notes || ""
     });
     
@@ -276,6 +279,7 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
           max_trades: formData.max_trades || undefined,
           max_loss_trades: formData.max_loss_trades || undefined,
           pullback_percentage: formData.pullback_percentage || undefined,
+          strict_entry_vs_swing_check: formData.strict_entry_vs_swing_check ?? false,
           notes: formData.notes || undefined
         };
 
@@ -300,6 +304,7 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
           max_trades: formData.max_trades || undefined,
           max_loss_trades: formData.max_loss_trades || undefined,
           pullback_percentage: formData.pullback_percentage || undefined,
+          strict_entry_vs_swing_check: formData.strict_entry_vs_swing_check ?? false,
           notes: formData.notes || undefined
         };
 
@@ -626,6 +631,30 @@ export function SmartLevelsModal({ isOpen, onClose, onRefresh }: SmartLevelsModa
                         />
                         <span className="text-sm text-[var(--foreground)]">PE Sell Enabled</span>
                       </label>
+                    </div>
+
+                    {/* Strict Entry vs Swing Check */}
+                    <div className="flex items-center space-x-2">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={formData.strict_entry_vs_swing_check || false}
+                          onChange={(e) => setFormData({ ...formData, strict_entry_vs_swing_check: e.target.checked })}
+                          className="rounded border-[var(--border)] text-[var(--accent)] focus:ring-[var(--accent)]"
+                        />
+                        <span className="text-sm text-[var(--foreground)]">Strict Entry vs Swing Check</span>
+                      </label>
+                      <div className="relative group">
+                        <div className="w-4 h-4 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)] flex items-center justify-center text-xs cursor-help">
+                          ?
+                        </div>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-[var(--popover)] border border-[var(--border)] rounded-lg shadow-lg text-xs text-[var(--popover-foreground)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                          If enabled, only take trades when the entry level<br/>
+                          is below the swing high (for uptrend) or above<br/>
+                          the swing low (for downtrend). Uncheck to<br/>
+                          ignore this condition.
+                        </div>
+                      </div>
                     </div>
 
                     {/* Notes */}

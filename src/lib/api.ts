@@ -123,6 +123,7 @@ export interface SmartLevelConfig {
   max_trades?: number;
   max_loss_trades?: number;
   pullback_percentage?: number;
+  strict_entry_vs_swing_check: boolean;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -146,6 +147,7 @@ export interface SmartLevelCreate {
   max_trades?: number;
   max_loss_trades?: number;
   pullback_percentage?: number;
+  strict_entry_vs_swing_check?: boolean;
   notes?: string;
 }
 
