@@ -3606,107 +3606,129 @@ export default function Dashboard() {
                             <p className="text-[var(--muted-foreground)] text-lg">No orders today</p>
                           </div>
                         ) : (
-                          <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-hidden shadow-lg">
-                            <table className="w-full">
+                          <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-x-auto shadow-lg">
+                            <table className="w-full min-w-[1300px]">
                               <thead className="bg-[var(--background)]/50 border-b border-[var(--border)]">
                                 <tr>
-                                  <th className="px-4 py-3 text-left text-[var(--accent)] w-12">
-                                    <Eye className="w-4 h-4" />
+                                  <th className="px-3 py-2 text-left text-[var(--accent)] w-12">
+                                    <Eye className="w-3 h-3" />
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('underlying')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Symbol</span>
+                                      <span className="text-xs font-medium">Symbol</span>
                                       {sortField === 'underlying' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('strike')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Strike</span>
+                                      <span className="text-xs font-medium">Strike</span>
                                       {sortField === 'strike' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-2 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('type')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Type</span>
+                                      <span className="text-xs font-medium">Type</span>
                                       {sortField === 'type' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('pnl')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>P&L</span>
+                                      <span className="text-xs font-medium">P&L</span>
                                       {sortField === 'pnl' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('status')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Status</span>
+                                      <span className="text-xs font-medium">Status</span>
                                       {sortField === 'status' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-2 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('side')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Side</span>
+                                      <span className="text-xs font-medium">Side</span>
                                       {sortField === 'side' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('signal_time')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Signal Time</span>
+                                      <span className="text-xs font-medium">Signal Time</span>
                                       {sortField === 'signal_time' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('entry_time')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span className="text-xs font-medium">Entry Time</span>
+                                      {sortField === 'entry_time' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('entry_price')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Entry Price</span>
+                                      <span className="text-xs font-medium">Entry Price</span>
                                       {sortField === 'entry_price' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
                                     </div>
                                   </th>
                                   <th 
-                                    className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('exit_time')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <span className="text-xs font-medium">Exit Time</span>
+                                      {sortField === 'exit_time' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th 
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                     onClick={() => handleSort('exit_price')}
                                   >
                                     <div className="flex items-center space-x-1">
-                                      <span>Exit Price</span>
+                                      <span className="text-xs font-medium">Exit Price</span>
                                       {sortField === 'exit_price' && (
                                         <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
                                       )}
@@ -3723,7 +3745,7 @@ export default function Dashboard() {
                                   return (
                                     <React.Fragment key={order.id}>
                                       <tr className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
-                                        <td className="px-4 py-3">
+                                        <td className="px-3 py-2">
                                           {hasExecutions ? (
                                             <button
                                               onClick={() => toggleRowExpansion(order.id)}
@@ -3731,9 +3753,9 @@ export default function Dashboard() {
                                               title={isExpanded ? 'Hide executions' : 'Show executions'}
                                             >
                                               {isExpanded ? (
-                                                <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
+                                                <ChevronDown className="w-3 h-3 text-[var(--accent)]" />
                                               ) : (
-                                                <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                                                <ChevronRight className="w-3 h-3 text-[var(--accent)]" />
                                               )}
                                             </button>
                                           ) : (
@@ -3742,14 +3764,14 @@ export default function Dashboard() {
                                             </div>
                                           )}
                                         </td>
-                                        <td className="px-4 py-3 font-medium text-[var(--foreground)]">
+                                        <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
                                           {parsed.underlying || 'N/A'}
                                         </td>
-                                        <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
+                                        <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
                                           {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
                                         </td>
-                                        <td className="px-4 py-3">
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                        <td className="px-2 py-2">
+                                          <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
                                             parsed.type === 'CE' 
                                               ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
                                               : parsed.type === 'PE'
@@ -3759,8 +3781,8 @@ export default function Dashboard() {
                                             {parsed.type || 'N/A'}
                                           </span>
                                         </td>
-                                        <td className="px-4 py-3">
-                                          <span className={`font-bold ${
+                                        <td className="px-3 py-2">
+                                          <span className={`font-bold text-xs ${
                                             order.pnl > 0 
                                               ? 'text-green-400' 
                                               : order.pnl < 0 
@@ -3770,23 +3792,30 @@ export default function Dashboard() {
                                             {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
                                           </span>
                                         </td>
-                                        <td className="px-4 py-3">
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                            order.status === 'OPEN' 
-                                              ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
-                                              : order.status === 'CLOSED'
-                                                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                                                : order.status === 'AWAITING_ENTRY'
-                                                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
-                                                  : order.status === 'CANCELLED'
-                                                    ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                                    : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                                          }`}>
-                                            {order.status}
-                                          </span>
+                                        <td className="px-3 py-2">
+                                          <div className="flex items-center space-x-2">
+                                            <span className={`px-2 py-1 rounded text-xs font-medium uppercase whitespace-nowrap ${
+                                              order.status === 'OPEN' 
+                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                                                : order.status === 'CLOSED'
+                                                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                                                  : order.status === 'AWAITING_ENTRY'
+                                                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                                                    : order.status === 'CANCELLED'
+                                                      ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                      : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                            }`}>
+                                              {order.status?.replace('_', ' ')}
+                                            </span>
+                                            {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
+                                              <div className="flex items-center justify-center w-6 h-6 bg-red-500/20 text-red-400 rounded border border-red-500/30" title="Exit functionality available in individual strategy pages">
+                                                <LogOut className="w-3 h-3" />
+                                              </div>
+                                            )}
+                                          </div>
                                         </td>
-                                        <td className="px-4 py-3">
-                                          <span className={`px-2 py-1 rounded text-xs ${
+                                        <td className="px-2 py-2">
+                                          <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${
                                             order.side === 'BUY' 
                                               ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
                                               : 'bg-red-500/20 text-red-400 border border-red-500/50'
@@ -3794,18 +3823,61 @@ export default function Dashboard() {
                                             {order.side || 'N/A'}
                                           </span>
                                         </td>
-                                        <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
-                                          {order.signal_time ? new Date(order.signal_time).toLocaleDateString('en-IN', {
-                                            day: '2-digit',
-                                            month: 'short',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                          }) : 'N/A'}
+                                        <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                          <div className="space-y-1">
+                                            <div className="text-[var(--foreground)] font-medium">
+                                              {order.signal_time ? new Date(order.signal_time).toLocaleDateString('en-IN', {
+                                                day: '2-digit',
+                                                month: 'short'
+                                              }) : 'N/A'}
+                                            </div>
+                                            <div className="text-[var(--muted-foreground)]">
+                                              {order.signal_time ? new Date(order.signal_time).toLocaleTimeString('en-IN', {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                hour12: true
+                                              }) : ''}
+                                            </div>
+                                          </div>
                                         </td>
-                                        <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                        <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                          <div className="space-y-1">
+                                            <div className="text-[var(--foreground)] font-medium">
+                                              {order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
+                                                day: '2-digit',
+                                                month: 'short'
+                                              }) : 'N/A'}
+                                            </div>
+                                            <div className="text-[var(--muted-foreground)]">
+                                              {order.entry_time ? new Date(order.entry_time).toLocaleTimeString('en-IN', {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                hour12: true
+                                              }) : ''}
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
                                           {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
                                         </td>
-                                        <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                        <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                          <div className="space-y-1">
+                                            <div className="text-[var(--foreground)] font-medium">
+                                              {order.exit_time ? new Date(order.exit_time).toLocaleDateString('en-IN', {
+                                                day: '2-digit',
+                                                month: 'short'
+                                              }) : 'N/A'}
+                                            </div>
+                                            <div className="text-[var(--muted-foreground)]">
+                                              {order.exit_time ? new Date(order.exit_time).toLocaleTimeString('en-IN', {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                                hour12: true
+                                              }) : ''}
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
                                           {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
                                         </td>
                                       </tr>
@@ -3813,7 +3885,7 @@ export default function Dashboard() {
                                       {/* Broker Executions Row - only show if expanded */}
                                       {isExpanded && hasExecutions && (
                                         <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                          <td colSpan={10} className="py-4 px-6">
+                                          <td colSpan={12} className="py-4 px-6">
                                             <div className="space-y-4">
                                               {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                 <div
@@ -3866,67 +3938,79 @@ export default function Dashboard() {
                           </div>
 
                           {showOldOrders && (
-                            <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-hidden shadow-lg">
+                            <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-x-auto shadow-lg">
                               <div className="max-h-96 overflow-y-auto">
-                                <table className="w-full">
+                                <table className="w-full min-w-[1300px]">
                                   <thead className="bg-[var(--background)]/50 border-b border-[var(--border)] sticky top-0">
                                     <tr>
-                                      <th className="px-4 py-3 text-left text-[var(--accent)] w-12">
-                                        <Eye className="w-4 h-4" />
+                                      <th className="px-3 py-2 text-left text-[var(--accent)] w-12">
+                                        <Eye className="w-3 h-3" />
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('underlying')}
                                       >
-                                        <span>Symbol</span>
+                                        <span className="text-xs font-medium">Symbol</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('strike')}
                                       >
-                                        <span>Strike</span>
+                                        <span className="text-xs font-medium">Strike</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-2 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('type')}
                                       >
-                                        <span>Type</span>
+                                        <span className="text-xs font-medium">Type</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('pnl')}
                                       >
-                                        <span>P&L</span>
+                                        <span className="text-xs font-medium">P&L</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('status')}
                                       >
-                                        <span>Status</span>
+                                        <span className="text-xs font-medium">Status</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-2 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('side')}
                                       >
-                                        <span>Side</span>
+                                        <span className="text-xs font-medium">Side</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('signal_time')}
                                       >
-                                        <span>Signal Time</span>
+                                        <span className="text-xs font-medium">Signal Time</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('entry_time')}
+                                      >
+                                        <span className="text-xs font-medium">Entry Time</span>
+                                      </th>
+                                      <th 
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('entry_price')}
                                       >
-                                        <span>Entry Price</span>
+                                        <span className="text-xs font-medium">Entry Price</span>
                                       </th>
                                       <th 
-                                        className="px-4 py-3 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('exit_time')}
+                                      >
+                                        <span className="text-xs font-medium">Exit Time</span>
+                                      </th>
+                                      <th 
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
                                         onClick={() => handleSort('exit_price')}
                                       >
-                                        <span>Exit Price</span>
+                                        <span className="text-xs font-medium">Exit Price</span>
                                       </th>
                                     </tr>
                                   </thead>
@@ -3939,7 +4023,7 @@ export default function Dashboard() {
                                       return (
                                         <React.Fragment key={order.id}>
                                           <tr className="border-t border-[var(--border)]/20 hover:bg-[var(--card-background)]/50 transition duration-200">
-                                            <td className="px-4 py-3">
+                                            <td className="px-3 py-2">
                                               {hasExecutions ? (
                                                 <button
                                                   onClick={() => toggleRowExpansion(order.id)}
@@ -3947,9 +4031,9 @@ export default function Dashboard() {
                                                   title={isExpanded ? 'Hide executions' : 'Show executions'}
                                                 >
                                                   {isExpanded ? (
-                                                    <ChevronDown className="w-4 h-4 text-[var(--accent)]" />
+                                                    <ChevronDown className="w-3 h-3 text-[var(--accent)]" />
                                                   ) : (
-                                                    <ChevronRight className="w-4 h-4 text-[var(--accent)]" />
+                                                    <ChevronRight className="w-3 h-3 text-[var(--accent)]" />
                                                   )}
                                                 </button>
                                               ) : (
@@ -3958,14 +4042,14 @@ export default function Dashboard() {
                                                 </div>
                                               )}
                                             </td>
-                                            <td className="px-4 py-3 font-medium text-[var(--foreground)]">
+                                            <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
                                               {parsed.underlying || 'N/A'}
                                             </td>
-                                            <td className="px-4 py-3 text-[var(--muted-foreground)] font-mono text-sm">
+                                            <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
                                               {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
                                             </td>
-                                            <td className="px-4 py-3">
-                                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                            <td className="px-2 py-2">
+                                              <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
                                                 parsed.type === 'CE' 
                                                   ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
                                                   : parsed.type === 'PE'
@@ -3975,8 +4059,8 @@ export default function Dashboard() {
                                                 {parsed.type || 'N/A'}
                                               </span>
                                             </td>
-                                            <td className="px-4 py-3">
-                                              <span className={`font-bold ${
+                                            <td className="px-3 py-2">
+                                              <span className={`font-bold text-xs ${
                                                 order.pnl > 0 
                                                   ? 'text-green-400' 
                                                   : order.pnl < 0 
@@ -3986,23 +4070,30 @@ export default function Dashboard() {
                                                 {order.pnl !== null && order.pnl !== undefined ? `₹${Number(order.pnl).toFixed(2)}` : '₹0.00'}
                                               </span>
                                             </td>
-                                            <td className="px-4 py-3">
-                                              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                                order.status === 'OPEN' 
-                                                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
-                                                  : order.status === 'CLOSED'
-                                                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                                                    : order.status === 'AWAITING_ENTRY'
-                                                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
-                                                      : order.status === 'CANCELLED'
-                                                        ? 'bg-red-500/20 text-red-400 border border-red-500/50'
-                                                        : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                                              }`}>
-                                                {order.status}
-                                              </span>
+                                            <td className="px-3 py-2">
+                                              <div className="flex items-center space-x-2">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium uppercase whitespace-nowrap ${
+                                                  order.status === 'OPEN' 
+                                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                                                    : order.status === 'CLOSED'
+                                                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                                                      : order.status === 'AWAITING_ENTRY'
+                                                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50'
+                                                        : order.status === 'CANCELLED'
+                                                          ? 'bg-red-500/20 text-red-400 border border-red-500/50'
+                                                          : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                                                }`}>
+                                                  {order.status?.replace('_', ' ')}
+                                                </span>
+                                                {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
+                                                  <div className="flex items-center justify-center w-6 h-6 bg-red-500/20 text-red-400 rounded border border-red-500/30" title="Exit functionality available in individual strategy pages">
+                                                    <LogOut className="w-3 h-3" />
+                                                  </div>
+                                                )}
+                                              </div>
                                             </td>
-                                            <td className="px-4 py-3">
-                                              <span className={`px-2 py-1 rounded text-xs ${
+                                            <td className="px-2 py-2">
+                                              <span className={`px-2 py-1 rounded text-xs whitespace-nowrap ${
                                                 order.side === 'BUY' 
                                                   ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
                                                   : 'bg-red-500/20 text-red-400 border border-red-500/50'
@@ -4010,18 +4101,61 @@ export default function Dashboard() {
                                                 {order.side || 'N/A'}
                                               </span>
                                             </td>
-                                            <td className="px-4 py-3 text-[var(--muted-foreground)] text-sm">
-                                              {order.signal_time ? new Date(order.signal_time).toLocaleDateString('en-IN', {
-                                                day: '2-digit',
-                                                month: 'short',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                              }) : 'N/A'}
+                                            <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                              <div className="space-y-1">
+                                                <div className="text-[var(--foreground)] font-medium">
+                                                  {order.signal_time ? new Date(order.signal_time).toLocaleDateString('en-IN', {
+                                                    day: '2-digit',
+                                                    month: 'short'
+                                                  }) : 'N/A'}
+                                                </div>
+                                                <div className="text-[var(--muted-foreground)]">
+                                                  {order.signal_time ? new Date(order.signal_time).toLocaleTimeString('en-IN', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    hour12: true
+                                                  }) : ''}
+                                                </div>
+                                              </div>
                                             </td>
-                                            <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                            <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                              <div className="space-y-1">
+                                                <div className="text-[var(--foreground)] font-medium">
+                                                  {order.entry_time ? new Date(order.entry_time).toLocaleDateString('en-IN', {
+                                                    day: '2-digit',
+                                                    month: 'short'
+                                                  }) : 'N/A'}
+                                                </div>
+                                                <div className="text-[var(--muted-foreground)]">
+                                                  {order.entry_time ? new Date(order.entry_time).toLocaleTimeString('en-IN', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    hour12: true
+                                                  }) : ''}
+                                                </div>
+                                              </div>
+                                            </td>
+                                            <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
                                               {order.entry_price ? `₹${Number(order.entry_price).toFixed(2)}` : 'N/A'}
                                             </td>
-                                            <td className="px-4 py-3 text-[var(--muted-foreground)]">
+                                            <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
+                                              <div className="space-y-1">
+                                                <div className="text-[var(--foreground)] font-medium">
+                                                  {order.exit_time ? new Date(order.exit_time).toLocaleDateString('en-IN', {
+                                                    day: '2-digit',
+                                                    month: 'short'
+                                                  }) : 'N/A'}
+                                                </div>
+                                                <div className="text-[var(--muted-foreground)]">
+                                                  {order.exit_time ? new Date(order.exit_time).toLocaleTimeString('en-IN', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    hour12: true
+                                                  }) : ''}
+                                                </div>
+                                              </div>
+                                            </td>
+                                            <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
                                               {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
                                             </td>
                                           </tr>
@@ -4029,7 +4163,7 @@ export default function Dashboard() {
                                           {/* Broker Executions Row - only show if expanded */}
                                           {isExpanded && hasExecutions && (
                                             <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                              <td colSpan={10} className="py-4 px-6">
+                                              <td colSpan={12} className="py-4 px-6">
                                                 <div className="space-y-4">
                                                   {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                     <div

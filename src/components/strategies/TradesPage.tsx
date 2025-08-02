@@ -893,100 +893,106 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] shadow-lg">
               <div className={showCollapse && isCollapsed ? 'max-h-96 overflow-y-auto' : ''}>
-                <table className="w-full">
+                <table className="w-full min-w-[1200px]">
                   <thead className="bg-[var(--muted)]/10 border-b border-[var(--border)] sticky top-0">
                     <tr>
-                      <th className="text-left py-4 px-4 w-12">
-                        <span className="text-sm font-medium text-[var(--muted-foreground)]">
-                          <Eye className="w-4 h-4" />
+                      <th className="text-left py-3 px-3 w-12">
+                        <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                          <Eye className="w-3 h-3" />
                         </span>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-4">
                         <button
                           onClick={() => handleSort('strike_symbol')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Strike</span>
                           <ArrowUpDown className="w-3 h-3" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-3">
                         <button
                           onClick={() => handleSort('type')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Type</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-4">
                         <button
                           onClick={() => handleSort('pnl')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>P&L</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-4">
                         <button
                           onClick={() => handleSort('status')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Status</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-3">
                         <button
                           onClick={() => handleSort('side')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Side</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-4">
                         <button
                           onClick={() => handleSort('entry_price')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Entry Price</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-4">
                         <button
                           onClick={() => handleSort('exit_price')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Exit Price</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-4">
                         <button
                           onClick={() => handleSort('signal_time')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                        >
+                          <span>Signal Time</span>
+                          <ArrowUpDown className="w-2 h-2" />
+                        </button>
+                      </th>
+                      <th className="text-left py-3 px-4">
+                        <button
+                          onClick={() => handleSort('entry_time')}
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Entry Time</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
+                      <th className="text-left py-3 px-4">
                         <button
                           onClick={() => handleSort('exit_time')}
-                          className="flex items-center space-x-1 text-sm font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
                         >
                           <span>Exit Time</span>
-                          <ArrowUpDown className="w-3 h-3" />
+                          <ArrowUpDown className="w-2 h-2" />
                         </button>
                       </th>
-                      <th className="text-left py-4 px-6">
-                        <span className="text-sm font-medium text-[var(--foreground)]">Quantity</span>
-                      </th>
-                      <th className="text-left py-4 px-6">
-                        <span className="text-sm font-medium text-[var(--foreground)]">Actions</span>
+                      <th className="text-left py-3 px-3">
+                        <span className="text-xs font-medium text-[var(--foreground)]">Qty</span>
                       </th>
                     </tr>
                   </thead>
@@ -1000,7 +1006,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         <React.Fragment key={order.id}>
                           <tr className={`border-b border-[var(--border)]/30 hover:bg-[var(--accent)]/5 transition-colors ${index % 2 === 0 ? 'bg-[var(--background)]/20' : 'bg-[var(--background)]/5'}`}>
                             {/* Expand Button */}
-                            <td className="py-4 px-4">
+                            <td className="py-3 px-3">
                               {brokerExecutionSummaries.length > 0 && (
                                 <button
                                   onClick={() => toggleRowExpansion(order.id)}
@@ -1008,65 +1014,93 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                                   title="View Broker Executions"
                                 >
                                   {isExpanded ? (
-                                    <ChevronDown className="w-4 h-4 text-[var(--muted-foreground)]" />
+                                    <ChevronDown className="w-3 h-3 text-[var(--muted-foreground)]" />
                                   ) : (
-                                    <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
+                                    <ChevronRight className="w-3 h-3 text-[var(--muted-foreground)]" />
                                   )}
                                 </button>
                               )}
                             </td>
                             
                             {/* Strike */}
-                            <td className="py-4 px-6">
-                              <div className="font-mono text-sm text-[var(--foreground)]">
+                            <td className="py-3 px-4">
+                              <div className="font-mono text-xs text-[var(--foreground)]">
                                 ₹{parsed.strike}
                               </div>
                             </td>
                             
                             {/* Type */}
-                            <td className="py-4 px-6">
+                            <td className="py-3 px-3">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(parsed.type)}`}>
                                 {parsed.type}
                               </span>
                             </td>
                             
                             {/* P&L */}
-                            <td className="py-4 px-6">
-                              <div className={`font-semibold ${getPnLColor(order.pnl || 0)}`}>
+                            <td className="py-3 px-4">
+                              <div className={`font-semibold text-xs ${getPnLColor(order.pnl || 0)}`}>
                                 {formatCurrency(order.pnl || 0)}
                               </div>
                             </td>
                             
-                            {/* Status */}
-                            <td className="py-4 px-6">
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium uppercase ${getStatusColor(order.status)}`}>
-                                {order.status?.replace('_', ' ')}
-                              </span>
+                            {/* Status with Exit Icon */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center space-x-2">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium uppercase whitespace-nowrap ${getStatusColor(order.status)}`}>
+                                  {order.status?.replace('_', ' ')}
+                                </span>
+                                {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
+                                  <button
+                                    onClick={() => handleExitOrder(order.id)}
+                                    disabled={exitingOrders.has(order.id)}
+                                    className="flex items-center justify-center w-6 h-6 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-all duration-200 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Exit this order"
+                                  >
+                                    {exitingOrders.has(order.id) ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <LogOut className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
                             </td>
                             
                             {/* Side */}
-                            <td className="py-4 px-6">
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium uppercase ${getSideColor(order.side || '')}`}>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium uppercase whitespace-nowrap ${getSideColor(order.side || '')}`}>
                                 {order.side}
                               </span>
                             </td>
                             
                             {/* Entry Price */}
-                            <td className="py-4 px-6">
-                              <div className="text-sm font-medium text-[var(--foreground)]">
+                            <td className="py-3 px-4">
+                              <div className="text-xs font-medium text-[var(--foreground)]">
                                 ₹{order.entry_price?.toFixed(2) || 'N/A'}
                               </div>
                             </td>
                             
                             {/* Exit Price */}
-                            <td className="py-4 px-6">
-                              <div className="text-sm font-medium text-[var(--foreground)]">
+                            <td className="py-3 px-4">
+                              <div className="text-xs font-medium text-[var(--foreground)]">
                                 {order.exit_price ? `₹${order.exit_price.toFixed(2)}` : 'N/A'}
                               </div>
                             </td>
                             
+                            {/* Signal Time */}
+                            <td className="py-3 px-4">
+                              <div className="text-xs space-y-1">
+                                <div className="text-[var(--foreground)] font-medium">
+                                  {formatDate(order.signal_time || "")}
+                                </div>
+                                <div className="text-[var(--muted-foreground)]">
+                                  {formatTime(order.signal_time || "")}
+                                </div>
+                              </div>
+                            </td>
+                            
                             {/* Entry Time */}
-                            <td className="py-4 px-6">
+                            <td className="py-3 px-4">
                               <div className="text-xs space-y-1">
                                 <div className="text-[var(--foreground)] font-medium">
                                   {formatDate(order.entry_time || "")}
@@ -1078,7 +1112,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                             </td>
                             
                             {/* Exit Time */}
-                            <td className="py-4 px-6">
+                            <td className="py-3 px-4">
                               <div className="text-xs text-[var(--muted-foreground)]">
                                 {order.exit_time ? formatDate(order.exit_time) : 'N/A'}<br />
                                 {order.exit_time ? formatTime(order.exit_time) : ''}
@@ -1086,34 +1120,10 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                             </td>
                             
                             {/* Quantity */}
-                            <td className="py-4 px-6">
-                              <div className="text-sm font-medium text-[var(--foreground)]">
+                            <td className="py-3 px-3">
+                              <div className="text-xs font-medium text-[var(--foreground)]">
                                 {order.executed_quantity || order.qty || 'N/A'}
                               </div>
-                            </td>
-                            
-                            {/* Actions */}
-                            <td className="py-4 px-6">
-                              {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
-                                <button
-                                  onClick={() => handleExitOrder(order.id)}
-                                  disabled={exitingOrders.has(order.id)}
-                                  className="flex items-center space-x-1 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs font-medium transition-all duration-200 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Exit this order"
-                                >
-                                  {exitingOrders.has(order.id) ? (
-                                    <>
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                      <span>Exiting...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <LogOut className="w-3 h-3" />
-                                      <span>Exit</span>
-                                    </>
-                                  )}
-                                </button>
-                              )}
                             </td>
                           </tr>
 
@@ -1250,9 +1260,25 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <div className="text-[var(--muted-foreground)] text-xs mb-1">Status</div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium uppercase ${getStatusColor(order.status)}`}>
-                            {order.status?.replace('_', ' ')}
-                          </span>
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium uppercase whitespace-nowrap ${getStatusColor(order.status)}`}>
+                              {order.status?.replace('_', ' ')}
+                            </span>
+                            {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
+                              <button
+                                onClick={() => handleExitOrder(order.id)}
+                                disabled={exitingOrders.has(order.id)}
+                                className="flex items-center justify-center w-6 h-6 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-all duration-200 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Exit this order"
+                              >
+                                {exitingOrders.has(order.id) ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <LogOut className="w-3 h-3" />
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <div className="text-[var(--muted-foreground)] text-xs mb-1">Side</div>
@@ -1269,6 +1295,12 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                           <div className="font-medium text-[var(--foreground)]">{order.exit_price ? `₹${order.exit_price.toFixed(2)}` : 'N/A'}</div>
                         </div>
                         <div>
+                          <div className="text-[var(--muted-foreground)] text-xs mb-1">Signal Time</div>
+                          <div className="text-xs text-[var(--foreground)]">
+                            {formatDate(order.signal_time || "")} • {formatTime(order.signal_time || "")}
+                          </div>
+                        </div>
+                        <div>
                           <div className="text-[var(--muted-foreground)] text-xs mb-1">Entry Time</div>
                           <div className="text-xs text-[var(--foreground)]">
                             {formatDate(order.entry_time || "")} • {formatTime(order.entry_time || "")}
@@ -1277,6 +1309,12 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         <div>
                           <div className="text-[var(--muted-foreground)] text-xs mb-1">Quantity</div>
                           <div className="font-medium text-[var(--foreground)]">{order.executed_quantity || order.qty || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[var(--muted-foreground)] text-xs mb-1">Exit Time</div>
+                          <div className="text-xs text-[var(--foreground)]">
+                            {order.exit_time ? `${formatDate(order.exit_time)} • ${formatTime(order.exit_time)}` : 'N/A'}
+                          </div>
                         </div>
                       </div>
 
@@ -1302,26 +1340,6 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                             </button>
                           )}
                         </div>
-                        
-                        {(order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') && (
-                          <button
-                            onClick={() => handleExitOrder(order.id)}
-                            disabled={exitingOrders.has(order.id)}
-                            className="flex items-center space-x-1 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-xs font-medium transition-all duration-200 border border-red-500/30 disabled:opacity-50"
-                          >
-                            {exitingOrders.has(order.id) ? (
-                              <>
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                <span>Exiting...</span>
-                              </>
-                            ) : (
-                              <>
-                                <LogOut className="w-3 h-3" />
-                                <span>Exit</span>
-                              </>
-                            )}
-                          </button>
-                        )}
                       </div>
 
                       {/* Mobile Expanded Broker Details */}
