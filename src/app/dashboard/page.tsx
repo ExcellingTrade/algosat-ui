@@ -42,6 +42,7 @@ import {
   Wifi,
   Clock,
   DollarSign,
+  IndianRupee,
   Activity,
   Users,
   Settings,
@@ -322,7 +323,7 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
   // Orders tab splitting state - similar to TradesPage
-  const [showOldOrders, setShowOldOrders] = useState(false);
+  const [showCompletedOrders, setShowCompletedOrders] = useState(false);
   
   // Row expansion for detailed broker executions (Already declared above)
   // const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -701,6 +702,47 @@ export default function Dashboard() {
     }
   };
 
+  const formatCompactDateTime = (dateString: string) => {
+    if (!dateString) return { date: 'N/A', time: 'N/A' };
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return { date: 'N/A', time: 'N/A' };
+      
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+      
+      return {
+        date: isToday ? 'Today' : date.toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short'
+        }),
+        time: date.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        })
+      };
+    } catch (error) {
+      return { date: 'N/A', time: 'N/A' };
+    }
+  };
+
+  const getPriceUpdateFreshness = (dateString: string) => {
+    if (!dateString) return { isFresh: false, color: 'text-gray-500' };
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - date.getTime()) / (1000 * 60);
+      
+      if (diffMinutes <= 1) return { isFresh: true, color: 'text-green-500' };
+      if (diffMinutes <= 5) return { isFresh: true, color: 'text-yellow-500' };
+      if (diffMinutes <= 30) return { isFresh: false, color: 'text-orange-500' };
+      return { isFresh: false, color: 'text-red-500' };
+    } catch {
+      return { isFresh: false, color: 'text-gray-500' };
+    }
+  };
+
   // Get available dates for filter (already computed above as availableDates)
   // const availableDates = useMemo(() => {
   //   const dates = orders
@@ -794,20 +836,22 @@ export default function Dashboard() {
     });
   }, [filteredOrders, sortField, sortDirection]);
 
-  // Split filtered orders into today's and old orders - similar to TradesPage
-  const { todaysOrders, oldOrders } = useMemo(() => {
-    const today = [];
-    const old = [];
+  // Split filtered orders into live/open orders and completed/old orders - similar to TradesPage
+  const { liveOrders, completedOrders } = useMemo(() => {
+    const liveOrders = [];
+    const completedOrders = [];
     
     for (const order of sortedOrders) {
-      if (isToday(order.signal_time)) {
-        today.push(order);
+      // Open orders go to "Live Orders" regardless of date
+      if (order.status === 'OPEN' || order.status === 'AWAITING_ENTRY') {
+        liveOrders.push(order);
       } else {
-        old.push(order);
+        // Completed orders go to "Completed Orders"
+        completedOrders.push(order);
       }
     }
     
-    return { todaysOrders: today, oldOrders: old };
+    return { liveOrders: liveOrders, completedOrders: completedOrders };
   }, [sortedOrders]);
 
   // P&L Graph Data Processing
@@ -3299,7 +3343,7 @@ export default function Dashboard() {
                   {/* Order Stats */}
                   <div className="grid grid-cols-4 gap-4 text-center">
                     <div className="backdrop-blur-xl bg-green-500/10 border border-green-500/30 rounded-2xl p-3 shadow-lg shadow-green-500/20 hover:shadow-xl hover:shadow-green-500/30 transition-all duration-300">
-                      <p className="text-xl font-bold text-green-400">Today: {todaysOrders.length} / Total: {sortedOrders.length}</p>
+                      <p className="text-xl font-bold text-green-400">Live: {liveOrders.length} / Total: {sortedOrders.length}</p>
                       <p className="text-xs text-green-300">Showing</p>
                     </div>
                     <div className="backdrop-blur-xl bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300">
@@ -3609,11 +3653,11 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center space-x-4 text-sm">
                         <div className="text-center">
-                          <div className="text-lg font-bold text-[var(--accent)]">{todaysOrders.length}</div>
+                          <div className="text-lg font-bold text-[var(--accent)]">{liveOrders.length}</div>
                           <div className="text-xs text-[var(--muted-foreground)]">Today's</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-lg font-bold text-[var(--muted-foreground)]">{oldOrders.length}</div>
+                          <div className="text-lg font-bold text-[var(--muted-foreground)]">{completedOrders.length}</div>
                           <div className="text-xs text-[var(--muted-foreground)]">Historical</div>
                         </div>
                         <div className="text-center">
@@ -3647,25 +3691,25 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <>
-                      {/* Today's Orders Section */}
+                      {/* Live Orders Section */}
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
-                            <h3 className="text-lg font-semibold text-[var(--foreground)]">Today's Orders</h3>
+                            <h3 className="text-lg font-semibold text-[var(--foreground)]">Live Orders</h3>
                             <span className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded-full text-sm font-medium">
-                              {todaysOrders.length} {todaysOrders.length === 1 ? 'order' : 'orders'}
+                              {liveOrders.length} {liveOrders.length === 1 ? 'order' : 'orders'}
                             </span>
                           </div>
                         </div>
 
-                        {todaysOrders.length === 0 ? (
+                        {liveOrders.length === 0 ? (
                           <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] p-8 text-center">
                             <TrendingUp className="w-12 h-12 text-[var(--muted-foreground)] mx-auto mb-4 opacity-50" />
-                            <p className="text-[var(--muted-foreground)] text-lg">No orders today</p>
+                            <p className="text-[var(--muted-foreground)] text-lg">No live orders</p>
                           </div>
                         ) : (
                           <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-x-auto shadow-lg">
-                            <table className="w-full min-w-[1400px]">
+                            <table className="w-full min-w-[1600px]">
                               <thead className="bg-[var(--background)]/50 border-b border-[var(--border)]">
                                 <tr>
                                   <th className="px-3 py-2 text-left text-[var(--accent)] w-12">
@@ -3814,10 +3858,28 @@ export default function Dashboard() {
                                       )}
                                     </div>
                                   </th>
+                                  <th 
+                                    className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                    onClick={() => handleSort('current_price')}
+                                  >
+                                    <div className="flex items-center space-x-1">
+                                      <IndianRupee className="w-3 h-3" />
+                                      <span className="text-xs font-medium">Current</span>
+                                      {sortField === 'current_price' && (
+                                        <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                      )}
+                                    </div>
+                                  </th>
+                                  <th className="px-3 py-2 text-left text-[var(--accent)]">
+                                    <div className="flex items-center space-x-1">
+                                      <RefreshCw className="w-3 h-3" />
+                                      <span className="text-xs font-medium">Updated</span>
+                                    </div>
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {todaysOrders.map((order) => {
+                                {liveOrders.map((order) => {
                                   const parsed = parseStrikeSymbol(order.strike_symbol || '');
                                   const isExpanded = expandedRows.has(order.id);
                                   const hasExecutions = order.broker_executions && order.broker_executions.length > 0;
@@ -3981,12 +4043,47 @@ export default function Dashboard() {
                                         <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
                                           {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
                                         </td>
+                                        {/* Current Price */}
+                                        <td className="px-3 py-2">
+                                          <div className="flex items-center space-x-1">
+                                            {order.current_price ? (
+                                              <>
+                                                <IndianRupee className="w-3 h-3 text-[var(--accent)]" />
+                                                <span className="text-xs font-medium text-[var(--foreground)] font-mono">
+                                                  {order.current_price.toFixed(2)}
+                                                </span>
+                                              </>
+                                            ) : (
+                                              <span className="text-xs text-[var(--muted-foreground)]">N/A</span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        {/* Price Last Updated */}
+                                        <td className="px-3 py-2">
+                                          <div className="flex items-center space-x-1">
+                                            {order.price_last_updated ? (
+                                              <>
+                                                <RefreshCw className={`w-3 h-3 ${getPriceUpdateFreshness(order.price_last_updated).color}`} />
+                                                <div className="text-xs space-y-0.5">
+                                                  <div className="text-[var(--foreground)] font-medium">
+                                                    {formatCompactDateTime(order.price_last_updated).date}
+                                                  </div>
+                                                  <div className="text-[var(--muted-foreground)]">
+                                                    {formatCompactDateTime(order.price_last_updated).time}
+                                                  </div>
+                                                </div>
+                                              </>
+                                            ) : (
+                                              <span className="text-xs text-[var(--muted-foreground)]">N/A</span>
+                                            )}
+                                          </div>
+                                        </td>
                                       </tr>
                                       
                                       {/* Broker Executions Row - only show if expanded */}
                                       {isExpanded && hasExecutions && (
                                         <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                          <td colSpan={14} className="py-4 px-6">
+                                          <td colSpan={16} className="py-4 px-6">
                                             <div className="space-y-4">
                                               {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                 <div
@@ -4135,24 +4232,24 @@ export default function Dashboard() {
                         )}
                       </div>
                       
-                      {/* Historical Orders Section - Collapsible */}
-                      {oldOrders.length > 0 && (
+                      {/* Completed Orders Section - Collapsible */}
+                      {completedOrders.length > 0 && (
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
-                              <h3 className="text-lg font-semibold text-[var(--foreground)]">Historical Orders</h3>
+                              <h3 className="text-lg font-semibold text-[var(--foreground)]">Completed Orders</h3>
                               <span className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded-full text-sm font-medium">
-                                {oldOrders.length} {oldOrders.length === 1 ? 'order' : 'orders'}
+                                {completedOrders.length} {completedOrders.length === 1 ? 'order' : 'orders'}
                               </span>
                             </div>
                             <button
-                              onClick={() => setShowOldOrders(!showOldOrders)}
+                              onClick={() => setShowCompletedOrders(!showCompletedOrders)}
                               className="flex items-center space-x-2 px-3 py-1.5 bg-[var(--card-background)] border border-[var(--border)] rounded-lg hover:bg-[var(--accent)]/10 transition-all duration-200"
                             >
                               <span className="text-sm text-[var(--foreground)]">
-                                {showOldOrders ? 'Hide' : 'Show'} Historical Orders
+                                {showCompletedOrders ? 'Hide' : 'Show'} Completed Orders
                               </span>
-                              {showOldOrders ? (
+                              {showCompletedOrders ? (
                                 <ChevronDown className="w-4 h-4 text-[var(--muted-foreground)]" />
                               ) : (
                                 <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
@@ -4160,10 +4257,10 @@ export default function Dashboard() {
                             </button>
                           </div>
 
-                          {showOldOrders && (
+                          {showCompletedOrders && (
                             <div className="bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] overflow-x-auto shadow-lg">
                               <div className="max-h-96 overflow-y-auto">
-                                <table className="w-full min-w-[1400px]">
+                                <table className="w-full min-w-[1600px]">
                                   <thead className="bg-[var(--background)]/50 border-b border-[var(--border)] sticky top-0">
                                     <tr>
                                       <th className="px-3 py-2 text-left text-[var(--accent)] w-12">
@@ -4247,10 +4344,25 @@ export default function Dashboard() {
                                       >
                                         <span className="text-xs font-medium">Exit Price</span>
                                       </th>
+                                      <th 
+                                        className="px-3 py-2 text-left text-[var(--accent)] cursor-pointer hover:bg-[var(--accent)]/10 transition-colors"
+                                        onClick={() => handleSort('current_price')}
+                                      >
+                                        <div className="flex items-center space-x-1">
+                                          <IndianRupee className="w-3 h-3" />
+                                          <span className="text-xs font-medium">Current</span>
+                                        </div>
+                                      </th>
+                                      <th className="px-3 py-2 text-left text-[var(--accent)]">
+                                        <div className="flex items-center space-x-1">
+                                          <RefreshCw className="w-3 h-3" />
+                                          <span className="text-xs font-medium">Updated</span>
+                                        </div>
+                                      </th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {oldOrders.map((order) => {
+                                    {completedOrders.map((order) => {
                                       const parsed = parseStrikeSymbol(order.strike_symbol || '');
                                       const isExpanded = expandedRows.has(order.id);
                                       const hasExecutions = order.broker_executions && order.broker_executions.length > 0;
@@ -4414,12 +4526,47 @@ export default function Dashboard() {
                                             <td className="px-3 py-2 text-[var(--muted-foreground)] text-xs">
                                               {order.exit_price ? `₹${Number(order.exit_price).toFixed(2)}` : 'N/A'}
                                             </td>
+                                            {/* Current Price */}
+                                            <td className="px-3 py-2">
+                                              <div className="flex items-center space-x-1">
+                                                {order.current_price ? (
+                                                  <>
+                                                    <IndianRupee className="w-3 h-3 text-[var(--accent)]" />
+                                                    <span className="text-xs font-medium text-[var(--foreground)] font-mono">
+                                                      {order.current_price.toFixed(2)}
+                                                    </span>
+                                                  </>
+                                                ) : (
+                                                  <span className="text-xs text-[var(--muted-foreground)]">N/A</span>
+                                                )}
+                                              </div>
+                                            </td>
+                                            {/* Price Last Updated */}
+                                            <td className="px-3 py-2">
+                                              <div className="flex items-center space-x-1">
+                                                {order.price_last_updated ? (
+                                                  <>
+                                                    <RefreshCw className={`w-3 h-3 ${getPriceUpdateFreshness(order.price_last_updated).color}`} />
+                                                    <div className="text-xs space-y-0.5">
+                                                      <div className="text-[var(--foreground)] font-medium">
+                                                        {formatCompactDateTime(order.price_last_updated).date}
+                                                      </div>
+                                                      <div className="text-[var(--muted-foreground)]">
+                                                        {formatCompactDateTime(order.price_last_updated).time}
+                                                      </div>
+                                                    </div>
+                                                  </>
+                                                ) : (
+                                                  <span className="text-xs text-[var(--muted-foreground)]">N/A</span>
+                                                )}
+                                              </div>
+                                            </td>
                                           </tr>
                                           
                                           {/* Broker Executions Row - only show if expanded */}
                                           {isExpanded && hasExecutions && (
                                             <tr key={`${order.id}-executions`} className="bg-[var(--muted)]/5">
-                                              <td colSpan={14} className="py-4 px-6">
+                                              <td colSpan={16} className="py-4 px-6">
                                                 <div className="space-y-4">
                                                   {groupBrokerExecutions(order.broker_executions || []).map((summary) => (
                                                     <div

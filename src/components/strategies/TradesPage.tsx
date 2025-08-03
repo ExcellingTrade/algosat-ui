@@ -18,7 +18,9 @@ import {
   ChevronRight,
   Eye,
   LogOut,
-  Loader2
+  Loader2,
+  IndianRupee,
+  RefreshCw
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -74,6 +76,8 @@ interface Order {
   order_type?: string;
   side?: string;
   broker_executions?: BrokerExecution[];
+  current_price?: number;
+  price_last_updated?: string;
 }
 
 interface TradesPageProps {
@@ -532,20 +536,22 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     }
   };
 
-  // Split filtered trades into today's and old trades
+  // Split filtered trades into live/open trades and completed/old trades
   const { todaysTrades, oldTrades } = useMemo(() => {
-    const today = [];
-    const old = [];
+    const liveToday = [];
+    const completed = [];
     
     for (const trade of filteredAndSortedOrders) {
-      if (isToday(trade.signal_time)) {
-        today.push(trade);
+      // Open trades go to "Today's trades" regardless of date
+      if (trade.status === 'OPEN' || trade.status === 'AWAITING_ENTRY') {
+        liveToday.push(trade);
       } else {
-        old.push(trade);
+        // Completed trades go to "Old trades"
+        completed.push(trade);
       }
     }
     
-    return { todaysTrades: today, oldTrades: old };
+    return { todaysTrades: liveToday, oldTrades: completed };
   }, [filteredAndSortedOrders]);
 
   const filteredTrades = filteredAndSortedOrders;
@@ -712,6 +718,47 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
       });
     } catch (error) {
       return 'N/A';
+    }
+  };
+
+  const formatCompactDateTime = (dateString: string) => {
+    if (!dateString) return { date: 'N/A', time: 'N/A' };
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return { date: 'N/A', time: 'N/A' };
+      
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+      
+      return {
+        date: isToday ? 'Today' : date.toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short'
+        }),
+        time: date.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        })
+      };
+    } catch (error) {
+      return { date: 'N/A', time: 'N/A' };
+    }
+  };
+
+  const getPriceUpdateFreshness = (dateString: string) => {
+    if (!dateString) return { isFresh: false, color: 'text-gray-500' };
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - date.getTime()) / (1000 * 60);
+      
+      if (diffMinutes <= 1) return { isFresh: true, color: 'text-green-500' };
+      if (diffMinutes <= 5) return { isFresh: true, color: 'text-yellow-500' };
+      if (diffMinutes <= 30) return { isFresh: false, color: 'text-orange-500' };
+      return { isFresh: false, color: 'text-red-500' };
+    } catch {
+      return { isFresh: false, color: 'text-gray-500' };
     }
   };
 
@@ -897,7 +944,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto bg-[var(--card-background)]/50 rounded-xl border border-[var(--border)] shadow-lg">
               <div className={showCollapse && isCollapsed ? 'max-h-96 overflow-y-auto' : ''}>
-                <table className="w-full min-w-[1200px]">
+                <table className="w-full min-w-[1400px]">
                   <thead className="bg-[var(--muted)]/10 border-b border-[var(--border)] sticky top-0">
                     <tr>
                       <th className="text-left py-3 px-3 w-12">
@@ -967,6 +1014,22 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                           <span>Exit Price</span>
                           <ArrowUpDown className="w-2 h-2" />
                         </button>
+                      </th>
+                      <th className="text-left py-3 px-3">
+                        <button
+                          onClick={() => handleSort('current_price')}
+                          className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)] hover:text-[var(--accent)] transition-colors"
+                          title="Current Market Price"
+                        >
+                          <IndianRupee className="w-3 h-3" />
+                          <span>Current</span>
+                        </button>
+                      </th>
+                      <th className="text-left py-3 px-3">
+                        <span className="flex items-center space-x-1 text-xs font-medium text-[var(--foreground)]" title="Last Price Update Time">
+                          <RefreshCw className="w-3 h-3" />
+                          <span>Updated</span>
+                        </span>
                       </th>
                       <th className="text-left py-3 px-4">
                         <button
@@ -1091,6 +1154,43 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                               </div>
                             </td>
                             
+                            {/* Current Price */}
+                            <td className="py-3 px-3">
+                              <div className="flex items-center space-x-1">
+                                {order.current_price ? (
+                                  <>
+                                    <IndianRupee className="w-3 h-3 text-[var(--accent)]" />
+                                    <span className="text-xs font-medium text-[var(--foreground)] font-mono">
+                                      {order.current_price.toFixed(2)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-[var(--muted-foreground)]">N/A</span>
+                                )}
+                              </div>
+                            </td>
+                            
+                            {/* Price Last Updated */}
+                            <td className="py-3 px-3">
+                              <div className="flex items-center space-x-1">
+                                {order.price_last_updated ? (
+                                  <>
+                                    <RefreshCw className={`w-3 h-3 ${getPriceUpdateFreshness(order.price_last_updated).color}`} />
+                                    <div className="text-xs space-y-0.5">
+                                      <div className="text-[var(--foreground)] font-medium">
+                                        {formatCompactDateTime(order.price_last_updated).date}
+                                      </div>
+                                      <div className="text-[var(--muted-foreground)]">
+                                        {formatCompactDateTime(order.price_last_updated).time}
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-[var(--muted-foreground)]">N/A</span>
+                                )}
+                              </div>
+                            </td>
+                            
                             {/* Signal Time */}
                             <td className="py-3 px-4">
                               <div className="text-xs space-y-1">
@@ -1134,7 +1234,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                           {/* Expandable Row for Broker Executions */}
                           {isExpanded && brokerExecutionSummaries.length > 0 && (
                             <tr className="bg-[var(--muted)]/5 border-b border-[var(--border)]/20">
-                              <td colSpan={12} className="py-4 px-6">
+                              <td colSpan={14} className="py-4 px-6">
                                 <div className="space-y-4">
                                   <h4 className="text-sm font-semibold text-[var(--foreground)] flex items-center space-x-2">
                                     <Target className="w-4 h-4 text-[var(--accent)]" />
@@ -1348,6 +1448,31 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
                         <div>
                           <div className="text-[var(--muted-foreground)] text-xs mb-1">Exit Price</div>
                           <div className="font-medium text-[var(--foreground)]">{order.exit_price ? `₹${order.exit_price.toFixed(2)}` : 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[var(--muted-foreground)] text-xs mb-1 flex items-center space-x-1">
+                            <IndianRupee className="w-3 h-3" />
+                            <span>Current Price</span>
+                          </div>
+                          <div className="font-medium text-[var(--foreground)] font-mono">
+                            {order.current_price ? `₹${order.current_price.toFixed(2)}` : 'N/A'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[var(--muted-foreground)] text-xs mb-1 flex items-center space-x-1">
+                            <RefreshCw className="w-3 h-3" />
+                            <span>Price Updated</span>
+                          </div>
+                          <div className="text-xs">
+                            {order.price_last_updated ? (
+                              <div className="flex items-center space-x-1">
+                                <RefreshCw className={`w-3 h-3 ${getPriceUpdateFreshness(order.price_last_updated).color}`} />
+                                <span className="text-[var(--foreground)]">
+                                  {formatCompactDateTime(order.price_last_updated).date} • {formatCompactDateTime(order.price_last_updated).time}
+                                </span>
+                              </div>
+                            ) : 'N/A'}
+                          </div>
                         </div>
                         <div>
                           <div className="text-[var(--muted-foreground)] text-xs mb-1">Signal Time</div>
@@ -1958,18 +2083,18 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
           </div>
         ) : (
           <>
-            {/* Today's Trades Section */}
+            {/* Live Trades Section */}
             <TradesTable 
               trades={todaysTrades} 
-              title="Today's Trades" 
+              title="Live Trades" 
             />
             
-            {/* Old Trades Section - Collapsible */}
+            {/* Completed Trades Section - Collapsible */}
             {oldTrades.length > 0 && (
               <div className={`transition-all duration-300 ${showOldTrades ? 'opacity-100' : 'opacity-100'}`}>
                 <TradesTable 
                   trades={oldTrades} 
-                  title="Historical Trades" 
+                  title="Completed Trades" 
                   showCollapse={true}
                   isCollapsed={!showOldTrades}
                   onToggle={() => setShowOldTrades(!showOldTrades)}
