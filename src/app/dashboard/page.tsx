@@ -719,6 +719,7 @@ export default function Dashboard() {
         time: date.toLocaleTimeString('en-IN', {
           hour: '2-digit',
           minute: '2-digit',
+          second: '2-digit',
           hour12: true
         })
       };
@@ -1430,6 +1431,48 @@ export default function Dashboard() {
     };
   }, [isAuthenticated, router]); // Only include primitive dependencies to avoid circular deps
 
+  // Define handleRefreshOrders before it's used in useEffect
+  const handleRefreshOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    setError(null);
+    try {
+      console.log('Dashboard: Refreshing orders data...');
+      
+      // Load orders-specific data concurrently
+      const [ordersResult, overallPnlResult] = await Promise.allSettled([
+        apiClient.getOrders(),
+        apiClient.getOrdersPnlStats()
+      ]);
+      
+      // Handle orders
+      if (ordersResult.status === 'fulfilled') {
+        console.log('Dashboard: Orders data received:', ordersResult.value);
+        console.log('Dashboard: First order broker_executions:', ordersResult.value[0]?.broker_executions);
+        if (ordersResult.value[0]?.broker_executions && ordersResult.value[0].broker_executions.length > 0) {
+          console.log('Dashboard: First broker execution details:', ordersResult.value[0].broker_executions[0]);
+          console.log('Dashboard: Broker execution fields:', Object.keys(ordersResult.value[0].broker_executions[0]));
+        }
+        setOrders(ordersResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh orders:', ordersResult.reason);
+      }
+      
+      // Handle overall PnL stats (related to orders)
+      if (overallPnlResult.status === 'fulfilled') {
+        setOverallPnlStats(overallPnlResult.value);
+      } else {
+        console.error('Dashboard: Failed to refresh overall PnL stats:', overallPnlResult.reason);
+      }
+      
+      console.log('Dashboard: Orders data refreshed successfully');
+    } catch (err) {
+      console.error('Dashboard: Failed to refresh orders:', err);
+      setError("Failed to refresh orders data");
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []); // Empty dependency array since it only uses setters and API calls
+
   // Separate useEffect for holidays - only run once on mount
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -1484,6 +1527,23 @@ export default function Dashboard() {
     };
   }, [isAuthenticated]); // Only depend on authentication
 
+  // Auto-refresh orders when Orders tab is active
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== 'orders') return;
+
+    const ordersRefreshInterval = setInterval(() => {
+      // Only refresh if not currently loading orders to avoid conflicts
+      if (!ordersLoading) {
+        console.log('Auto-refreshing Orders tab data...');
+        handleRefreshOrders();
+      }
+    }, 30000); // 30 seconds
+
+    return () => {
+      clearInterval(ordersRefreshInterval);
+    };
+  }, [isAuthenticated, activeTab, ordersLoading, handleRefreshOrders]);
+
   const loadDashboardData = useCallback(async (isBackgroundRefresh = false) => {
     try {
       // Rate limiting check - prevent calls more frequent than 60 seconds
@@ -1508,7 +1568,6 @@ export default function Dashboard() {
       let strategiesData: Strategy[] = [];
       let brokersData: Broker[] = [];
       let balanceSummariesData: BrokerBalanceSummary[] = [];
-      let positionsData: Position[] = [];
       let tradesData: Trade[] = [];
       let ordersData: any[] = [];
       let systemStatusData: SystemStatus | null = null;
@@ -1516,12 +1575,11 @@ export default function Dashboard() {
       let dashboardSummaryData: DashboardSummary | null = null;
 
       // Load data concurrently for better performance
-      const [strategiesResult, brokersResult, balanceSummariesResult, positionsResult, tradesResult, ordersResult, systemStatusResult, healthResult, dashboardSummaryResult, overallPnlResult, strategyStatsResult, dailyPnlResult, perStrategyStatsResult] = 
+      const [strategiesResult, brokersResult, balanceSummariesResult, tradesResult, ordersResult, systemStatusResult, healthResult, dashboardSummaryResult, overallPnlResult, strategyStatsResult, dailyPnlResult, perStrategyStatsResult] = 
         await Promise.allSettled([
           apiClient.getStrategies(),
           apiClient.getBrokers(),
           apiClient.getBalanceSummaries(),
-          apiClient.getPositions(),
           apiClient.getTrades(),
           apiClient.getOrders(),
           apiClient.getSystemStatus(),
@@ -1583,14 +1641,6 @@ export default function Dashboard() {
         console.error('Dashboard: Failed to load balance summaries:', balanceSummariesResult.reason);
       }
       setBalanceSummaries(balanceSummariesData);
-
-      // Handle positions
-      if (positionsResult.status === 'fulfilled') {
-        positionsData = positionsResult.value;
-      } else {
-        console.error('Dashboard: Failed to load positions:', positionsResult.reason);
-      }
-      setPositions(positionsData);
 
       // Handle trades
       if (tradesResult.status === 'fulfilled') {
@@ -1717,14 +1767,16 @@ export default function Dashboard() {
         setDailyPnlHistory(null);
       }
 
-      // Calculate stats
-      const totalPnL = positionsData.reduce((sum, pos) => sum + (pos.pnl || 0), 0);
+      // Calculate stats - use dashboard summary for open positions count
+      const openPositionsCount = dashboardSummaryData?.open_positions?.count || 0;
+      const totalPnL = dashboardSummaryData?.open_positions?.total_pnl || 0;
+      
       setStats({
         totalStrategies: strategiesData.length,
         activeStrategies: strategiesData.filter(s => s.enabled).length,
         totalBrokers: brokersData.length,
         activeBrokers: brokersData.filter(b => b.is_enabled).length,
-        totalPositions: positionsData.length,
+        totalPositions: openPositionsCount, // Use dashboard summary open positions count
         totalPnL
       });
     } catch (err) {
@@ -1809,24 +1861,33 @@ export default function Dashboard() {
       console.log('Dashboard: Refreshing overview data...');
       
       // Load overview-specific data concurrently
-      const [positionsResult, dashboardSummaryResult, overallPnlResult, dailyPnlResult, balanceSummariesResult] = await Promise.allSettled([
-        apiClient.getPositions(),
+      const [ordersResult, dashboardSummaryResult, overallPnlResult, dailyPnlResult, balanceSummariesResult] = await Promise.allSettled([
+        apiClient.getOrders(),
         apiClient.getDashboardSummary(),
         apiClient.getOrdersPnlStats(),
         apiClient.getDailyPnlHistory(365),
         apiClient.getBalanceSummaries()
       ]);
       
-      // Handle positions
-      if (positionsResult.status === 'fulfilled') {
-        setPositions(positionsResult.value);
+      // Handle orders (for display in orders tab)
+      if (ordersResult.status === 'fulfilled') {
+        setOrders(ordersResult.value);
       } else {
-        console.error('Dashboard: Failed to refresh positions:', positionsResult.reason);
+        console.error('Dashboard: Failed to refresh orders:', ordersResult.reason);
       }
       
-      // Handle dashboard summary
+      // Handle dashboard summary and use it for open positions count
       if (dashboardSummaryResult.status === 'fulfilled') {
         setDashboardSummary(dashboardSummaryResult.value);
+        
+        // Update stats with dashboard summary data
+        const openPositionsCount = dashboardSummaryResult.value?.open_positions?.count || 0;
+        const totalPnL = dashboardSummaryResult.value?.open_positions?.total_pnl || 0;
+        setStats(prevStats => ({
+          ...prevStats,
+          totalPositions: openPositionsCount,
+          totalPnL
+        }));
       } else {
         console.error('Dashboard: Failed to refresh dashboard summary:', dashboardSummaryResult.reason);
       }
@@ -1923,47 +1984,6 @@ export default function Dashboard() {
       setError("Failed to refresh strategies data");
     } finally {
       setStrategiesLoading(false);
-    }
-  };
-
-  const handleRefreshOrders = async () => {
-    setOrdersLoading(true);
-    setError(null);
-    try {
-      console.log('Dashboard: Refreshing orders data...');
-      
-      // Load orders-specific data concurrently
-      const [ordersResult, overallPnlResult] = await Promise.allSettled([
-        apiClient.getOrders(),
-        apiClient.getOrdersPnlStats()
-      ]);
-      
-      // Handle orders
-      if (ordersResult.status === 'fulfilled') {
-        console.log('Dashboard: Orders data received:', ordersResult.value);
-        console.log('Dashboard: First order broker_executions:', ordersResult.value[0]?.broker_executions);
-        if (ordersResult.value[0]?.broker_executions && ordersResult.value[0].broker_executions.length > 0) {
-          console.log('Dashboard: First broker execution details:', ordersResult.value[0].broker_executions[0]);
-          console.log('Dashboard: Broker execution fields:', Object.keys(ordersResult.value[0].broker_executions[0]));
-        }
-        setOrders(ordersResult.value);
-      } else {
-        console.error('Dashboard: Failed to refresh orders:', ordersResult.reason);
-      }
-      
-      // Handle overall PnL stats (related to orders)
-      if (overallPnlResult.status === 'fulfilled') {
-        setOverallPnlStats(overallPnlResult.value);
-      } else {
-        console.error('Dashboard: Failed to refresh overall PnL stats:', overallPnlResult.reason);
-      }
-      
-      console.log('Dashboard: Orders data refreshed successfully');
-    } catch (err) {
-      console.error('Dashboard: Failed to refresh orders:', err);
-      setError("Failed to refresh orders data");
-    } finally {
-      setOrdersLoading(false);
     }
   };
 
@@ -2536,7 +2556,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-[var(--muted-foreground)] text-sm">Open Positions</p>
                       <p className="text-xl lg:text-2xl font-bold text-[var(--foreground)] break-words">
-                        {positions.length}
+                        {stats.totalPositions}
                       </p>
                       <p className="text-[var(--muted-foreground)] text-xs lg:text-sm">
                         Active trades running
@@ -3700,6 +3720,15 @@ export default function Dashboard() {
                               {liveOrders.length} {liveOrders.length === 1 ? 'order' : 'orders'}
                             </span>
                           </div>
+                          <button
+                            onClick={handleRefreshOrders}
+                            disabled={ordersLoading}
+                            className="flex items-center space-x-2 px-3 py-2 bg-[var(--accent)]/10 text-[var(--accent)] rounded-lg hover:bg-[var(--accent)]/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Refresh Orders"
+                          >
+                            <RefreshCw className={`w-4 h-4 ${ordersLoading ? 'animate-spin' : ''}`} />
+                            <span className="text-sm font-medium">Refresh</span>
+                          </button>
                         </div>
 
                         {liveOrders.length === 0 ? (

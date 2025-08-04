@@ -395,6 +395,10 @@ export interface DashboardSummary {
     change_percentage: number;
     is_positive: boolean;
   };
+  open_positions: {
+    count: number;
+    total_pnl: number;
+  };
   active_strategies: {
     count: number;
     profit_count: number;

@@ -676,6 +676,14 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
     }
   };
 
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    if (isLoading || isLoadingMore) return; // Prevent multiple concurrent refreshes
+    console.log('Manual refresh triggered for trades...');
+    const dateFilter = filters.date !== 'all' ? filters.date : null;
+    await fetchTrades(1, true, dateFilter);
+  };
+
   // Fetch trades for this specific symbol using the symbol ID
   useEffect(() => {
     if (symbol.id) {
@@ -690,6 +698,24 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
       fetchTrades(1, true, dateFilter);
     }
   }, [filters.date]);
+
+  // Auto-refresh trades every 30 seconds
+  useEffect(() => {
+    if (!symbol.id) return;
+
+    const refreshInterval = setInterval(() => {
+      // Only refresh if not currently loading to avoid conflicts
+      if (!isLoading && !isLoadingMore) {
+        console.log('Auto-refreshing trades data...');
+        const dateFilter = filters.date !== 'all' ? filters.date : null;
+        fetchTrades(1, true, dateFilter);
+      }
+    }, 30000); // 30 seconds
+
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [symbol.id, filters.date, isLoading, isLoadingMore]);
 
   const formatTime = (dateString: string) => {
     if (!dateString) return 'N/A';
@@ -738,6 +764,7 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
         time: date.toLocaleTimeString('en-IN', {
           hour: '2-digit',
           minute: '2-digit',
+          second: '2-digit',
           hour12: true
         })
       };
@@ -912,6 +939,17 @@ export function TradesPage({ symbol, strategy }: TradesPageProps) {
             <span className="px-2 py-1 bg-[var(--accent)]/20 text-[var(--accent)] rounded-full text-sm font-medium">
               {trades.length} {trades.length === 1 ? 'trade' : 'trades'}
             </span>
+            {/* Manual Refresh Button - only show for Live Trades */}
+            {title === "Live Trades" && (
+              <button
+                onClick={handleManualRefresh}
+                disabled={isLoading || isLoadingMore}
+                className={`p-2 rounded-full border border-[var(--border)] bg-[var(--card-background)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--muted-foreground)] hover:text-[var(--accent)] ${isLoading || isLoadingMore ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="Refresh trades data"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading || isLoadingMore ? 'animate-spin' : ''}`} />
+              </button>
+            )}
           </div>
           {showCollapse && (
             <button
