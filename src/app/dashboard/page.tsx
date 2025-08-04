@@ -255,7 +255,6 @@ export default function Dashboard() {
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [strategiesLoading, setStrategiesLoading] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -452,13 +451,10 @@ export default function Dashboard() {
     }
     const dates = orders
       .map((order: any) => {
-        if (!order?.entry_time) return null;
+        if (!order?.signal_time) return null;
         try {
-          return new Date(order.entry_time).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-          });
+          // Return ISO date format (YYYY-MM-DD) for consistent comparison
+          return new Date(order.signal_time).toISOString().split('T')[0];
         } catch {
           return null;
         }
@@ -3636,7 +3632,13 @@ export default function Dashboard() {
                       >
                         <option value="">All Dates</option>
                         {availableDates.map(date => (
-                          <option key={date} value={date}>{formatDate(date)}</option>
+                          <option key={date} value={date}>
+                            {new Date(date + 'T00:00:00').toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </option>
                         ))}
                       </select>
                     </div>
