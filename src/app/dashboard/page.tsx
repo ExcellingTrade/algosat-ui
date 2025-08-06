@@ -73,7 +73,8 @@ import {
   ChevronUp,
   ChevronRight,
   ChevronLeft,
-  Loader2
+  Loader2,
+  Brain
 } from "lucide-react";
 
 interface DashboardStats {
@@ -3946,7 +3947,17 @@ export default function Dashboard() {
                                           </span>
                                         </td>
                                         <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
-                                          {parsed.underlying || 'N/A'}
+                                          <div className="flex items-center space-x-1">
+                                            <span>{parsed.underlying || 'N/A'}</span>
+                                            {order.smart_level_enabled && (
+                                              <div 
+                                                className="flex items-center justify-center" 
+                                                title="Smart Levels Enabled"
+                                              >
+                                                <Brain className="w-4 h-4 text-emerald-500" />
+                                              </div>
+                                            )}
+                                          </div>
                                         </td>
                                         <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
                                           {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
@@ -4429,7 +4440,17 @@ export default function Dashboard() {
                                               </span>
                                             </td>
                                             <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
-                                              {parsed.underlying || 'N/A'}
+                                              <div className="flex items-center space-x-1">
+                                                <span>{parsed.underlying || 'N/A'}</span>
+                                                {order.smart_level_enabled && (
+                                                  <div 
+                                                    className="flex items-center justify-center" 
+                                                    title="Smart Levels Enabled"
+                                                  >
+                                                    <Brain className="w-4 h-4 text-emerald-500" />
+                                                  </div>
+                                                )}
+                                              </div>
                                             </td>
                                             <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
                                               {parsed.strike ? `₹${parsed.strike}` : 'N/A'}
