@@ -452,6 +452,7 @@ class ApiClient {
   private tokenExpiry: number | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
   private refreshPromise: Promise<void> | null = null;
+  private isLoggingOut: boolean = false;
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
@@ -499,6 +500,7 @@ class ApiClient {
     this.token = null;
     this.refreshToken = null;
     this.tokenExpiry = null;
+    this.isLoggingOut = false; // Reset logout flag
     
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
@@ -658,7 +660,14 @@ class ApiClient {
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Try to refresh token once more
+          // Don't try to refresh tokens for logout requests - just clear tokens
+          if (endpoint === '/auth/logout') {
+            console.log('401 received on logout, clearing tokens without retry');
+            this.clearTokens();
+            return {} as T; // Return empty object for logout, don't throw error
+          }
+          
+          // Try to refresh token once more for other endpoints
           if (this.refreshToken && !this.refreshPromise) {
             console.log('401 received, attempting token refresh...');
             await this.refreshAccessToken();
@@ -739,10 +748,18 @@ class ApiClient {
   }
 
   async logout(): Promise<void> {
+    // Prevent multiple simultaneous logout attempts
+    if (this.isLoggingOut) {
+      console.log('Logout already in progress, skipping duplicate request');
+      return;
+    }
+    
+    this.isLoggingOut = true;
     try {
       await this.request('/auth/logout', { method: 'POST' });
     } finally {
       this.clearTokens();
+      this.isLoggingOut = false;
     }
   }
 
