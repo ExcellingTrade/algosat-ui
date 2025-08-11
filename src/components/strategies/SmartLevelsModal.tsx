@@ -736,12 +736,12 @@ export function SmartLevelsModal({
                         <div className="w-4 h-4 rounded-full bg-[var(--muted)] text-[var(--muted-foreground)] flex items-center justify-center text-xs cursor-help">
                           ?
                         </div>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-[var(--popover)] border border-[var(--border)] rounded-lg shadow-lg text-xs text-[var(--popover-foreground)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                          If enabled, only take trades when the entry level<br/>
-                          is below the swing high (for uptrend) or above<br/>
-                          the swing low (for downtrend). Uncheck to<br/>
+                        {/* <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-[var(--popover)] border border-[var(--border)] rounded-lg shadow-lg text-xs text-[var(--popover-foreground)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                          If enabled, only take trades when the entry level,
+                          is below the swing high (for uptrend) or above,
+                          the swing low (for downtrend). Uncheck to
                           ignore this condition.
-                        </div>
+                        </div> */}
                       </div>
                     </div>
 
