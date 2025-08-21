@@ -3949,14 +3949,27 @@ export default function Dashboard() {
                                         <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
                                           <div className="flex items-center space-x-1">
                                             <span>{parsed.underlying || 'N/A'}</span>
-                                            {order.smart_level_enabled && (
-                                              <div 
-                                                className="flex items-center justify-center" 
-                                                title="Smart Levels Enabled"
-                                              >
-                                                <Brain className="w-4 h-4 text-emerald-500" />
-                                              </div>
-                                            )}
+                                            <div className="flex items-center space-x-1">
+                                              {order.smart_level_enabled && (
+                                                <div 
+                                                  className="flex items-center justify-center" 
+                                                  title="Smart Levels Enabled"
+                                                >
+                                                  <Brain className="w-4 h-4 text-emerald-500" />
+                                                </div>
+                                              )}
+                                              {order.is_hedge && (
+                                                <div 
+                                                  className="flex items-center justify-center space-x-1" 
+                                                  title={`Hedge Order (Parent: #${order.parent_order_id})`}
+                                                >
+                                                  <Link className="w-4 h-4 text-orange-500" />
+                                                  <span className="text-xs text-orange-600 font-semibold">
+                                                    #{order.parent_order_id}
+                                                  </span>
+                                                </div>
+                                              )}
+                                            </div>
                                           </div>
                                         </td>
                                         <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
@@ -4442,14 +4455,27 @@ export default function Dashboard() {
                                             <td className="px-3 py-2 font-medium text-[var(--foreground)] text-xs">
                                               <div className="flex items-center space-x-1">
                                                 <span>{parsed.underlying || 'N/A'}</span>
-                                                {order.smart_level_enabled && (
-                                                  <div 
-                                                    className="flex items-center justify-center" 
-                                                    title="Smart Levels Enabled"
-                                                  >
-                                                    <Brain className="w-4 h-4 text-emerald-500" />
-                                                  </div>
-                                                )}
+                                                <div className="flex items-center space-x-1">
+                                                  {order.smart_level_enabled && (
+                                                    <div 
+                                                      className="flex items-center justify-center" 
+                                                      title="Smart Levels Enabled"
+                                                    >
+                                                      <Brain className="w-4 h-4 text-emerald-500" />
+                                                    </div>
+                                                  )}
+                                                  {order.is_hedge && (
+                                                    <div 
+                                                      className="flex items-center justify-center space-x-1" 
+                                                      title={`Hedge Order (Parent: #${order.parent_order_id})`}
+                                                    >
+                                                      <Link className="w-4 h-4 text-orange-500" />
+                                                      <span className="text-xs text-orange-600 font-semibold">
+                                                        #{order.parent_order_id}
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                </div>
                                               </div>
                                             </td>
                                             <td className="px-3 py-2 text-[var(--muted-foreground)] font-mono text-xs">
